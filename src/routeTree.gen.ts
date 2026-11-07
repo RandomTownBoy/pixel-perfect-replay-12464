@@ -9,50 +9,192 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as StudioRouteImport } from './routes/_studio'
+import { Route as OverlayRouteImport } from './routes/overlay'
+import { Route as StudioIndexRouteImport } from './routes/_studio.index'
+import { Route as StudioAiRouteImport } from './routes/_studio.ai'
+import { Route as StudioBankRouteImport } from './routes/_studio.bank'
+import { Route as StudioGimmicksRouteImport } from './routes/_studio.gimmicks'
+import { Route as StudioSettingsRouteImport } from './routes/_studio.settings'
+import { Route as StudioStudioRouteImport } from './routes/_studio.studio'
 
-const IndexRoute = IndexRouteImport.update({
+const StudioRoute = StudioRouteImport.update({
+  id: '/_studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OverlayRoute = OverlayRouteImport.update({
+  id: '/overlay',
+  path: '/overlay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioIndexRoute = StudioIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioAiRoute = StudioAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioBankRoute = StudioBankRouteImport.update({
+  id: '/bank',
+  path: '/bank',
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioGimmicksRoute = StudioGimmicksRouteImport.update({
+  id: '/gimmicks',
+  path: '/gimmicks',
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioSettingsRoute = StudioSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioStudioRoute = StudioStudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => StudioRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof StudioIndexRoute
+  '/overlay': typeof OverlayRoute
+  '/ai': typeof StudioAiRoute
+  '/bank': typeof StudioBankRoute
+  '/gimmicks': typeof StudioGimmicksRoute
+  '/settings': typeof StudioSettingsRoute
+  '/studio': typeof StudioStudioRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/overlay': typeof OverlayRoute
+  '/ai': typeof StudioAiRoute
+  '/bank': typeof StudioBankRoute
+  '/gimmicks': typeof StudioGimmicksRoute
+  '/settings': typeof StudioSettingsRoute
+  '/studio': typeof StudioStudioRoute
+  '/': typeof StudioIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_studio': typeof StudioRouteWithChildren
+  '/overlay': typeof OverlayRoute
+  '/_studio/ai': typeof StudioAiRoute
+  '/_studio/bank': typeof StudioBankRoute
+  '/_studio/gimmicks': typeof StudioGimmicksRoute
+  '/_studio/settings': typeof StudioSettingsRoute
+  '/_studio/studio': typeof StudioStudioRoute
+  '/_studio/': typeof StudioIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    '/' | '/overlay' | '/ai' | '/bank' | '/gimmicks' | '/settings' | '/studio'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/overlay' | '/ai' | '/bank' | '/gimmicks' | '/settings' | '/studio' | '/'
+  id:
+    | '__root__'
+    | '/_studio'
+    | '/overlay'
+    | '/_studio/ai'
+    | '/_studio/bank'
+    | '/_studio/gimmicks'
+    | '/_studio/settings'
+    | '/_studio/studio'
+    | '/_studio/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  StudioRoute: typeof StudioRouteWithChildren
+  OverlayRoute: typeof OverlayRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_studio': {
+      id: '/_studio'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof StudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/overlay': {
+      id: '/overlay'
+      path: '/overlay'
+      fullPath: '/overlay'
+      preLoaderRoute: typeof OverlayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_studio/': {
+      id: '/_studio/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof StudioIndexRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/_studio/ai': {
+      id: '/_studio/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof StudioAiRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/_studio/bank': {
+      id: '/_studio/bank'
+      path: '/bank'
+      fullPath: '/bank'
+      preLoaderRoute: typeof StudioBankRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/_studio/gimmicks': {
+      id: '/_studio/gimmicks'
+      path: '/gimmicks'
+      fullPath: '/gimmicks'
+      preLoaderRoute: typeof StudioGimmicksRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/_studio/settings': {
+      id: '/_studio/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof StudioSettingsRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/_studio/studio': {
+      id: '/_studio/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioStudioRouteImport
+      parentRoute: typeof StudioRoute
     }
   }
 }
 
+interface StudioRouteChildren {
+  StudioAiRoute: typeof StudioAiRoute
+  StudioBankRoute: typeof StudioBankRoute
+  StudioGimmicksRoute: typeof StudioGimmicksRoute
+  StudioSettingsRoute: typeof StudioSettingsRoute
+  StudioStudioRoute: typeof StudioStudioRoute
+  StudioIndexRoute: typeof StudioIndexRoute
+}
+
+const StudioRouteChildren: StudioRouteChildren = {
+  StudioAiRoute: StudioAiRoute,
+  StudioBankRoute: StudioBankRoute,
+  StudioGimmicksRoute: StudioGimmicksRoute,
+  StudioSettingsRoute: StudioSettingsRoute,
+  StudioStudioRoute: StudioStudioRoute,
+  StudioIndexRoute: StudioIndexRoute,
+}
+
+const StudioRouteWithChildren =
+  StudioRoute._addFileChildren(StudioRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  StudioRoute: StudioRouteWithChildren,
+  OverlayRoute: OverlayRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

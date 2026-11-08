@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Demo-mode app state lives in `src/lib/kyoka.ts` (localStorage store + BroadcastChannel overlay sync); replace the overlay channel with backend realtime in Stage 2 so OBS (separate browser) can receive updates.
+- Dashboard pages sit under the `_studio` pathless layout; `/overlay` stays outside it so it renders with no chrome and a transparent background.

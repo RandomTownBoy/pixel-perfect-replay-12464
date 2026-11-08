@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { OverlayState } from "@/lib/kyoka";
 import { GIMMICKS } from "@/lib/kyoka";
 
@@ -16,27 +16,45 @@ function beep() {
 
 export function OverlayView({ state, preview }: { state: OverlayState; preview?: boolean }) {
   const p = state.payload;
-  const last = useRef(state.updatedAt);
+  const last = useRef(state.payloadAt);
   useEffect(() => {
-    if (!preview && state.sound && state.updatedAt !== last.current && p) beep();
-    last.current = state.updatedAt;
-  }, [state.updatedAt, state.sound, p, preview]);
+    if (!preview && state.sound && state.payloadAt !== last.current && p) beep();
+    last.current = state.payloadAt;
+  }, [state.payloadAt, state.sound, p, preview]);
+  const [bannerOn, setBannerOn] = useState(false);
+  useEffect(() => {
+    if (!state.banner || Date.now() - state.banner.at > 8000) return;
+    setBannerOn(true);
+    if (!preview && state.sound) beep();
+    const t = setTimeout(() => setBannerOn(false), 6000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.banner?.at]);
 
   const style = { "--ov": ACCENT[state.accent] ?? "var(--primary)", fontSize: `${state.textScale}em` } as CSSProperties;
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
 
   return (
     <div style={style} className="relative flex h-full w-full flex-col items-center justify-center gap-[1.2em] p-[4%] text-foreground">
+      {state.visible && bannerOn && state.banner && (
+        <div key={state.banner.at} className="animate-pop-in absolute inset-x-[4%] top-[3%] z-10 rounded-[1em] bg-party px-[1em] py-[0.6em] text-center font-display text-[1.1em] font-bold shadow-pop">
+          {state.banner.text}
+        </div>
+      )}
       {!state.visible ? null : !p ? (
         preview ? <p className="text-[0.9em] text-muted-foreground">Overlay kosong — kirim gimmick dari dashboard</p> : null
       ) : (
-        <div key={state.updatedAt} className="animate-pop-in flex w-full flex-col items-center gap-[1em]">
+        <div key={state.payloadAt} className="animate-pop-in flex w-full flex-col items-center gap-[1em]">
           {state.showTitle && g && (
             <div className="rounded-full px-[1.2em] py-[0.4em] font-display text-[1.1em] font-bold shadow-pop" style={{ background: "var(--ov)" }}>
               {g.emoji} {g.name}
             </div>
           )}
           <Body state={state} />
+          {state.votes && (p.gimmick === "thisorthat" || p.gimmick === "hottake") && <VoteBar votes={state.votes} labels={p.gimmick === "hottake" ? ["Setuju", "Gak setuju"] : ["A", "B"]} />}
+          {state.audienceCode && (p.gimmick === "thisorthat" || p.gimmick === "hottake") && (
+            <p className="text-center text-[0.85em] font-semibold">Komen <b className="text-zest">A</b> / <b className="text-zest">B</b> atau vote di link bio 💜</p>
+          )}
           {state.showBadge && <div className="mt-[0.5em] font-display text-[0.7em] font-bold tracking-[0.3em] text-gradient">KYOKA LIVE</div>}
         </div>
       )}
@@ -91,6 +109,14 @@ function Body({ state }: { state: OverlayState }) {
           ) : null}
         </>
       );
+    case "audience":
+      return (
+        <>
+          <span className="rounded-full bg-pop/30 px-[1em] py-[0.2em] text-[0.9em] font-semibold">{p.kind === "confession" ? "🤫 Confession anonim" : p.kind === "problem" ? "🌀 Masalah dari penonton" : "💬 Dari penonton"}</span>
+          <Bubble big>{p.content}</Bubble>
+          <p className="text-[0.9em] text-muted-foreground">— {p.nickname || "Anonim"}</p>
+        </>
+      );
     case "confession":
       return (
         <>
@@ -123,7 +149,6 @@ function Body({ state }: { state: OverlayState }) {
   }
 }
 
-import { useState } from "react";
 function ThisOrThat({ a, b, end }: { a?: string | undefined; b?: string | undefined; end?: number | undefined }) {
   const [left, setLeft] = useState(0);
   useEffect(() => {
@@ -138,6 +163,20 @@ function ThisOrThat({ a, b, end }: { a?: string | undefined; b?: string | undefi
         {end && left > 0 ? left : "VS"}
       </div>
       <div className="w-full rounded-[1.2em] bg-electric p-[1em] text-center font-display text-[1.7em] font-bold text-background shadow-glow">{b}</div>
+    </div>
+  );
+}
+
+function VoteBar({ votes, labels }: { votes: { a: number; b: number }; labels: [string, string] }) {
+  const total = votes.a + votes.b;
+  const pa = total ? Math.round((votes.a / total) * 100) : 50;
+  return (
+    <div className="w-full">
+      <div className="flex h-[1.8em] w-full overflow-hidden rounded-full border-[0.12em] border-background/60 bg-background/70">
+        <div className="flex items-center justify-start bg-primary px-[0.6em] font-display text-[0.85em] font-bold transition-all duration-500" style={{ width: `${pa}%` }}>{pa}%</div>
+        <div className="flex flex-1 items-center justify-end bg-electric px-[0.6em] font-display text-[0.85em] font-bold text-background">{100 - pa}%</div>
+      </div>
+      <div className="mt-[0.3em] flex justify-between text-[0.8em] font-semibold"><span>{labels[0]} · {votes.a}</span><span>{votes.b} · {labels[1]}</span></div>
     </div>
   );
 }

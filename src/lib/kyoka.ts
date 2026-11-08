@@ -24,7 +24,7 @@ export type Activity = { id: string; text: string; at: number };
 export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
   sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
-  countdown: number;
+  countdown: number; giftRules: GiftRule[];
 };
 
 export type OverlayPayload =
@@ -34,16 +34,22 @@ export type OverlayPayload =
   | { gimmick: "hottake"; topic?: string | undefined; followups?: string[] | undefined }
   | { gimmick: "confession"; prompt?: string | undefined; category?: string | undefined }
   | { gimmick: "chaos"; mode: "story"; words: string[] }
-  | { gimmick: "chaos"; mode: "solution"; problem: string; solutions: string[] };
+  | { gimmick: "chaos"; mode: "solution"; problem: string; solutions: string[] }
+  | { gimmick: "audience"; kind: string; content: string; nickname?: string | undefined };
+
+export type GiftRule = { id: string; name: string; emoji: string; effect: "vote" | "shoutout"; weight: number; reward: string };
 
 export type OverlayState = {
-  visible: boolean; payload: OverlayPayload | null; updatedAt: number;
+  visible: boolean; payload: OverlayPayload | null; updatedAt: number; payloadAt: number;
+  votes?: { a: number; b: number } | undefined;
+  banner?: { text: string; at: number } | undefined;
+  audienceCode?: string | undefined;
   accent: Settings["accent"]; textScale: number; sound: boolean; showTitle: boolean; showBadge: boolean;
 };
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 const now = Date.now();
 const q = (text: string, gimmick: GimmickId, category: string): Question => ({
   id: uid(), text, gimmick, category, createdAt: now, favorite: false, used: false, demo: true,
@@ -121,6 +127,13 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
+    giftRules: [
+      { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
+      { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
+      { id: "donut", name: "Donut", emoji: "🍩", effect: "vote", weight: 10, reward: "+10 suara" },
+      { id: "galaxy", name: "Galaxy", emoji: "🌌", effect: "shoutout", weight: 0, reward: "Boleh pilih pertanyaan berikutnya!" },
+      { id: "lion", name: "Lion", emoji: "🦁", effect: "shoutout", weight: 0, reward: "Kyoka wajib jawab jujur 1 pertanyaan!" },
+    ],
   },
 };
 
@@ -152,6 +165,15 @@ export function useKyoka<T>(sel: (s: State) => T): T {
   );
 }
 
+export type Remote = {
+  insert: (q: Question[]) => void; update: (id: string, p: Partial<Question>) => void; remove: (id: string) => void;
+  overlay: (s: OverlayState) => void;
+};
+let remote: Remote | null = null;
+export function setRemote(r: Remote | null) { remote = r; }
+export function replaceQuestions(qs: Question[]) { setState((s) => ({ ...s, questions: qs })); }
+export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
+
 export const actions = {
   log(text: string) {
     setState((s) => ({ ...s, activity: [{ id: uid(), text, at: Date.now() }, ...s.activity].slice(0, 30) }));
@@ -159,18 +181,19 @@ export const actions = {
   addQuestions(items: { text: string; gimmick: GimmickId; category: string; demo?: boolean }[]) {
     const existing = new Set(state.questions.map((x) => normalize(x.text)));
     const fresh = items.filter((i) => i.text.trim() && !existing.has(normalize(i.text)));
-    setState((s) => ({
-      ...s,
-      questions: [...fresh.map((i) => ({ ...i, id: uid(), createdAt: Date.now(), favorite: false, used: false })), ...s.questions],
-    }));
+    const rows: Question[] = fresh.map((i) => ({ ...i, id: uid(), createdAt: Date.now(), favorite: false, used: false }));
+    setState((s) => ({ ...s, questions: [...rows, ...s.questions] }));
+    if (rows.length) remote?.insert(rows);
     if (fresh.length) actions.log(`${fresh.length} konten disimpan ke Question Bank`);
     return fresh.length;
   },
   updateQuestion(id: string, patch: Partial<Question>) {
     setState((s) => ({ ...s, questions: s.questions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+    remote?.update(id, patch);
   },
   deleteQuestion(id: string) {
     setState((s) => ({ ...s, questions: s.questions.filter((x) => x.id !== id) }));
+    remote?.remove(id);
   },
   addCategory(name: string) {
     if (!name.trim() || state.categories.includes(name.trim())) return;
@@ -215,7 +238,7 @@ export const sample = <T,>(arr: T[], n: number) => shuffle(arr).slice(0, n);
 /* ---------- Overlay realtime channel (same-browser, Demo Mode) ---------- */
 
 export const defaultOverlay = (): OverlayState => ({
-  visible: true, payload: null, updatedAt: 0, accent: state.settings.accent, textScale: state.settings.textScale,
+  visible: true, payload: null, updatedAt: 0, payloadAt: 0, accent: state.settings.accent, textScale: state.settings.textScale,
   sound: state.settings.sound, showTitle: state.settings.showTitle, showBadge: state.settings.showBadge,
 });
 
@@ -238,19 +261,26 @@ export function pushOverlay(next: OverlayState) {
   const s = { ...next, updatedAt: Date.now() };
   try { localStorage.setItem(OVERLAY_KEY, JSON.stringify(s)); } catch { /* ignore */ }
   getChannel()?.postMessage({ type: "state", state: s });
+  remote?.overlay(s);
   overlayListeners.forEach((l) => l());
 }
 
 const overlayListeners = new Set<() => void>();
 export function sendToOverlay(payload: OverlayPayload) {
   const o = readOverlay();
-  pushOverlay({ ...o, payload, visible: true });
+  pushOverlay({ ...o, payload, visible: true, payloadAt: Date.now(), votes: undefined });
   const g = GIMMICKS.find((x) => x.id === payload.gimmick);
   actions.log(`Overlay: ${g?.name ?? payload.gimmick} dikirim`);
 }
 export function setOverlayVisible(visible: boolean) {
   pushOverlay({ ...readOverlay(), visible });
   actions.log(visible ? "Overlay ditampilkan" : "Overlay disembunyikan");
+}
+export function showBanner(text: string) {
+  pushOverlay({ ...readOverlay(), banner: { text, at: Date.now() } });
+}
+export function setOverlayVotes(votes: { a: number; b: number }) {
+  pushOverlay({ ...readOverlay(), votes });
 }
 export function resetOverlay() {
   pushOverlay({ ...defaultOverlay(), payload: null });

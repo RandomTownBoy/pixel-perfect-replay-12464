@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { Star, Radio } from "lucide-react";
-import { PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
+import { overlayUrl, PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
+import { useLive } from "@/lib/cloud";
 import { Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { GIMMICKS, setOverlayVisible, useKyoka } from "@/lib/kyoka";
 
-export const Route = createFileRoute("/_studio/")({
+export const Route = createFileRoute("/_authenticated/_studio/dashboard")({
   head: () => ({
     meta: [
       { title: "Kyoka Live Studio — Livestream Control Center" },
@@ -23,11 +24,12 @@ function Overview() {
   const questions = useKyoka((s) => s.questions);
   const activity = useKyoka((s) => s.activity);
   const connected = useOverlayConnected();
+  const token = useLive((l) => l.overlayToken);
   const recent = [...questions].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
   const favs = questions.filter((q) => q.favorite).slice(0, 5);
 
   const goLive = () => {
-    window.open("/overlay", "kyoka-overlay", "width=540,height=960");
+    window.open(overlayUrl(token), "kyoka-overlay", "width=540,height=960");
     setOverlayVisible(true);
   };
 

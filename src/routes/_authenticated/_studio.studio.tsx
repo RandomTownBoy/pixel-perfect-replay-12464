@@ -2,13 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
+import { overlayUrl, PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
+import { audienceUrl } from "@/components/LiveConsole";
+import { liveActions, useLive } from "@/lib/cloud";
 import { Panel } from "@/components/Gimmicks";
 import { OverlayView } from "@/components/OverlayView";
 import { Button } from "@/components/ui/button";
 import { actions, defaultOverlay, readOverlay, resetOverlay, setOverlayVisible, subscribeOverlay, useKyoka, type OverlayState, type Settings } from "@/lib/kyoka";
 
-export const Route = createFileRoute("/_studio/studio")({
+export const Route = createFileRoute("/_authenticated/_studio/studio")({
   head: () => ({
     meta: [
       { title: "Overlay Studio — Kyoka Live Studio" },
@@ -25,7 +27,10 @@ function Studio() {
   const s = useKyoka((x) => x.settings);
   const [ov, setOv] = useState<OverlayState>(defaultOverlay());
   useEffect(() => { setOv(readOverlay()); return subscribeOverlay(setOv); }, []);
-  const url = typeof window !== "undefined" ? `${window.location.origin}/overlay` : "/overlay";
+  const token = useLive((l) => l.overlayToken);
+  const code = useLive((l) => l.audienceCode);
+  const url = overlayUrl(token);
+  const aUrl = audienceUrl(code);
   const ratio = s.overlayWidth / s.overlayHeight;
 
   return (
@@ -34,12 +39,19 @@ function Studio() {
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">
           <Panel className="grid grid-cols-2 gap-2">
-            <Button size="lg" variant="live" className="col-span-2" onClick={() => window.open("/overlay", "kyoka-overlay", "width=540,height=960")}><Play /> Start Overlay</Button>
+            <Button size="lg" variant="live" className="col-span-2" onClick={() => window.open(url, "kyoka-overlay", "width=540,height=960")}><Play /> Start Overlay</Button>
             <Button size="lg" variant="secondary" onClick={() => setOverlayVisible(true)}><Eye /> Show</Button>
             <Button size="lg" variant="secondary" onClick={() => setOverlayVisible(false)}><EyeOff /> Hide</Button>
             <Button size="lg" variant="secondary" onClick={resetOverlay}><RotateCcw /> Reset</Button>
             <Button size="lg" variant="secondary" onClick={() => { navigator.clipboard.writeText(url); toast("URL overlay disalin"); }}><Copy /> Copy URL</Button>
-            <a href="/overlay" target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1 truncate text-xs text-muted-foreground"><ExternalLink className="h-3 w-3" />{url}</a>
+            <a href={url} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1 truncate text-xs text-muted-foreground"><ExternalLink className="h-3 w-3" />{url}</a>
+            <Button size="sm" variant="ghost" className="col-span-2" onClick={async () => { if (confirm("Ganti link overlay? Link lama di OBS langsung berhenti.")) { if (await liveActions.rotateToken()) toast("Link overlay baru dibuat"); } }}>Ganti link overlay (cabut akses lama)</Button>
+          </Panel>
+          <Panel className="space-y-2 text-sm">
+            <h3 className="font-display text-sm font-bold">Link Penonton</h3>
+            <p className="text-xs text-muted-foreground">Taruh di bio / pin komentar. Penonton bisa vote, confess anonim & kirim pertanyaan.</p>
+            {aUrl && <img alt="QR link penonton" className="mx-auto h-32 w-32 rounded-lg bg-foreground p-1.5" src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(aUrl)}`} />}
+            <Button size="sm" variant="secondary" className="w-full" onClick={() => { navigator.clipboard.writeText(aUrl); toast("Link penonton disalin"); }}><Copy /> {aUrl.replace(/^https?:\/\//, "")}</Button>
           </Panel>
           <Panel className="space-y-4 text-sm">
             <h3 className="font-display text-sm font-bold">Kustomisasi</h3>
@@ -60,7 +72,7 @@ function Studio() {
             </div>
           </Panel>
           <Panel className="text-xs text-muted-foreground">
-            <b className="text-foreground">Cara pakai di OBS:</b> tambah Browser Source, isi URL di atas, ukuran {s.overlayWidth}×{s.overlayHeight}. Di Demo Mode, sinkronisasi hanya bekerja antar-tab di browser yang sama — sinkronisasi lintas aplikasi (OBS) aktif setelah backend tersambung.
+            <b className="text-foreground">Cara pakai di OBS:</b> tambah Browser Source, isi URL di atas, ukuran {s.overlayWidth}×{s.overlayHeight}. Overlay tersinkron realtime lewat internet, jadi bisa dibuka di OBS, HP, atau komputer lain. Jaga link ini tetap rahasia.
           </Panel>
         </div>
         <Panel>

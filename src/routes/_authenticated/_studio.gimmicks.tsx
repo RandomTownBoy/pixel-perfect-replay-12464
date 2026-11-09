@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/AppShell";
 import { GIMMICK_COMPONENTS } from "@/components/Gimmicks";
 import { GIMMICKS, type GimmickId } from "@/lib/kyoka";
 
-export const Route = createFileRoute("/_studio/gimmicks")({
+export const Route = createFileRoute("/_authenticated/_studio/gimmicks")({
   validateSearch: (s: { g?: GimmickId | undefined }): { g?: GimmickId | undefined } => ({
     g: GIMMICKS.some((x) => x.id === s.g) ? s.g : undefined,
   }),

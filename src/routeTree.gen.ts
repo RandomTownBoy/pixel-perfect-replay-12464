@@ -9,192 +9,297 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StudioRouteImport } from './routes/_studio'
-import { Route as OverlayRouteImport } from './routes/overlay'
-import { Route as StudioIndexRouteImport } from './routes/_studio.index'
-import { Route as StudioAiRouteImport } from './routes/_studio.ai'
-import { Route as StudioBankRouteImport } from './routes/_studio.bank'
-import { Route as StudioGimmicksRouteImport } from './routes/_studio.gimmicks'
-import { Route as StudioSettingsRouteImport } from './routes/_studio.settings'
-import { Route as StudioStudioRouteImport } from './routes/_studio.studio'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/_studio'
+import { Route as LiveCodeRouteImport } from './routes/live.$code'
+import { Route as OverlayTokenRouteImport } from './routes/overlay.$token'
+import { Route as AuthenticatedStudioAiRouteImport } from './routes/_authenticated/_studio.ai'
+import { Route as AuthenticatedStudioBankRouteImport } from './routes/_authenticated/_studio.bank'
+import { Route as AuthenticatedStudioDashboardRouteImport } from './routes/_authenticated/_studio.dashboard'
+import { Route as AuthenticatedStudioGimmicksRouteImport } from './routes/_authenticated/_studio.gimmicks'
+import { Route as AuthenticatedStudioSettingsRouteImport } from './routes/_authenticated/_studio.settings'
+import { Route as AuthenticatedStudioStudioRouteImport } from './routes/_authenticated/_studio.studio'
 
-const StudioRoute = StudioRouteImport.update({
-  id: '/_studio',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OverlayRoute = OverlayRouteImport.update({
-  id: '/overlay',
-  path: '/overlay',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StudioIndexRoute = StudioIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => StudioRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const StudioAiRoute = StudioAiRouteImport.update({
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
+  id: '/_studio',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const LiveCodeRoute = LiveCodeRouteImport.update({
+  id: '/live/$code',
+  path: '/live/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OverlayTokenRoute = OverlayTokenRouteImport.update({
+  id: '/overlay/$token',
+  path: '/overlay/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedStudioAiRoute = AuthenticatedStudioAiRouteImport.update({
   id: '/ai',
   path: '/ai',
-  getParentRoute: () => StudioRoute,
+  getParentRoute: () => AuthenticatedStudioRoute,
 } as any)
-const StudioBankRoute = StudioBankRouteImport.update({
+const AuthenticatedStudioBankRoute = AuthenticatedStudioBankRouteImport.update({
   id: '/bank',
   path: '/bank',
-  getParentRoute: () => StudioRoute,
+  getParentRoute: () => AuthenticatedStudioRoute,
 } as any)
-const StudioGimmicksRoute = StudioGimmicksRouteImport.update({
-  id: '/gimmicks',
-  path: '/gimmicks',
-  getParentRoute: () => StudioRoute,
-} as any)
-const StudioSettingsRoute = StudioSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => StudioRoute,
-} as any)
-const StudioStudioRoute = StudioStudioRouteImport.update({
-  id: '/studio',
-  path: '/studio',
-  getParentRoute: () => StudioRoute,
-} as any)
+const AuthenticatedStudioDashboardRoute =
+  AuthenticatedStudioDashboardRouteImport.update({
+    id: '/dashboard',
+    path: '/dashboard',
+    getParentRoute: () => AuthenticatedStudioRoute,
+  } as any)
+const AuthenticatedStudioGimmicksRoute =
+  AuthenticatedStudioGimmicksRouteImport.update({
+    id: '/gimmicks',
+    path: '/gimmicks',
+    getParentRoute: () => AuthenticatedStudioRoute,
+  } as any)
+const AuthenticatedStudioSettingsRoute =
+  AuthenticatedStudioSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedStudioRoute,
+  } as any)
+const AuthenticatedStudioStudioRoute =
+  AuthenticatedStudioStudioRouteImport.update({
+    id: '/studio',
+    path: '/studio',
+    getParentRoute: () => AuthenticatedStudioRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof StudioIndexRoute
-  '/overlay': typeof OverlayRoute
-  '/ai': typeof StudioAiRoute
-  '/bank': typeof StudioBankRoute
-  '/gimmicks': typeof StudioGimmicksRoute
-  '/settings': typeof StudioSettingsRoute
-  '/studio': typeof StudioStudioRoute
+  '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/live/$code': typeof LiveCodeRoute
+  '/overlay/$token': typeof OverlayTokenRoute
+  '/ai': typeof AuthenticatedStudioAiRoute
+  '/bank': typeof AuthenticatedStudioBankRoute
+  '/dashboard': typeof AuthenticatedStudioDashboardRoute
+  '/gimmicks': typeof AuthenticatedStudioGimmicksRoute
+  '/settings': typeof AuthenticatedStudioSettingsRoute
+  '/studio': typeof AuthenticatedStudioStudioRoute
 }
 export interface FileRoutesByTo {
-  '/overlay': typeof OverlayRoute
-  '/ai': typeof StudioAiRoute
-  '/bank': typeof StudioBankRoute
-  '/gimmicks': typeof StudioGimmicksRoute
-  '/settings': typeof StudioSettingsRoute
-  '/studio': typeof StudioStudioRoute
-  '/': typeof StudioIndexRoute
+  '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/live/$code': typeof LiveCodeRoute
+  '/overlay/$token': typeof OverlayTokenRoute
+  '/ai': typeof AuthenticatedStudioAiRoute
+  '/bank': typeof AuthenticatedStudioBankRoute
+  '/dashboard': typeof AuthenticatedStudioDashboardRoute
+  '/gimmicks': typeof AuthenticatedStudioGimmicksRoute
+  '/settings': typeof AuthenticatedStudioSettingsRoute
+  '/studio': typeof AuthenticatedStudioStudioRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_studio': typeof StudioRouteWithChildren
-  '/overlay': typeof OverlayRoute
-  '/_studio/ai': typeof StudioAiRoute
-  '/_studio/bank': typeof StudioBankRoute
-  '/_studio/gimmicks': typeof StudioGimmicksRoute
-  '/_studio/settings': typeof StudioSettingsRoute
-  '/_studio/studio': typeof StudioStudioRoute
-  '/_studio/': typeof StudioIndexRoute
+  '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/_studio': typeof AuthenticatedStudioRouteWithChildren
+  '/live/$code': typeof LiveCodeRoute
+  '/overlay/$token': typeof OverlayTokenRoute
+  '/_authenticated/_studio/ai': typeof AuthenticatedStudioAiRoute
+  '/_authenticated/_studio/bank': typeof AuthenticatedStudioBankRoute
+  '/_authenticated/_studio/dashboard': typeof AuthenticatedStudioDashboardRoute
+  '/_authenticated/_studio/gimmicks': typeof AuthenticatedStudioGimmicksRoute
+  '/_authenticated/_studio/settings': typeof AuthenticatedStudioSettingsRoute
+  '/_authenticated/_studio/studio': typeof AuthenticatedStudioStudioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/overlay' | '/ai' | '/bank' | '/gimmicks' | '/settings' | '/studio'
+    | '/'
+    | '/auth'
+    | '/live/$code'
+    | '/overlay/$token'
+    | '/ai'
+    | '/bank'
+    | '/dashboard'
+    | '/gimmicks'
+    | '/settings'
+    | '/studio'
   fileRoutesByTo: FileRoutesByTo
-  to: '/overlay' | '/ai' | '/bank' | '/gimmicks' | '/settings' | '/studio' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/live/$code'
+    | '/overlay/$token'
+    | '/ai'
+    | '/bank'
+    | '/dashboard'
+    | '/gimmicks'
+    | '/settings'
+    | '/studio'
   id:
     | '__root__'
-    | '/_studio'
-    | '/overlay'
-    | '/_studio/ai'
-    | '/_studio/bank'
-    | '/_studio/gimmicks'
-    | '/_studio/settings'
-    | '/_studio/studio'
-    | '/_studio/'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/_studio'
+    | '/live/$code'
+    | '/overlay/$token'
+    | '/_authenticated/_studio/ai'
+    | '/_authenticated/_studio/bank'
+    | '/_authenticated/_studio/dashboard'
+    | '/_authenticated/_studio/gimmicks'
+    | '/_authenticated/_studio/settings'
+    | '/_authenticated/_studio/studio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  StudioRoute: typeof StudioRouteWithChildren
-  OverlayRoute: typeof OverlayRoute
+  IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  LiveCodeRoute: typeof LiveCodeRoute
+  OverlayTokenRoute: typeof OverlayTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_studio': {
-      id: '/_studio'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof StudioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/overlay': {
-      id: '/overlay'
-      path: '/overlay'
-      fullPath: '/overlay'
-      preLoaderRoute: typeof OverlayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_studio/': {
-      id: '/_studio/'
+    '/': {
+      id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof StudioIndexRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_studio/ai': {
-      id: '/_studio/ai'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/_studio': {
+      id: '/_authenticated/_studio'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedStudioRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/live/$code': {
+      id: '/live/$code'
+      path: '/live/$code'
+      fullPath: '/live/$code'
+      preLoaderRoute: typeof LiveCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/overlay/$token': {
+      id: '/overlay/$token'
+      path: '/overlay/$token'
+      fullPath: '/overlay/$token'
+      preLoaderRoute: typeof OverlayTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/_studio/ai': {
+      id: '/_authenticated/_studio/ai'
       path: '/ai'
       fullPath: '/ai'
-      preLoaderRoute: typeof StudioAiRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof AuthenticatedStudioAiRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
     }
-    '/_studio/bank': {
-      id: '/_studio/bank'
+    '/_authenticated/_studio/bank': {
+      id: '/_authenticated/_studio/bank'
       path: '/bank'
       fullPath: '/bank'
-      preLoaderRoute: typeof StudioBankRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof AuthenticatedStudioBankRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
     }
-    '/_studio/gimmicks': {
-      id: '/_studio/gimmicks'
+    '/_authenticated/_studio/dashboard': {
+      id: '/_authenticated/_studio/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedStudioDashboardRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
+    }
+    '/_authenticated/_studio/gimmicks': {
+      id: '/_authenticated/_studio/gimmicks'
       path: '/gimmicks'
       fullPath: '/gimmicks'
-      preLoaderRoute: typeof StudioGimmicksRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof AuthenticatedStudioGimmicksRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
     }
-    '/_studio/settings': {
-      id: '/_studio/settings'
+    '/_authenticated/_studio/settings': {
+      id: '/_authenticated/_studio/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof StudioSettingsRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof AuthenticatedStudioSettingsRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
     }
-    '/_studio/studio': {
-      id: '/_studio/studio'
+    '/_authenticated/_studio/studio': {
+      id: '/_authenticated/_studio/studio'
       path: '/studio'
       fullPath: '/studio'
-      preLoaderRoute: typeof StudioStudioRouteImport
-      parentRoute: typeof StudioRoute
+      preLoaderRoute: typeof AuthenticatedStudioStudioRouteImport
+      parentRoute: typeof AuthenticatedStudioRoute
     }
   }
 }
 
-interface StudioRouteChildren {
-  StudioAiRoute: typeof StudioAiRoute
-  StudioBankRoute: typeof StudioBankRoute
-  StudioGimmicksRoute: typeof StudioGimmicksRoute
-  StudioSettingsRoute: typeof StudioSettingsRoute
-  StudioStudioRoute: typeof StudioStudioRoute
-  StudioIndexRoute: typeof StudioIndexRoute
+interface AuthenticatedStudioRouteChildren {
+  AuthenticatedStudioAiRoute: typeof AuthenticatedStudioAiRoute
+  AuthenticatedStudioBankRoute: typeof AuthenticatedStudioBankRoute
+  AuthenticatedStudioDashboardRoute: typeof AuthenticatedStudioDashboardRoute
+  AuthenticatedStudioGimmicksRoute: typeof AuthenticatedStudioGimmicksRoute
+  AuthenticatedStudioSettingsRoute: typeof AuthenticatedStudioSettingsRoute
+  AuthenticatedStudioStudioRoute: typeof AuthenticatedStudioStudioRoute
 }
 
-const StudioRouteChildren: StudioRouteChildren = {
-  StudioAiRoute: StudioAiRoute,
-  StudioBankRoute: StudioBankRoute,
-  StudioGimmicksRoute: StudioGimmicksRoute,
-  StudioSettingsRoute: StudioSettingsRoute,
-  StudioStudioRoute: StudioStudioRoute,
-  StudioIndexRoute: StudioIndexRoute,
+const AuthenticatedStudioRouteChildren: AuthenticatedStudioRouteChildren = {
+  AuthenticatedStudioAiRoute: AuthenticatedStudioAiRoute,
+  AuthenticatedStudioBankRoute: AuthenticatedStudioBankRoute,
+  AuthenticatedStudioDashboardRoute: AuthenticatedStudioDashboardRoute,
+  AuthenticatedStudioGimmicksRoute: AuthenticatedStudioGimmicksRoute,
+  AuthenticatedStudioSettingsRoute: AuthenticatedStudioSettingsRoute,
+  AuthenticatedStudioStudioRoute: AuthenticatedStudioStudioRoute,
 }
 
-const StudioRouteWithChildren =
-  StudioRoute._addFileChildren(StudioRouteChildren)
+const AuthenticatedStudioRouteWithChildren =
+  AuthenticatedStudioRoute._addFileChildren(AuthenticatedStudioRouteChildren)
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedStudioRoute: typeof AuthenticatedStudioRouteWithChildren
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedStudioRoute: AuthenticatedStudioRouteWithChildren,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  StudioRoute: StudioRouteWithChildren,
-  OverlayRoute: OverlayRoute,
+  IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+  LiveCodeRoute: LiveCodeRoute,
+  OverlayTokenRoute: OverlayTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -5,9 +5,9 @@ import { PageHeader } from "@/components/AppShell";
 import { Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { actions, GIMMICKS, useKyoka } from "@/lib/kyoka";
+import { actions, GIMMICKS, SAMPLE_QUESTIONS, useKyoka } from "@/lib/kyoka";
 
-export const Route = createFileRoute("/_studio/bank")({
+export const Route = createFileRoute("/_authenticated/_studio/bank")({
   head: () => ({
     meta: [
       { title: "Question Bank — Kyoka Live Studio" },
@@ -64,7 +64,13 @@ function Bank() {
             </div>
           );
         })}
-        {!list.length && <p className="py-10 text-center text-sm text-muted-foreground">Gak ada yang cocok.</p>}
+        {!qs.length && (
+          <div className="py-10 text-center">
+            <p className="mb-3 text-sm text-muted-foreground">Bank masih kosong.</p>
+            <Button variant="live" onClick={() => actions.addQuestions(SAMPLE_QUESTIONS().map((q) => ({ text: q.text, gimmick: q.gimmick, category: q.category, demo: true })))}>Muat contoh pertanyaan</Button>
+          </div>
+        )}
+        {!!qs.length && !list.length && <p className="py-10 text-center text-sm text-muted-foreground">Gak ada yang cocok.</p>}
       </div>
     </>
   );

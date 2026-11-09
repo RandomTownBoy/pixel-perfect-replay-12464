@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { actions, DEMO, demoGenerate, demoImprove, demoRemix, GIMMICKS, sample, useKyoka, type GimmickId } from "@/lib/kyoka";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_studio/ai")({
+export const Route = createFileRoute("/_authenticated/_studio/ai")({
   head: () => ({
     meta: [
       { title: "AI Assistant — Kyoka Live Studio" },

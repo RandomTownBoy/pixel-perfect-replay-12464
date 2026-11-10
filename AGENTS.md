@@ -30,5 +30,6 @@ use the editor.
 <!-- LOVABLE:END -->
 
 ## Project rules
-- Demo-mode app state lives in `src/lib/kyoka.ts` (localStorage store + BroadcastChannel overlay sync); replace the overlay channel with backend realtime in Stage 2 so OBS (separate browser) can receive updates.
-- Dashboard pages sit under the `_studio` pathless layout; `/overlay` stays outside it so it renders with no chrome and a transparent background.
+- `src/lib/kyoka.ts` is the local UI store; `src/lib/cloud.ts` mirrors questions to the database and broadcasts overlay/audience state over realtime channels keyed by the secret overlay token / audience code, so OBS and phones receive updates.
+- Public pages (`/overlay/$token`, `/live/$code`) only use security-definer RPCs (get_overlay_state, get_audience_state, submit_audience); never grant anon table access.
+- Dashboard pages live under `_authenticated/_studio.*` (sign-in gate + shell); overlay and audience routes stay outside so they render without chrome.

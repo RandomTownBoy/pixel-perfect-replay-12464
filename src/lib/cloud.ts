@@ -139,8 +139,8 @@ export function useCloudSync(userId: string | undefined) {
       setRemote({
         insert: (rows) => { supabase.from("questions").insert(rows.map((q) => ({ id: q.id, text: q.text, gimmick: q.gimmick, category: q.category, favorite: q.favorite, used: q.used, demo: !!q.demo }))).then(); },
         update: (id, p) => {
-          const patch: Record<string, unknown> = {};
-          for (const k of ["text", "category", "favorite", "used", "gimmick"] as const) if (k in p) patch[k] = p[k];
+          const patch: { text?: string; category?: string; favorite?: boolean; used?: boolean; gimmick?: string } = {};
+          for (const k of ["text", "category", "favorite", "used", "gimmick"] as const) if (k in p) (patch as Record<string, unknown>)[k] = p[k];
           supabase.from("questions").update(patch).eq("id", id).then();
         },
         remove: (id) => { supabase.from("questions").delete().eq("id", id).then(); },

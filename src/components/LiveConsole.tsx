@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, RotateCcw, X, Send } from "lucide-react";
+import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, X, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { liveActions, totalVotes, useLive, type Submission } from "@/lib/cloud";
+import { liveActions, totalVotes, useLive, type LiveEvent, type Submission } from "@/lib/cloud";
 import { readOverlay, sendToOverlay, showBanner, useKyoka } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
@@ -12,9 +12,11 @@ export function audienceUrl(code: string | null) {
 
 /** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. */
 export function LiveConsole() {
-  const [open, setOpen] = useState<"votes" | "gift" | "inbox" | null>(null);
+  const [open, setOpen] = useState<"votes" | "gift" | "inbox" | "feed" | null>(null);
   const inbox = useLive((l) => l.inbox);
   const history = useLive((l) => l.history);
+  const feed = useLive((l) => l.feed);
+  const tk = useLive((l) => l.tiktokLive);
   const [view, setView] = useState<"pending" | "history">("pending");
   const [savingId, setSavingId] = useState<string | null>(null);
   const code = useLive((l) => l.audienceCode);
@@ -37,6 +39,15 @@ export function LiveConsole() {
   const kindLabel = (k: string) => (k === "confession" ? "🤫 Confession" : k === "problem" ? "🌀 Masalah" : "💬 Pertanyaan");
   const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
 
+  const showComment = (e: LiveEvent) => sendToOverlay({ gimmick: "audience", kind: "question", content: e.content ?? "", nickname: e.nickname ?? undefined });
+  const feedLine = (e: LiveEvent) => {
+    const who = `@${e.nickname || e.user_id || "penonton"}`;
+    if (e.type === "gift") return `🎁 ${who} kirim ${e.gift_name ?? "gift"}${e.gift_count > 1 ? ` ×${e.gift_count}` : ""}`;
+    if (e.type === "follow") return `➕ ${who} follow`;
+    if (e.type === "share") return `🔁 ${who} membagikan LIVE`;
+    return `${who}: ${e.content ?? ""}`;
+  };
+
   const applyGift = (id: string) => {
     const r = rules.find((x) => x.id === id); if (!r) return;
     const who = sender.trim() ? `@${sender.trim()}` : "Seseorang";
@@ -55,7 +66,7 @@ export function LiveConsole() {
       {open && (
         <div className="w-[min(92vw,360px)] rounded-2xl border border-border bg-popover p-4 shadow-glow animate-pop-in">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-sm font-bold">{open === "votes" ? "Vote Penonton" : open === "gift" ? "Gift TikTok" : `Inbox Penonton (${inbox.length})`}</h3>
+            <h3 className="font-display text-sm font-bold">{open === "votes" ? "Vote Penonton" : open === "gift" ? "Gift TikTok" : open === "feed" ? "Live Feed TikTok" : `Inbox Penonton (${inbox.length})`}</h3>
             <button onClick={() => setOpen(null)} aria-label="Tutup"><X className="h-4 w-4" /></button>
           </div>
 
@@ -99,6 +110,37 @@ export function LiveConsole() {
               </div>
               {live.giftLog.length > 0 && <ul className="max-h-24 space-y-1 overflow-auto text-xs text-muted-foreground">{live.giftLog.map((g) => <li key={g.id}>{g.text}</li>)}</ul>}
               <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok. Atur gift & hadiahnya di Settings.</p>
+            </div>
+          )}
+
+          {open === "feed" && (
+            <div className="space-y-2 text-sm">
+              <div className={`flex items-center gap-2 rounded-lg p-2 text-xs font-semibold ${tk.connected ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+                <span className={`h-2 w-2 rounded-full ${tk.connected ? "animate-pulse bg-success" : "bg-muted-foreground"}`} />
+                {tk.connected ? `Konektor TikTok aktif${tk.handle ? ` · @${tk.handle}` : ""}` : "Konektor TikTok belum aktif — lihat Settings › TikTok LIVE"}
+              </div>
+              {!feed.length && <p className="py-4 text-center text-muted-foreground">Belum ada komentar atau gift masuk.</p>}
+              <ul className="max-h-64 space-y-1.5 overflow-auto">
+                {feed.map((e) => (
+                  <li key={e.id} className="flex items-start gap-2 rounded-lg bg-background/60 px-2.5 py-1.5">
+                    <span className="min-w-0 flex-1 break-words text-xs">{feedLine(e)}</span>
+                    {e.vote_choice && <span className="rounded bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">VOTE {e.vote_choice.toUpperCase()}</span>}
+                    {e.type === "comment" && !e.vote_choice && <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" onClick={() => showComment(e)}><Send /></Button>}
+                  </li>
+                ))}
+              </ul>
+              {!!feed.length && <Button size="sm" variant="ghost" onClick={liveActions.clearFeed}><RotateCcw /> Bersihkan tampilan</Button>}
+              <details className="rounded-lg border border-border p-2 text-xs">
+                <summary className="cursor-pointer font-semibold">Uji tanpa TikTok</summary>
+                <p className="my-2 text-muted-foreground">Kirim event palsu lewat jalur yang sama dengan konektor. Untuk tes vote, kirim This or That / Hot Take ke overlay dulu.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("comment-a")}>Komentar “A”</Button>
+                  <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("comment-b")}>Komentar “B”</Button>
+                  <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("comment")}>Komentar biasa</Button>
+                  <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("gift")}>Gift (dari pemilih A/B terakhir)</Button>
+                  <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("follow")}>Follow</Button>
+                </div>
+              </details>
             </div>
           )}
 
@@ -148,6 +190,9 @@ export function LiveConsole() {
       <div className="flex gap-2">
         <Fab label="Vote" onClick={() => setOpen(open === "votes" ? null : "votes")} active={open === "votes"}><MessageCircle className="h-5 w-5" />{voting && <span className="text-xs font-bold">{totals.a}:{totals.b}</span>}</Fab>
         <Fab label="Gift" onClick={() => setOpen(open === "gift" ? null : "gift")} active={open === "gift"}><Gift className="h-5 w-5" /></Fab>
+        <Fab label="Feed" onClick={() => setOpen(open === "feed" ? null : "feed")} active={open === "feed"}>
+          <Radio className="h-5 w-5" /><span className={`h-2 w-2 rounded-full ${tk.connected ? "animate-pulse bg-success" : "bg-muted-foreground"}`} />
+        </Fab>
         <Fab label="Inbox" onClick={() => setOpen(open === "inbox" ? null : "inbox")} active={open === "inbox"}>
           <Inbox className="h-5 w-5" />{inbox.length > 0 && <span className="rounded-full bg-pop px-1.5 text-xs font-bold text-background">{inbox.length}</span>}
         </Fab>

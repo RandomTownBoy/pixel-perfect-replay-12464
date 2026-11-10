@@ -49,7 +49,14 @@ export type OverlayState = {
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
 
-const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+// Harus berformat UUID asli: kolom questions.id di database bertipe uuid.
+const uid = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+};
 const now = Date.now();
 const q = (text: string, gimmick: GimmickId, category: string): Question => ({
   id: uid(), text, gimmick, category, createdAt: now, favorite: false, used: false, demo: true,
@@ -171,6 +178,8 @@ export type Remote = {
 };
 let remote: Remote | null = null;
 export function setRemote(r: Remote | null) { remote = r; }
+/** True kalau sudah tersambung ke database (aman untuk menyimpan). */
+export const hasRemote = () => remote !== null;
 export function replaceQuestions(qs: Question[]) { setState((s) => ({ ...s, questions: qs })); }
 export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
 
@@ -220,7 +229,7 @@ function pick(p: Partial<Settings>): Partial<OverlayState> {
 }
 
 export function normalize(t: string) {
-  return t.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  return t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
 
 export function getQuestions() { load(); return state.questions; }

@@ -282,11 +282,17 @@ export function useCloudSync(userId: string | undefined) {
     ownerId = userId;
     let cancelled = false;
     (async () => { try {
-      let { data: sess } = await supabase.from("studio_sessions").select("overlay_token, audience_code, ingest_key").eq("owner_id", userId).maybeSingle();
-      if (!sess) {
-        const ins = await supabase.from("studio_sessions").insert({ owner_id: userId }).select("overlay_token, audience_code, ingest_key").single();
+      // Kolom dasar dimuat dulu (link penonton + token overlay) supaya tidak ikut gagal kalau kolom baru belum ada di database.
+      let { data: sess, error: sessErr } = await supabase.from("studio_sessions").select("overlay_token, audience_code").eq("owner_id", userId).maybeSingle();
+      if (sessErr) console.error("Gagal memuat sesi studio", sessErr);
+      if (!sess && !sessErr) {
+        const ins = await supabase.from("studio_sessions").insert({ owner_id: userId }).select("overlay_token, audience_code").single();
+        if (ins.error) console.error("Gagal membuat sesi studio", ins.error);
         sess = ins.data;
       }
+      // Kunci konektor TikTok dimuat terpisah; null kalau migrasi database step 2 belum dijalankan.
+      const ik = await supabase.from("studio_sessions").select("ingest_key").eq("owner_id", userId).maybeSingle();
+      const ingestKey = ik.error ? null : ((ik.data as unknown as { ingest_key?: string } | null)?.ingest_key ?? null);
       const { data: qs } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
       const { data: inbox } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(100);
       const { data: hist } = await supabase.from("audience_submissions").select("*").in("status", ["approved", "shown", "rejected"]).order("created_at", { ascending: false }).limit(100);
@@ -301,7 +307,7 @@ export function useCloudSync(userId: string | undefined) {
       }
       setLive({ feed: events.filter((x) => x.type !== "system" && x.type !== "join" && x.type !== "like").slice(0, 60) });
       replaceQuestions((qs ?? []).map(toQ));
-      setLive({ overlayToken: sess?.overlay_token ?? null, audienceCode: sess?.audience_code ?? null, ingestKey: (sess as { ingest_key?: string } | null)?.ingest_key ?? null, inbox: inbox ?? [], history: hist ?? [], round: String(readOverlay().payloadAt || "") });
+      setLive({ overlayToken: sess?.overlay_token ?? null, audienceCode: sess?.audience_code ?? null, ingestKey, inbox: inbox ?? [], history: hist ?? [], round: String(readOverlay().payloadAt || "") });
       void reloadWebTally();
       setRemote({
         insert: (rows) => {
@@ -329,7 +335,9 @@ export function useCloudSync(userId: string | undefined) {
             setLive({ web: { ...live.web, [r.choice]: live.web[r.choice] + 1 } }); scheduleVotePush();
           }
         } else if (r.status === "pending") setLive({ inbox: [r, ...live.inbox].slice(0, 100) });
-      })
+      }).subscribe();
+    // Channel terpisah: kalau tabel live_events belum ada, inbox penonton tetap jalan.
+    const evCh = supabase.channel(`events-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
       .subscribe();
     // Koneksi dianggap putus kalau konektor tidak mengirim heartbeat selama 60 detik.
@@ -337,7 +345,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch); clearInterval(staleTimer);
+      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); clearInterval(staleTimer);
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

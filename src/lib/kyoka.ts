@@ -180,7 +180,12 @@ let remote: Remote | null = null;
 export function setRemote(r: Remote | null) { remote = r; }
 /** True kalau sudah tersambung ke database (aman untuk menyimpan). */
 export const hasRemote = () => remote !== null;
-export function replaceQuestions(qs: Question[]) { setState((s) => ({ ...s, questions: qs })); }
+/** Kategori khusus untuk konten yang berasal dari kiriman penonton. */
+export const VIEWER_CATEGORY = "Dari Penonton";
+export function replaceQuestions(qs: Question[]) {
+  // Kategori dimuat dari isi database juga, supaya konten tidak "hilang" dari dropdown kalau localStorage kosong/ganti perangkat.
+  setState((s) => ({ ...s, questions: qs, categories: [...new Set([...s.categories, ...qs.map((q) => q.category)])] }));
+}
 export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
 
 export const actions = {

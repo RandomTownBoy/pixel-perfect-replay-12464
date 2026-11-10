@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Copy, Gift, Inbox, MessageCircle, RotateCcw, X, Check, Send } from "lucide-react";
+import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, RotateCcw, X, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { liveActions, totalVotes, useLive } from "@/lib/cloud";
+import { liveActions, totalVotes, useLive, type Submission } from "@/lib/cloud";
 import { readOverlay, sendToOverlay, showBanner, useKyoka } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
@@ -14,6 +14,9 @@ export function audienceUrl(code: string | null) {
 export function LiveConsole() {
   const [open, setOpen] = useState<"votes" | "gift" | "inbox" | null>(null);
   const inbox = useLive((l) => l.inbox);
+  const history = useLive((l) => l.history);
+  const [view, setView] = useState<"pending" | "history">("pending");
+  const [savingId, setSavingId] = useState<string | null>(null);
   const code = useLive((l) => l.audienceCode);
   const live = useLive((l) => l);
   const totals = totalVotes(live);
@@ -23,6 +26,16 @@ export function LiveConsole() {
   const p = readOverlay().payload;
   const voting = p?.gimmick === "thisorthat" || p?.gimmick === "hottake";
   const labels = p?.gimmick === "thisorthat" ? [p.a ?? "A", p.b ?? "B"] : ["Setuju", "Gak setuju"];
+
+  const save = async (s: Submission) => {
+    setSavingId(s.id);
+    const r = await liveActions.saveToBank(s);
+    setSavingId(null);
+    if (r.ok) toast.success(r.message); else toast.error(r.message);
+  };
+  const show = (s: Submission) => sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", nickname: s.nickname ?? undefined });
+  const kindLabel = (k: string) => (k === "confession" ? "🤫 Confession" : k === "problem" ? "🌀 Masalah" : "💬 Pertanyaan");
+  const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
 
   const applyGift = (id: string) => {
     const r = rules.find((x) => x.id === id); if (!r) return;
@@ -95,16 +108,35 @@ export function LiveConsole() {
                 <span className="flex-1 truncate">{audienceUrl(code)}</span>
                 <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(audienceUrl(code)); toast("Link penonton disalin — taruh di bio!"); }}><Copy /></Button>
               </div>
-              {!inbox.length && <p className="py-6 text-center text-muted-foreground">Belum ada kiriman. Bagikan link di atas ke penonton.</p>}
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                {([["pending", `Masuk (${inbox.length})`], ["history", `Riwayat (${history.length})`]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setView(k)} className={`rounded-md py-1.5 text-xs font-semibold ${view === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
+                ))}
+              </div>
+
+              {view === "pending" && !inbox.length && <p className="py-6 text-center text-muted-foreground">Belum ada kiriman. Bagikan link di atas ke penonton.</p>}
+              {view === "history" && !history.length && <p className="py-6 text-center text-muted-foreground">Belum ada riwayat. Kiriman yang kamu simpan, tampilkan, atau tolak muncul di sini.</p>}
+
               <ul className="max-h-80 space-y-2 overflow-auto">
-                {inbox.map((s) => (
+                {view === "pending" && inbox.map((s) => (
                   <li key={s.id} className="rounded-xl bg-background/60 p-3">
-                    <p className="text-xs font-semibold text-pop">{s.kind === "confession" ? "🤫 Confession" : s.kind === "problem" ? "🌀 Masalah" : "💬 Pertanyaan"} · {s.nickname || "Anonim"}</p>
+                    <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {s.nickname || "Anonim"}</p>
                     <p className="my-1.5">{s.content}</p>
                     <div className="flex gap-1.5">
-                      <Button size="sm" variant="live" onClick={() => { sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", nickname: s.nickname ?? undefined }); liveActions.setStatus(s.id, "shown"); }}><Send /> Tampilkan</Button>
-                      <Button size="sm" variant="secondary" onClick={() => liveActions.setStatus(s.id, "approved")}><Check /> Simpan</Button>
-                      <Button size="sm" variant="ghost" onClick={() => liveActions.setStatus(s.id, "rejected")}><X /></Button>
+                      <Button size="sm" variant="live" onClick={() => { show(s); void liveActions.setStatus(s.id, "shown"); }}><Send /> Tampilkan</Button>
+                      <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>
+                      <Button size="sm" variant="ghost" aria-label="Tolak" onClick={() => void liveActions.setStatus(s.id, "rejected")}><X /></Button>
+                    </div>
+                  </li>
+                ))}
+                {view === "history" && history.map((s) => (
+                  <li key={s.id} className="rounded-xl bg-background/60 p-3">
+                    <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {s.nickname || "Anonim"} · <span className="text-muted-foreground">{statusLabel[s.status] ?? s.status}</span></p>
+                    <p className="my-1.5">{s.content}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {s.status !== "approved" && <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>}
+                      <Button size="sm" variant="ghost" onClick={() => show(s)}><Send /> Tampilkan</Button>
+                      <Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "pending")}><RotateCcw /> Kembalikan</Button>
                     </div>
                   </li>
                 ))}

@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { PageHeader } from "@/components/AppShell";
 import { Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { liveActions, useLive } from "@/lib/cloud";
 import { actions, useKyoka } from "@/lib/kyoka";
 
 export const Route = createFileRoute("/_authenticated/_studio/settings")({
@@ -19,6 +22,16 @@ export const Route = createFileRoute("/_authenticated/_studio/settings")({
 
 function SettingsPage() {
   const s = useKyoka((x) => x.settings);
+  const ingestKey = useLive((l) => l.ingestKey);
+  const tk = useLive((l) => l.tiktokLive);
+  const [reveal, setReveal] = useState(false);
+  const [handle, setHandle] = useState("");
+  const envSnippet = () => [
+    `SUPABASE_URL=${import.meta.env["VITE_SUPABASE_URL"] ?? ""}`,
+    `SUPABASE_KEY=${import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? ""}`,
+    `INGEST_KEY=${ingestKey ?? ""}`,
+    `TIKTOK_USERNAME=${handle.replace(/^@/, "")}`,
+  ].join("\n");
   return (
     <>
       <PageHeader title="Settings" />
@@ -57,9 +70,25 @@ function SettingsPage() {
           })}
           <Button size="sm" variant="secondary" onClick={() => actions.updateSettings({ giftRules: [...s.giftRules, { id: crypto.randomUUID(), name: "Gift baru", emoji: "🎁", effect: "shoutout", weight: 1, reward: "Request lagu!" }] })}>+ Tambah gift</Button>
         </Panel>
-        <Panel className="space-y-2 text-sm">
-          <h3 className="font-display text-sm font-bold">TikTok LIVE</h3>
-          <p className="text-muted-foreground">Komentar & gift TikTok belum dibaca otomatis — TikTok belum menyediakan akses resmi untuk ini. Untuk sekarang hitung komentar dan tap gift lewat tombol Vote/Gift di pojok kanan bawah. Kami tidak akan pernah meminta password TikTok.</p>
+        <Panel className="space-y-3 text-sm md:col-span-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-display text-sm font-bold">TikTok LIVE (komentar & gift otomatis)</h3>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${tk.connected ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+              <span className={`h-2 w-2 rounded-full ${tk.connected ? "animate-pulse bg-success" : "bg-muted-foreground"}`} />
+              {tk.connected ? `Konektor aktif${tk.handle ? ` · @${tk.handle}` : ""}` : "Konektor belum aktif"}
+            </span>
+          </div>
+          <p className="text-muted-foreground">Konektor adalah program kecil yang kamu jalankan di komputer saat LIVE. Ia membaca komentar dan gift TikTok-mu, lalu mengirimnya ke studio ini lewat kunci di bawah. Kunci ini <b>bukan</b> password TikTok — jangan pernah membagikannya, dan jangan pernah memasukkan password TikTok di mana pun.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg bg-background/60 px-3 py-2 text-xs">{ingestKey ? (reveal ? ingestKey : "•".repeat(24)) : "Kunci belum tersedia"}</code>
+            <Button size="sm" variant="ghost" onClick={() => setReveal(!reveal)}>{reveal ? "Sembunyikan" : "Tampilkan"}</Button>
+            <Button size="sm" variant="ghost" onClick={async () => { if (await liveActions.rotateIngestKey()) toast.success("Kunci diganti. Perbarui juga di konektor."); }}>Ganti kunci</Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input placeholder="Username TikTok (tanpa @)" value={handle} onChange={(e) => setHandle(e.target.value)} className="w-56" />
+            <Button size="sm" variant="secondary" disabled={!ingestKey} onClick={() => { navigator.clipboard.writeText(envSnippet()); toast("Konfigurasi konektor disalin (isi file .env)."); }}>Salin konfigurasi konektor</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Sebelum konektor siap, kamu bisa menguji seluruh alurnya dari tombol <b>Feed</b> › “Uji tanpa TikTok” di pojok kanan bawah. Agar gift otomatis terhitung, nama gift di tabel atas harus sama dengan nama gift di TikTok (misalnya “Rose”).</p>
         </Panel>
         <Panel className="space-y-2 text-sm md:col-span-2">
           <h3 className="font-display text-sm font-bold">Data Demo</h3>

@@ -223,6 +223,8 @@ export function normalize(t: string) {
   return t.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+export function getQuestions() { load(); return state.questions; }
+
 export function isDuplicate(text: string) {
   const n = normalize(text);
   return state.questions.some((x) => normalize(x.text) === n);

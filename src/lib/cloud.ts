@@ -125,7 +125,7 @@ export function useCloudSync(userId: string | undefined) {
     if (!userId) return;
     ownerId = userId;
     let cancelled = false;
-    (async () => {
+    (async () => { try {
       let { data: sess } = await supabase.from("studio_sessions").select("overlay_token, audience_code").eq("owner_id", userId).maybeSingle();
       if (!sess) {
         const ins = await supabase.from("studio_sessions").insert({ owner_id: userId }).select("overlay_token, audience_code").single();
@@ -147,8 +147,7 @@ export function useCloudSync(userId: string | undefined) {
         overlay: pushRemote,
       });
       connectChannels();
-      setReady(true);
-    })();
+    } catch (e) { console.error("sync failed", e); } finally { if (!cancelled) setReady(true); } })();
     const ch = supabase.channel(`subs-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
         const r = e.new as Submission;

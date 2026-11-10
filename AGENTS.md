@@ -33,3 +33,4 @@ use the editor.
 - `src/lib/kyoka.ts` is the local UI store; `src/lib/cloud.ts` mirrors questions to the database and broadcasts overlay/audience state over realtime channels keyed by the secret overlay token / audience code, so OBS and phones receive updates.
 - Public pages (`/overlay/$token`, `/live/$code`) only use security-definer RPCs (get_overlay_state, get_audience_state, submit_audience); never grant anon table access.
 - Dashboard pages live under `_authenticated/_studio.*` (sign-in gate + shell); overlay and audience routes stay outside so they render without chrome.
+- AI calls go through `src/lib/ai.functions.ts` (auth-required server fn) → `ai.server.ts` (Lovable AI Gateway, Responses API, Kyoka persona prompt); the client sends recent bank items so the AI avoids repeats.

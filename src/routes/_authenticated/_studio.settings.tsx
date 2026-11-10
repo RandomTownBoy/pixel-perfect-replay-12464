@@ -35,7 +35,7 @@ function SettingsPage() {
         </Panel>
         <Panel className="space-y-2 text-sm">
           <h3 className="font-display text-sm font-bold">AI Provider</h3>
-          <p className="text-muted-foreground">Saat ini Demo Mode (tanpa API key). Tahap berikutnya memakai AI bawaan yang kuncinya disimpan aman di server — tidak pernah di browser.</p>
+          <p className="text-muted-foreground">AI aktif lewat Lovable AI — tidak perlu API key. Kunci disimpan aman di server, tidak pernah di browser. Pemakaian AI memotong kredit workspace.</p>
         </Panel>
         <Panel className="space-y-3 text-sm md:col-span-2">
           <h3 className="font-display text-sm font-bold">Gift TikTok & Hadiahnya</h3>

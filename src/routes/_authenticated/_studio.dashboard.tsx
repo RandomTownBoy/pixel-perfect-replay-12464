@@ -29,7 +29,6 @@ function Overview() {
   const favs = questions.filter((q) => q.favorite).slice(0, 5);
 
   const goLive = () => {
-    window.open(overlayUrl(token), "kyoka-overlay", "width=540,height=960");
     setOverlayVisible(true);
   };
 
@@ -38,7 +37,7 @@ function Overview() {
       <PageHeader title={`Halo, ${name} 👋`} sub="Siap bikin LIVE hari ini makin chaos?">
         <div className="flex items-center gap-3">
           <StatusPill connected={connected} />
-          <Button size="lg" variant="live" onClick={goLive}><Radio /> Mulai Mode LIVE</Button>
+          <Button asChild size="lg" variant="live"><a href={overlayUrl(token) || undefined} target="_blank" rel="noreferrer" onClick={goLive}><Radio /> Mulai Mode LIVE</a></Button>
         </div>
       </PageHeader>
 

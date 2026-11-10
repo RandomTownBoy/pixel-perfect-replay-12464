@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  actions, DEMO, demoGenerate, sample, sendToOverlay, useKyoka, type GimmickId,
+  actions, DEMO, sample, sendToOverlay, useKyoka, type GimmickId,
 } from "@/lib/kyoka";
 import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check } from "lucide-react";
 import { toast } from "sonner";
+import { useAi } from "@/lib/use-ai";
+import { Loader2 } from "lucide-react";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -43,6 +45,7 @@ export function SpinGimmick() {
   const [spinning, setSpinning] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<string[]>([]);
+  const ai = useAi();
 
   const spin = () => {
     if (!pool.length) { toast("Belum ada pertanyaan di kategori ini"); return; }
@@ -96,7 +99,7 @@ export function SpinGimmick() {
         <h3 className="font-display text-sm font-bold">Isi roda ({pool.length})</h3>
         <div className="flex gap-2">
           <Input type="number" min={1} max={10} value={count} onChange={(e) => setCount(+e.target.value)} className="w-20" />
-          <Button variant="secondary" className="flex-1" onClick={() => setDrafts(demoGenerate(category, count))}><Sparkles /> Generate (Demo AI)</Button>
+          <Button variant="secondary" className="flex-1" disabled={ai.loading} onClick={async () => { const l = await ai.run({ task: "generate", gimmick: "spin", category, count }); if (l) setDrafts(l); }}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate AI</Button>
         </div>
         {drafts.length > 0 && (
           <DraftList drafts={drafts} setDrafts={setDrafts} onSave={(d) => { actions.addQuestions(d.map((text) => ({ text, gimmick: "spin", category }))); setDrafts([]); }} />
@@ -131,7 +134,7 @@ function EditableRow({ text, index, onSave, onDelete }: { text: string; index: n
 export function DraftList({ drafts, setDrafts, onSave }: { drafts: string[]; setDrafts: (d: string[]) => void; onSave: (d: string[]) => void }) {
   return (
     <div className="space-y-2 rounded-xl border border-electric/40 bg-electric/5 p-3">
-      <p className="text-xs font-semibold text-electric">Hasil AI (Demo) — edit dulu sebelum disimpan</p>
+      <p className="text-xs font-semibold text-electric">Hasil AI — edit dulu sebelum disimpan</p>
       {drafts.map((d, i) => (
         <div key={i} className="flex gap-1.5">
           <Input value={d} onChange={(e) => setDrafts(drafts.map((x, j) => (j === i ? e.target.value : x)))} className="h-9 text-sm" />
@@ -150,7 +153,23 @@ export function ThisOrThatGimmick() {
   const [a, setA] = useState(""); const [b, setB] = useState("");
   const [timer, setTimer] = useState(true);
   const [k, setK] = useState(0);
-  const next = () => { setPair(sample(DEMO.thisOrThat.filter((p) => p[0] !== pair[0]), 1)[0] ?? pair); setK(k + 1); };
+  const saved = useKyoka((s) => s.questions).filter((q) => q.gimmick === "thisorthat" && q.text.includes("||")).map((q) => q.text.split("||").map((x) => x.trim()) as [string, string]);
+  const pool = [...saved, ...DEMO.thisOrThat];
+  const [queue, setQueue] = useState<[string, string][]>([]);
+  const ai = useAi();
+  const next = () => {
+    if (queue.length) { setPair(queue[0]!); setQueue(queue.slice(1)); }
+    else setPair(sample(pool.filter((p) => p[0] !== pair[0]), 1)[0] ?? pair);
+    setK(k + 1);
+  };
+  const aiPairs = async () => {
+    const l = await ai.run({ task: "thisorthat", gimmick: "thisorthat", category: "Random Thoughts", count: 6 });
+    const pairs = (l ?? []).map((x) => x.split("||").map((y) => y.trim())).filter((x) => x.length === 2 && x[0] && x[1]) as [string, string][];
+    if (!pairs.length) return;
+    actions.addQuestions(pairs.map((p) => ({ text: `${p[0]} || ${p[1]}`, gimmick: "thisorthat", category: "Random Thoughts" })));
+    setPair(pairs[0]!); setQueue(pairs.slice(1)); setK(k + 1);
+    toast.success(`${pairs.length} pasangan baru dari AI`);
+  };
   return (
     <Panel className="space-y-5">
       <Stage>
@@ -163,6 +182,7 @@ export function ThisOrThatGimmick() {
       <div className="flex flex-wrap items-center gap-2">
         <SendBtn onClick={() => sendToOverlay({ gimmick: "thisorthat", a: pair[0], b: pair[1], countdownEnd: timer ? Date.now() + cd * 1000 : undefined })} />
         <Button size="lg" variant="secondary" onClick={next}><Shuffle /> Next Round</Button>
+        <Button size="lg" variant="secondary" disabled={ai.loading} onClick={aiPairs}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} AI Pasangan</Button>
         <label className="ml-auto flex items-center gap-2 text-sm"><input type="checkbox" checked={timer} onChange={(e) => setTimer(e.target.checked)} /> Countdown {cd}s</label>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -220,7 +240,9 @@ export function HotTakeGimmick() {
   const [i, setI] = useState(0);
   const cur = pool[i % Math.max(pool.length, 1)];
   const [fu, setFu] = useState<string[]>([]);
-  if (!cur) return <Panel><Stage><p>Semua hot take sudah dipakai. Generate lagi di AI Assistant atau reset di Question Bank.</p></Stage></Panel>;
+  const ai = useAi();
+  const more = async () => { const l = await ai.run({ task: "hottake", gimmick: "hottake", category: "kehidupan sehari-hari", count: 5 }); if (l) { actions.addQuestions(l.map((text) => ({ text, gimmick: "hottake", category: "Random Thoughts" }))); toast.success("Hot take baru masuk"); } };
+  if (!cur) return <Panel><Stage><p>Semua hot take sudah dipakai.</p><Button variant="live" disabled={ai.loading} onClick={more}><Sparkles /> Bikin hot take baru (AI)</Button></Stage></Panel>;
   return (
     <Panel className="space-y-5">
       <Stage>
@@ -230,8 +252,9 @@ export function HotTakeGimmick() {
       </Stage>
       <div className="flex flex-wrap gap-2">
         <SendBtn onClick={() => sendToOverlay({ gimmick: "hottake", topic: cur.text, followups: fu })} />
-        <Button size="lg" variant="secondary" onClick={() => setFu(sample(DEMO.followups, 3))}><Sparkles /> Follow-up</Button>
+        <Button size="lg" variant="secondary" disabled={ai.loading} onClick={async () => { const l = await ai.run({ task: "followup", text: cur.text }); if (l) setFu(l.slice(0, 3)); }}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Follow-up AI</Button>
         <Button size="lg" variant="secondary" onClick={() => { setI(i + 1); setFu([]); }}><SkipForward /> Next</Button>
+        <Button size="lg" variant="ghost" disabled={ai.loading} onClick={more}>+ Hot take AI</Button>
         <Button size="lg" variant="ghost" onClick={() => { actions.updateQuestion(cur.id, { used: true }); setFu([]); }}><Check /> Tandai dipakai</Button>
       </div>
     </Panel>
@@ -247,6 +270,7 @@ export function ConfessionGimmick() {
   const [cat, setCat] = useState("Funny");
   const [custom, setCustom] = useState("");
   const [fu, setFu] = useState<string[]>([]);
+  const ai = useAi();
   const cur = pool[i % Math.max(pool.length, 1)];
   return (
     <Panel className="space-y-5">
@@ -261,7 +285,8 @@ export function ConfessionGimmick() {
       <div className="flex flex-wrap gap-2">
         <SendBtn disabled={!cur} onClick={() => cur && sendToOverlay({ gimmick: "confession", prompt: cur.text, category: cat })} />
         <Button size="lg" variant="secondary" onClick={() => { setI(i + 1); setFu([]); }}><SkipForward /> Next</Button>
-        <Button size="lg" variant="secondary" onClick={() => setFu(sample(DEMO.followups, 2))}><Sparkles /> Follow-up</Button>
+        <Button size="lg" variant="secondary" disabled={ai.loading || !cur} onClick={async () => { if (!cur) return; const l = await ai.run({ task: "followup", text: cur.text }); if (l) setFu(l.slice(0, 3)); }}><Sparkles /> Follow-up AI</Button>
+        <Button size="lg" variant="ghost" disabled={ai.loading} onClick={async () => { const l = await ai.run({ task: "generate", gimmick: "confession", category: cat, count: 5 }); if (l) { actions.addQuestions(l.map((text) => ({ text, gimmick: "confession", category: cat }))); setI(0); toast.success("Prompt baru masuk"); } }}>{ai.loading ? <Loader2 className="animate-spin" /> : "+"} Prompt AI</Button>
       </div>
       <div className="flex gap-2">
         <Input placeholder="Prompt confession sendiri…" value={custom} onChange={(e) => setCustom(e.target.value)} />
@@ -279,6 +304,12 @@ export function ChaosGimmick() {
   const [problem, setProblem] = useState(DEMO.problems[0]!);
   const [sols, setSols] = useState(() => DEMO.solutions.slice(0, 3));
   const [audience, setAudience] = useState("");
+  const ai = useAi();
+  const aiWords = async () => { const l = await ai.run({ task: "words", gimmick: "chaos" }); if (l && l.length >= 3) setWords(l.slice(0, 3)); };
+  const aiProblem = async (given = "") => {
+    const l = await ai.run({ task: "problem", gimmick: "chaos", text: given });
+    if (l && l.length >= 2) { setProblem(given || l[0]!); setSols(l.slice(1, 4)); }
+  };
   return (
     <Panel className="space-y-5">
       <div className="inline-flex rounded-xl bg-muted p-1">
@@ -297,7 +328,8 @@ export function ChaosGimmick() {
           </Stage>
           <div className="flex flex-wrap gap-2">
             <SendBtn onClick={() => sendToOverlay({ gimmick: "chaos", mode: "story", words })} />
-            <Button size="lg" variant="secondary" onClick={() => setWords(sample(DEMO.words, 3))}><Shuffle /> Regenerate</Button>
+            <Button size="lg" variant="secondary" onClick={() => setWords(sample(DEMO.words, 3))}><Shuffle /> Acak</Button>
+            <Button size="lg" variant="secondary" disabled={ai.loading} onClick={aiWords}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Kata AI</Button>
           </div>
         </>
       ) : (
@@ -309,11 +341,12 @@ export function ChaosGimmick() {
           <div className="flex flex-wrap gap-2">
             <SendBtn onClick={() => sendToOverlay({ gimmick: "chaos", mode: "solution", problem, solutions: sols })} />
             <Button size="lg" variant="secondary" onClick={() => { setProblem(sample(DEMO.problems.filter((p) => p !== problem), 1)[0] ?? problem); setSols(sample(DEMO.solutions, 3)); }}><Shuffle /> Masalah Baru</Button>
-            <Button size="lg" variant="ghost" onClick={() => setSols(sample(DEMO.solutions, 3))}>Solusi Lain</Button>
+            <Button size="lg" variant="secondary" disabled={ai.loading} onClick={() => aiProblem()}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Masalah AI</Button>
+            <Button size="lg" variant="ghost" disabled={ai.loading} onClick={() => aiProblem(problem)}>Solusi AI lain</Button>
           </div>
           <div className="flex gap-2">
             <Input placeholder="Masalah dari penonton…" value={audience} onChange={(e) => setAudience(e.target.value)} />
-            <Button onClick={() => { if (audience) { setProblem(audience); setSols(sample(DEMO.solutions, 3)); setAudience(""); } }}>Pakai</Button>
+            <Button disabled={ai.loading} onClick={() => { if (audience) { aiProblem(audience); setAudience(""); } }}>Pakai + AI</Button>
           </div>
         </>
       )}

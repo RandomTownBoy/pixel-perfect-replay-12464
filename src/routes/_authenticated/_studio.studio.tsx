@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink } from "lucide-react";
+import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink, Maximize2, X } from "lucide-react";
 import { toast } from "sonner";
 import { overlayUrl, PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
 import { audienceUrl } from "@/components/LiveConsole";
@@ -32,6 +32,7 @@ function Studio() {
   const url = overlayUrl(token);
   const aUrl = audienceUrl(code);
   const ratio = s.overlayWidth / s.overlayHeight;
+  const [full, setFull] = useState(false);
 
   return (
     <>
@@ -39,7 +40,8 @@ function Studio() {
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">
           <Panel className="grid grid-cols-2 gap-2">
-            <Button size="lg" variant="live" className="col-span-2" onClick={() => window.open(url, "kyoka-overlay", "width=540,height=960")}><Play /> Start Overlay</Button>
+            <Button asChild size="lg" variant="live" className="col-span-2"><a href={url || undefined} target="_blank" rel="noreferrer" onClick={() => setOverlayVisible(true)}><Play /> Start Overlay (tab baru)</a></Button>
+            <Button size="lg" variant="secondary" className="col-span-2" onClick={() => setFull(true)}><Maximize2 /> Preview layar penuh</Button>
             <Button size="lg" variant="secondary" onClick={() => setOverlayVisible(true)}><Eye /> Show</Button>
             <Button size="lg" variant="secondary" onClick={() => setOverlayVisible(false)}><EyeOff /> Hide</Button>
             <Button size="lg" variant="secondary" onClick={resetOverlay}><RotateCcw /> Reset</Button>
@@ -82,6 +84,14 @@ function Studio() {
           </div>
         </Panel>
       </div>
+      {full && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-3" onClick={() => setFull(false)}>
+          <button className="absolute right-4 top-4 rounded-full bg-card p-2" aria-label="Tutup preview"><X className="h-5 w-5" /></button>
+          <div className="h-full max-h-[94vh] overflow-hidden rounded-2xl border border-border" style={{ aspectRatio: String(ratio), backgroundImage: "repeating-conic-gradient(var(--muted) 0 25%, var(--background) 0 50%)", backgroundSize: "24px 24px", fontSize: "clamp(12px, 2.2vh, 24px)" }} onClick={(e) => e.stopPropagation()}>
+            <OverlayView state={{ ...ov, visible: true }} preview />
+          </div>
+        </div>
+      )}
     </>
   );
 }

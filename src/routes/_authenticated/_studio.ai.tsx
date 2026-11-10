@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/AppShell";
 import { DraftList, Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { actions, DEMO, demoGenerate, demoImprove, demoRemix, GIMMICKS, sample, useKyoka, type GimmickId } from "@/lib/kyoka";
+import { actions, GIMMICKS, useKyoka, type GimmickId } from "@/lib/kyoka";
+import { useAi } from "@/lib/use-ai";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/_studio/ai")({
@@ -35,20 +37,17 @@ function AiPage() {
   const [style, setStyle] = useState("funny");
   const [drafts, setDrafts] = useState<string[]>([]);
 
-  const run = () => {
-    if (tool === "generate") return setDrafts(demoGenerate(cat, count));
-    if (!input.trim()) return toast("Tulis pertanyaan dulu");
-    if (tool === "improve") setDrafts([demoImprove(input)]);
-    if (tool === "followup") setDrafts(sample(DEMO.followups, 3));
-    if (tool === "remix") setDrafts([demoRemix(input, style)]);
+  const ai = useAi();
+  const run = async () => {
+    if (tool !== "generate" && !input.trim()) return void toast("Tulis pertanyaan dulu");
+    const task = tool === "generate" ? (gimmick === "thisorthat" ? "thisorthat" : gimmick === "hottake" ? "hottake" : "generate") : tool;
+    const l = await ai.run({ task, gimmick, category: cat, count, text: input, style });
+    if (l) setDrafts(l);
   };
 
   return (
     <>
       <PageHeader title="AI Assistant" sub="Bahasa santai, gampang diucapin pas LIVE. Hasil selalu bisa diedit dulu." />
-      <div className="mb-4 rounded-xl border border-zest/40 bg-zest/10 px-4 py-3 text-sm text-zest">
-        Demo Mode: hasil dibuat dari template lokal, belum memakai AI sungguhan. AI asli aktif di tahap berikutnya.
-      </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel className="space-y-4">
           <div className="inline-flex flex-wrap rounded-xl bg-muted p-1">
@@ -74,8 +73,8 @@ function AiPage() {
               {["funny", "weird", "deep", "unexpected"].map((s) => <button key={s} onClick={() => setStyle(s)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${style === s ? "bg-pop text-background" : "bg-muted text-muted-foreground"}`}>{s}</button>)}
             </div>
           )}
-          <Button size="lg" variant="live" className="w-full" onClick={run}><Sparkles /> Jalankan</Button>
-          <p className="text-xs text-muted-foreground">Duplikat dengan isi Question Bank otomatis dilewati.</p>
+          <Button size="lg" variant="live" className="w-full" disabled={ai.loading} onClick={run}>{ai.loading ? <><Loader2 className="animate-spin" /> AI lagi mikir…</> : <><Sparkles /> Jalankan</>}</Button>
+          <p className="text-xs text-muted-foreground">AI melihat isi Question Bank supaya gak ngulang. Duplikat persis otomatis dilewati. Untuk This or That, format: A || B.</p>
         </Panel>
         <Panel>
           {drafts.length ? (

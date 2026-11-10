@@ -3,7 +3,7 @@ import type { RealtimeChannel, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  actions, hasRemote, isDuplicate, readOverlay, replaceQuestions, setOverlayVotes, setRemote,
+  actions, getSettings, hasRemote, isDuplicate, readOverlay, replaceQuestions, setOverlayVotes, setRemote, showBanner,
   type GimmickId, type OverlayPayload, type OverlayState, type Question,
 } from "@/lib/kyoka";
 
@@ -24,15 +24,23 @@ export type Submission = {
   id: string; kind: string; round_id: string | null; choice: string | null;
   content: string | null; nickname: string | null; status: string; created_at: string;
 };
+export type LiveEvent = {
+  id: string; type: string; user_id: string | null; nickname: string | null; content: string | null;
+  gift_name: string | null; gift_count: number; diamonds: number; vote_choice: string | null;
+  round_id: string | null; created_at: string;
+};
+type TiktokStatus = { connected: boolean; handle: string; at: number };
 type Tally = { a: number; b: number };
 type Live = {
   overlayToken: string | null; audienceCode: string | null; overlayConnected: boolean;
   round: string; web: Tally; tiktok: Tally; gift: Tally; inbox: Submission[]; history: Submission[];
+  ingestKey: string | null; feed: LiveEvent[]; tiktokLive: TiktokStatus;
   giftLog: { id: string; text: string; at: number }[];
 };
 let live: Live = {
   overlayToken: null, audienceCode: null, overlayConnected: false, round: "",
   web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], giftLog: [],
+  ingestKey: null, feed: [], tiktokLive: { connected: false, handle: "", at: 0 },
 };
 const subs = new Set<() => void>();
 function setLive(p: Partial<Live>) { live = { ...live, ...p }; subs.forEach((f) => f()); }
@@ -101,6 +109,29 @@ export const liveActions = {
     if (!marked) return { ok: false, message: "Sudah masuk Question Bank, tapi status inbox gagal diperbarui. Coba tekan lagi." };
     return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : "Tersimpan di Question Bank ✅" };
   },
+  async rotateIngestKey() {
+    const { data, error } = await supabase.rpc("rotate_ingest_key");
+    if (error || !data) { toast.error("Gagal mengganti kunci konektor."); return false; }
+    setLive({ ingestKey: data as string });
+    return true;
+  },
+  clearFeed() { setLive({ feed: [] }); },
+  /** Kirim event palsu lewat jalur yang sama dengan konektor TikTok, untuk menguji alur tanpa live. */
+  async sendTestEvent(kind: "comment-a" | "comment-b" | "comment" | "gift" | "follow") {
+    if (!live.ingestKey) { toast.error("Kunci konektor belum siap."); return false; }
+    const newUser = () => `test-${Math.random().toString(36).slice(2, 8)}`;
+    if (kind === "comment-a" || kind === "comment-b") testUser = newUser();
+    const user = kind === "comment" || kind === "follow" ? newUser() : testUser;
+    const ev: Record<string, unknown> =
+      kind === "comment-a" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "A" } :
+      kind === "comment-b" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "B" } :
+      kind === "comment" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "Halo Kyoka, tes komentar!" } :
+      kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
+      { type: "follow", user_id: user, nickname: "penonton_uji" };
+    const { error } = await supabase.rpc("ingest_live_events", { _key: live.ingestKey, _events: [ev] as never });
+    if (error) { toast.error(`Event uji gagal: ${error.message}`); return false; }
+    return true;
+  },
   async rotateToken() {
     const { data, error } = await supabase.rpc("rotate_overlay_token");
     if (!error && data) { setLive({ overlayToken: data }); connectChannels(); }
@@ -130,6 +161,9 @@ let overlayCh: RealtimeChannel | null = null;
 let audienceCh: RealtimeChannel | null = null;
 let dbTimer: ReturnType<typeof setTimeout> | null = null;
 let ownerId: string | null = null;
+let testUser = "test-awal";
+/** Siapa memilih sisi apa di ronde aktif (dari komentar A/B) — dipakai supaya gift mendukung sisi pilihannya. */
+const userSide = new Map<string, "a" | "b">();
 
 function connectChannels() {
   if (overlayCh) supabase.removeChannel(overlayCh);
@@ -146,7 +180,7 @@ function connectChannels() {
 function pushRemote(s: OverlayState) {
   const withCode: OverlayState = { ...s, audienceCode: live.audienceCode ?? undefined };
   const round = String(s.payloadAt || "");
-  if (round !== live.round) { setLive({ round, web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 } }); }
+  if (round !== live.round) { userSide.clear(); setLive({ round, web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 } }); }
   overlayCh?.send({ type: "broadcast", event: "state", payload: withCode });
   const aud = audienceStateFor(s);
   audienceCh?.send({ type: "broadcast", event: "state", payload: aud });
@@ -174,7 +208,62 @@ async function reloadWebTally() {
   const [a, b] = await Promise.all([count("a"), count("b")]);
   if (a.error || b.error || round !== live.round) return;
   setLive({ web: { a: a.count ?? 0, b: b.count ?? 0 } });
+  // Vote dari komentar TikTok (tabel live_events; diam-diam dilewati kalau tabelnya belum ada).
+  const { data: cv, error: cerr } = await supabase.from("live_events").select("user_id, vote_choice").eq("round_id", round).not("vote_choice", "is", null).limit(5000);
+  if (!cerr && cv && round === live.round) {
+    userSide.clear();
+    const t = { a: 0, b: 0 };
+    for (const r of cv as { user_id: string | null; vote_choice: string | null }[]) {
+      if (r.vote_choice !== "a" && r.vote_choice !== "b") continue;
+      t[r.vote_choice]++;
+      if (r.user_id) userSide.set(r.user_id, r.vote_choice);
+    }
+    if (live.tiktok.a === 0 && live.tiktok.b === 0) setLive({ tiktok: t });
+  }
   scheduleVotePush();
+}
+
+const normName = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+function matchGiftRule(name: string | null) {
+  const n = normName(name ?? "");
+  if (!n) return undefined;
+  return getSettings().giftRules.find((r) => normName(r.name) === n);
+}
+
+/** Proses satu event dari konektor TikTok (komentar, gift, follow, share, status koneksi). */
+function handleLiveEvent(e: LiveEvent) {
+  if (e.type === "system") {
+    const [kind = "", handle = ""] = (e.content ?? "").split(":");
+    setLive({ tiktokLive: { connected: kind !== "disconnected", handle, at: Date.now() } });
+    return;
+  }
+  if (e.type === "join" || e.type === "like") return; // terlalu ramai untuk ditampilkan
+  setLive({ feed: [e, ...live.feed.filter((x) => x.id !== e.id)].slice(0, 60) });
+  const who = `@${e.nickname || e.user_id || "penonton"}`;
+  if (e.type === "comment" && e.vote_choice && e.round_id === live.round && (e.vote_choice === "a" || e.vote_choice === "b")) {
+    if (e.user_id) userSide.set(e.user_id, e.vote_choice);
+    liveActions.addTiktok(e.vote_choice, 1);
+    return;
+  }
+  if (e.type !== "gift") return;
+  const rule = matchGiftRule(e.gift_name);
+  const count = Math.max(1, e.gift_count || 1);
+  const p = readOverlay().payload;
+  const voting = p?.gimmick === "thisorthat" || p?.gimmick === "hottake";
+  if (!rule) { liveActions.logGift(`🎁 ${who} kirim ${e.gift_name ?? "gift"} ×${count}`); return; }
+  if (rule.effect === "vote" && voting) {
+    const side = e.user_id ? userSide.get(e.user_id) : undefined;
+    if (side) {
+      const w = rule.weight * count;
+      liveActions.addGift(side, w, `${rule.emoji} ${who} → ${side.toUpperCase()} +${w}`);
+      showBanner(`${rule.emoji} ${who} kirim ${rule.name}! ${side.toUpperCase()} +${w} suara`);
+    } else {
+      liveActions.logGift(`${rule.emoji} ${who} kirim ${rule.name} — belum pilih A/B lewat komentar, suara tidak dihitung`);
+    }
+    return;
+  }
+  liveActions.logGift(`${rule.emoji} ${who}: ${rule.reward}`);
+  showBanner(`${rule.emoji} Makasih ${who} untuk ${rule.name}! ${rule.reward}`);
 }
 
 function dbFailed(what: string, error: { message: string }) {
@@ -191,17 +280,26 @@ export function useCloudSync(userId: string | undefined) {
     ownerId = userId;
     let cancelled = false;
     (async () => { try {
-      let { data: sess } = await supabase.from("studio_sessions").select("overlay_token, audience_code").eq("owner_id", userId).maybeSingle();
+      let { data: sess } = await supabase.from("studio_sessions").select("overlay_token, audience_code, ingest_key").eq("owner_id", userId).maybeSingle();
       if (!sess) {
-        const ins = await supabase.from("studio_sessions").insert({ owner_id: userId }).select("overlay_token, audience_code").single();
+        const ins = await supabase.from("studio_sessions").insert({ owner_id: userId }).select("overlay_token, audience_code, ingest_key").single();
         sess = ins.data;
       }
       const { data: qs } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
       const { data: inbox } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(100);
       const { data: hist } = await supabase.from("audience_submissions").select("*").in("status", ["approved", "shown", "rejected"]).order("created_at", { ascending: false }).limit(100);
+      const { data: evs } = await supabase.from("live_events").select("*").order("created_at", { ascending: false }).limit(80);
       if (cancelled) return;
+      const events = (evs ?? []) as unknown as LiveEvent[];
+      const sys = events.find((x) => x.type === "system");
+      const sysAt = sys ? Date.parse(sys.created_at) : 0;
+      if (sys && Date.now() - sysAt < 60_000) {
+        const [kind = "", handle = ""] = (sys.content ?? "").split(":");
+        setLive({ tiktokLive: { connected: kind !== "disconnected", handle, at: sysAt } });
+      }
+      setLive({ feed: events.filter((x) => x.type !== "system" && x.type !== "join" && x.type !== "like").slice(0, 60) });
       replaceQuestions((qs ?? []).map(toQ));
-      setLive({ overlayToken: sess?.overlay_token ?? null, audienceCode: sess?.audience_code ?? null, inbox: inbox ?? [], history: hist ?? [], round: String(readOverlay().payloadAt || "") });
+      setLive({ overlayToken: sess?.overlay_token ?? null, audienceCode: sess?.audience_code ?? null, ingestKey: (sess as { ingest_key?: string } | null)?.ingest_key ?? null, inbox: inbox ?? [], history: hist ?? [], round: String(readOverlay().payloadAt || "") });
       void reloadWebTally();
       setRemote({
         insert: (rows) => {
@@ -229,9 +327,15 @@ export function useCloudSync(userId: string | undefined) {
             setLive({ web: { ...live.web, [r.choice]: live.web[r.choice] + 1 } }); scheduleVotePush();
           }
         } else if (r.status === "pending") setLive({ inbox: [r, ...live.inbox].slice(0, 100) });
-      }).subscribe();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
+      .subscribe();
+    // Koneksi dianggap putus kalau konektor tidak mengirim heartbeat selama 60 detik.
+    const staleTimer = setInterval(() => {
+      if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
+    }, 10_000);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch);
+      cancelled = true; setRemote(null); supabase.removeChannel(ch); clearInterval(staleTimer);
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

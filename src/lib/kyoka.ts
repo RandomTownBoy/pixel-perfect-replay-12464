@@ -233,6 +233,7 @@ export function normalize(t: string) {
 }
 
 export function getQuestions() { load(); return state.questions; }
+export function getSettings() { load(); return state.settings; }
 
 export function isDuplicate(text: string) {
   const n = normalize(text);

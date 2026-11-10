@@ -3,8 +3,8 @@ import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, X, Se
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { liveActions, totalVotes, useLive, type LiveEvent, type Submission } from "@/lib/cloud";
-import { readOverlay, sendToOverlay, showBanner, useKyoka } from "@/lib/kyoka";
+import { KIND_TO_GIMMICK, liveActions, totalVotes, useLive, type LiveEvent, type Submission } from "@/lib/cloud";
+import { GIMMICKS, readOverlay, sendToOverlay, showBanner, useKyoka, type GimmickId } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
   return typeof window !== "undefined" && code ? `${window.location.origin}/live/${code}` : "";
@@ -19,6 +19,8 @@ export function LiveConsole() {
   const tk = useLive((l) => l.tiktokLive);
   const [view, setView] = useState<"pending" | "history">("pending");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [target, setTarget] = useState<Record<string, GimmickId>>({});
+  const targetOf = (s: Submission): GimmickId => target[s.id] ?? KIND_TO_GIMMICK[s.kind] ?? "spin";
   const code = useLive((l) => l.audienceCode);
   const live = useLive((l) => l);
   const totals = totalVotes(live);
@@ -31,11 +33,18 @@ export function LiveConsole() {
 
   const save = async (s: Submission) => {
     setSavingId(s.id);
-    const r = await liveActions.saveToBank(s);
+    const r = await liveActions.saveToBank(s, targetOf(s));
     setSavingId(null);
     if (r.ok) toast.success(r.message); else toast.error(r.message);
   };
   const show = (s: Submission) => sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", nickname: s.nickname ?? undefined });
+  const targetSelect = (s: Submission) => (
+    <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">Simpan ke gimmick
+      <select value={targetOf(s)} onChange={(e) => setTarget({ ...target, [s.id]: e.target.value as GimmickId })} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground">
+        {GIMMICKS.filter((g) => g.id !== "thisorthat").map((g) => <option key={g.id} value={g.id}>{g.emoji} {g.name}</option>)}
+      </select>
+    </label>
+  );
   const kindLabel = (k: string) => (k === "confession" ? "🤫 Confession" : k === "problem" ? "🌀 Masalah" : "💬 Pertanyaan");
   const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
 
@@ -164,6 +173,7 @@ export function LiveConsole() {
                   <li key={s.id} className="rounded-xl bg-background/60 p-3">
                     <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {s.nickname || "Anonim"}</p>
                     <p className="my-1.5">{s.content}</p>
+                    {targetSelect(s)}
                     <div className="flex gap-1.5">
                       <Button size="sm" variant="live" onClick={() => { show(s); void liveActions.setStatus(s.id, "shown"); }}><Send /> Tampilkan</Button>
                       <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>
@@ -175,6 +185,7 @@ export function LiveConsole() {
                   <li key={s.id} className="rounded-xl bg-background/60 p-3">
                     <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {s.nickname || "Anonim"} · <span className="text-muted-foreground">{statusLabel[s.status] ?? s.status}</span></p>
                     <p className="my-1.5">{s.content}</p>
+                    {s.status !== "approved" && targetSelect(s)}
                     <div className="flex flex-wrap gap-1.5">
                       {s.status !== "approved" && <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>}
                       <Button size="sm" variant="ghost" onClick={() => show(s)}><Send /> Tampilkan</Button>

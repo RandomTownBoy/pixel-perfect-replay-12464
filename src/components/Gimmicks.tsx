@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  actions, DEMO, sample, sendToOverlay, useKyoka, type GimmickId,
+  actions, DEMO, sample, sendToOverlay, useKyoka, VIEWER_CATEGORY, type GimmickId,
 } from "@/lib/kyoka";
 import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ export function SpinGimmick() {
   const [count, setCount] = useState(5);
   const [manual, setManual] = useState("");
   const pool = useMemo(() => all.filter((q) => q.gimmick === "spin" && q.category === category && !q.used).slice(0, 10), [all, category]);
+  const viewerCount = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used).length;
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -61,7 +62,12 @@ export function SpinGimmick() {
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       <Panel>
-        <div className="mb-4 flex flex-wrap gap-2"><CategorySelect value={category} onChange={(c) => { setCategory(c); setPicked(null); }} /></div>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <CategorySelect value={category} onChange={(c) => { setCategory(c); setPicked(null); }} />
+          {viewerCount > 0 && category !== VIEWER_CATEGORY && (
+            <Button size="sm" variant="secondary" onClick={() => { setCategory(VIEWER_CATEGORY); setPicked(null); }}>🙋 Pertanyaan penonton ({viewerCount})</Button>
+          )}
+        </div>
         <div className="flex flex-col items-center gap-5">
           <div className="relative h-72 w-72">
             <div className="absolute left-1/2 top-[-6px] z-10 h-0 w-0 -translate-x-1/2 border-x-[12px] border-t-[22px] border-x-transparent border-t-zest" />
@@ -265,7 +271,8 @@ export function HotTakeGimmick() {
 const CONF_CATS = ["Funny", "Embarrassing", "Friendship", "School", "Habits", "Everyday"];
 export function ConfessionGimmick() {
   const all = useKyoka((s) => s.questions);
-  const pool = all.filter((q) => q.gimmick === "confession");
+  const pool = all.filter((q) => q.gimmick === "confession" && q.category !== VIEWER_CATEGORY);
+  const viewerPool = all.filter((q) => q.gimmick === "confession" && q.category === VIEWER_CATEGORY && !q.used);
   const [i, setI] = useState(0);
   const [cat, setCat] = useState("Funny");
   const [custom, setCustom] = useState("");
@@ -292,6 +299,21 @@ export function ConfessionGimmick() {
         <Input placeholder="Prompt confession sendiri…" value={custom} onChange={(e) => setCustom(e.target.value)} />
         <Button onClick={() => { if (actions.addQuestions([{ text: custom, gimmick: "confession", category: cat }])) { setCustom(""); setI(0); } }}><Plus /></Button>
       </div>
+      <div className="space-y-2 rounded-xl border border-border bg-background/40 p-3">
+        <h4 className="text-sm font-bold">🤫 Confession dari penonton ({viewerPool.length} belum dibacakan)</h4>
+        {!viewerPool.length && <p className="text-xs text-muted-foreground">Belum ada. Di Inbox penonton, pilih “Confession Time” lalu tekan Simpan ke Bank.</p>}
+        <ul className="max-h-64 space-y-2 overflow-auto">
+          {viewerPool.map((q) => (
+            <li key={q.id} className="rounded-lg bg-card p-3 text-sm">
+              <p>{q.text}</p>
+              <div className="mt-2 flex gap-1.5">
+                <Button size="sm" variant="live" onClick={() => sendToOverlay({ gimmick: "audience", kind: "confession", content: q.text })}><Send /> Tampilkan</Button>
+                <Button size="sm" variant="ghost" onClick={() => actions.updateQuestion(q.id, { used: true })}><Check /> Sudah dibacakan</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
       <p className="text-xs text-muted-foreground">Tip: jangan minta penonton membagikan info pribadi yang sensitif.</p>
     </Panel>
   );
@@ -304,6 +326,7 @@ export function ChaosGimmick() {
   const [problem, setProblem] = useState(DEMO.problems[0]!);
   const [sols, setSols] = useState(() => DEMO.solutions.slice(0, 3));
   const [audience, setAudience] = useState("");
+  const viewerProblems = useKyoka((st) => st.questions).filter((q) => q.gimmick === "chaos" && q.category === VIEWER_CATEGORY && !q.used);
   const ai = useAi();
   const aiWords = async () => { const l = await ai.run({ task: "words", gimmick: "chaos" }); if (l && l.length >= 3) setWords(l.slice(0, 3)); };
   const aiProblem = async (given = "") => {
@@ -344,6 +367,19 @@ export function ChaosGimmick() {
             <Button size="lg" variant="secondary" disabled={ai.loading} onClick={() => aiProblem()}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Masalah AI</Button>
             <Button size="lg" variant="ghost" disabled={ai.loading} onClick={() => aiProblem(problem)}>Solusi AI lain</Button>
           </div>
+          {viewerProblems.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-border bg-background/40 p-3">
+              <h4 className="text-sm font-bold">🙋 Masalah dari penonton ({viewerProblems.length})</h4>
+              <ul className="max-h-56 space-y-2 overflow-auto">
+                {viewerProblems.map((q) => (
+                  <li key={q.id} className="flex items-start gap-2 rounded-lg bg-card p-3 text-sm">
+                    <span className="min-w-0 flex-1 break-words">{q.text}</span>
+                    <Button size="sm" variant="secondary" disabled={ai.loading} onClick={() => { setProblem(q.text); setSols(sample(DEMO.solutions, 3)); actions.updateQuestion(q.id, { used: true }); void aiProblem(q.text); }}>Pakai</Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex gap-2">
             <Input placeholder="Masalah dari penonton…" value={audience} onChange={(e) => setAudience(e.target.value)} />
             <Button disabled={ai.loading} onClick={() => { if (audience) { aiProblem(audience); setAudience(""); } }}>Pakai + AI</Button>

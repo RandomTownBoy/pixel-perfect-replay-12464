@@ -9,25 +9,45 @@ export const Route = createFileRoute("/live/$code")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Ikut main bareng Kyoka LIVE" },
-      { name: "description", content: "Vote, kirim confession anonim, dan ikut gimmick Kyoka LIVE." },
-      { property: "og:title", content: "Ikut main bareng Kyoka LIVE" },
-      { property: "og:description", content: "Vote dan kirim confession anonim saat Kyoka LIVE." },
+      { title: "Kirim ke Kyoka LIVE" },
+      { name: "description", content: "Kirim confession, usulan This or That, hot take, atau 3 kata secara anonim ke Kyoka LIVE." },
+      { property: "og:title", content: "Kirim ke Kyoka LIVE" },
+      { property: "og:description", content: "Kirim confession dan usulan gimmick secara anonim saat Kyoka LIVE." },
     ],
   }),
   component: Audience,
 });
 
-type AState = { live?: boolean; round?: string; mode?: string; a?: string; b?: string; title?: string };
+type KindId = "confession" | "thisorthat" | "hottake" | "chaos";
+type AState = {
+  live?: boolean; round?: string; mode?: string; gimmick?: string; a?: string; b?: string; title?: string;
+  intake?: Partial<Record<KindId | "spin", boolean>>;
+};
+
+const KINDS: { id: KindId; emoji: string; name: string; hint: string }[] = [
+  { id: "confession", emoji: "🤫", name: "Confession", hint: "Pengakuan anonim. Kyoka memilih mana yang dibacakan." },
+  { id: "thisorthat", emoji: "⚡", name: "This or That", hint: "Usul dua pilihan untuk ronde This or That." },
+  { id: "hottake", emoji: "🔥", name: "Hot Take", hint: "Opini panasmu. Penonton lain vote setuju atau tidak di komentar." },
+  { id: "chaos", emoji: "🌀", name: "3 Kata", hint: "Tulis 3 kata random. Kyoka bikin cerita atau solusi dari situ." },
+];
+
+function fingerprint(): string | undefined {
+  try {
+    let f = localStorage.getItem("kyoka-fp");
+    if (!f) { f = crypto.randomUUID(); localStorage.setItem("kyoka-fp", f); }
+    return f;
+  } catch { return undefined; }
+}
 
 function Audience() {
   const { code } = Route.useParams();
   const [st, setSt] = useState<AState | null>(null);
   const [missing, setMissing] = useState(false);
-  const [tab, setTab] = useState<"now" | "confess" | "ask">("now");
+  const [kind, setKind] = useState<KindId>("confession");
   const [text, setText] = useState("");
-  const [nick, setNick] = useState("");
-  const [voted, setVoted] = useState<string | null>(null);
+  const [pa, setPa] = useState("");
+  const [pb, setPb] = useState("");
+  const [w, setW] = useState(["", "", ""]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -36,74 +56,110 @@ function Audience() {
       setSt(data as AState);
     });
     const ch = supabase.channel(`audience-${code.toLowerCase()}`)
-      .on("broadcast", { event: "state" }, ({ payload }) => setSt(payload as AState)).subscribe();
+      .on("broadcast", { event: "state" }, ({ payload }) => setSt((cur) => ({ ...cur, ...(payload as AState) }))).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [code]);
 
-  useEffect(() => { if (st?.round) setVoted(localStorage.getItem(`kyoka-vote-${code}-${st.round}`)); }, [st?.round, code]);
+  const closed = (k: KindId) => st?.intake?.[k] === false;
 
-  const send = async (kind: string, content: string, choice?: string, nickname = nick) => {
+  const buildContent = (): string | null => {
+    if (kind === "thisorthat") {
+      const a = pa.trim(); const b = pb.trim();
+      if (!a || !b) { toast.error("Isi kedua pilihan."); return null; }
+      if (/\s(or|atau|vs)\s/i.test(` ${a} `) || /\s(or|atau|vs)\s/i.test(` ${b} `)) { toast.error("Jangan pakai kata “atau”, “or”, “vs” di dalam pilihan."); return null; }
+      return `${a} atau ${b}`;
+    }
+    if (kind === "chaos") {
+      const words = w.map((x) => x.trim());
+      if (words.some((x) => !x)) { toast.error("Isi ketiga kata."); return null; }
+      if (words.some((x) => /\s/.test(x))) { toast.error("Satu kata saja per kotak."); return null; }
+      return words.join(", ");
+    }
+    const t = text.trim();
+    if (t.length < 5) { toast.error("Isinya terlalu pendek."); return null; }
+    return t;
+  };
+
+  const submit = async () => {
+    if (closed(kind)) return;
+    const content = buildContent();
+    if (content === null) return;
     setBusy(true);
-    const { error } = await supabase.rpc("submit_audience", { _code: code, _kind: kind, _round: st?.round ?? "", _choice: choice ?? "", _content: content, _nickname: nickname });
+    const { error } = await supabase.rpc("submit_audience", {
+      _code: code, _kind: kind, _round: "", _choice: "", _content: content, _nickname: "", _fingerprint: fingerprint(),
+    } as never);
     setBusy(false);
-    if (error) { toast.error(error.message); return false; }
-    return true;
-  };
-  const vote = async (c: "a" | "b") => {
-    if (voted || !st?.round) return;
-    if (await send("vote", "", c)) { localStorage.setItem(`kyoka-vote-${code}-${st.round}`, c); setVoted(c); toast.success("Vote masuk!"); }
-  };
-  const submitText = async (kind: string) => {
-    if (await send(kind, text, undefined, kind === "confession" ? "" : nick)) { setText(""); toast.success(kind === "confession" ? "Confession terkirim, aman & anonim 🤫" : "Terkirim ke Kyoka!"); }
+    if (error) { toast.error(error.message); return; }
+    setText(""); setPa(""); setPb(""); setW(["", "", ""]);
+    toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : "Terkirim ke Kyoka!");
   };
 
   if (missing) return <Center>Link LIVE tidak ditemukan.</Center>;
   if (!st) return <Center>Memuat…</Center>;
-  const textKind = tab === "confess" ? "confession" : st.mode === "problem" && tab === "now" ? "problem" : "question";
+  const cur = KINDS.find((k) => k.id === kind)!;
+  const isClosed = closed(kind);
+  const voting = st.mode === "vote";
 
   return (
-    <div className="mx-auto min-h-screen max-w-md p-4">
-      <header className="mb-4 flex items-center gap-3">
+    <div className="mx-auto min-h-screen max-w-md space-y-4 p-4">
+      <header className="flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-party font-display font-black shadow-pop">K</span>
         <div className="flex-1"><h1 className="font-display text-sm font-bold">KYOKA LIVE</h1>
-          <p className="text-xs text-muted-foreground">{st.live === false ? "Overlay lagi istirahat" : "Ikut main sekarang!"}</p></div>
-        <span className="flex items-center gap-1.5 rounded-full bg-pop/20 px-2.5 py-1 text-xs font-bold text-pop"><span className="h-2 w-2 animate-pulse rounded-full bg-pop" />LIVE</span>
+          <p className="text-xs text-muted-foreground">Kirim anonim, kapan saja</p></div>
+        {st.live === false
+          ? <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">Istirahat</span>
+          : <span className="flex items-center gap-1.5 rounded-full bg-pop/20 px-2.5 py-1 text-xs font-bold text-pop"><span className="h-2 w-2 animate-pulse rounded-full bg-pop" />LIVE</span>}
       </header>
-      <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
-        {([["now", "Sekarang"], ["confess", "Confess 🤫"], ["ask", "Tanya"]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className={`rounded-lg py-2 text-sm font-semibold ${tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
+
+      <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted p-1">
+        {KINDS.map((k) => (
+          <button key={k.id} onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
+            className={`rounded-lg px-1 py-2 text-xs font-semibold ${kind === k.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"} ${closed(k.id) ? "opacity-50" : ""}`}>
+            <span className="block text-base">{k.emoji}</span>{k.name}
+          </button>
         ))}
       </div>
 
-      {tab === "now" && st.mode === "vote" && (
-        <div className="space-y-3 rounded-2xl border border-border bg-panel p-5">
-          {st.title && <p className="text-center font-display font-bold">{st.title}</p>}
-          {(["a", "b"] as const).map((c) => (
-            <button key={c} disabled={!!voted || busy} onClick={() => vote(c)}
-              className={`w-full rounded-2xl p-5 font-display text-lg font-bold transition active:scale-95 ${c === "a" ? "bg-primary text-primary-foreground" : "bg-electric text-background"} ${voted && voted !== c ? "opacity-35" : ""}`}>
-              {c.toUpperCase()} · {c === "a" ? st.a : st.b} {voted === c && "✓"}
-            </button>
-          ))}
-          <p className="text-center text-xs text-muted-foreground">{voted ? "Makasih! Lihat hasilnya di LIVE." : "Atau komen A / B di TikTok. Gift bikin suaramu makin berat 🎁"}</p>
-        </div>
-      )}
-      {tab === "now" && st.mode !== "vote" && (
-        <div className="mb-4 rounded-2xl border border-border bg-panel p-5 text-center">
-          <p className="text-xs font-semibold text-muted-foreground">{st.mode === "confession" ? "Confession Time" : st.mode === "problem" ? "Random Solution — kirim masalahmu!" : "Lagi dibahas"}</p>
-          <p className="mt-2 font-display text-lg font-bold">{st.title ?? "Tunggu gimmick berikutnya…"}</p>
-        </div>
-      )}
-      {(tab !== "now" || st.mode !== "vote") && (
-        <div className="space-y-3 rounded-2xl border border-border bg-panel p-5">
-          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={280} rows={4}
-            placeholder={textKind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : textKind === "problem" ? "Masalah random kamu…" : "Pertanyaan / cerita buat Kyoka…"}
+      <div className="space-y-3 rounded-2xl border border-border bg-panel p-5">
+        <p className="text-sm font-semibold">{cur.emoji} {cur.name}</p>
+        <p className="text-xs text-muted-foreground">{cur.hint}</p>
+
+        {(kind === "confession" || kind === "hottake") && (
+          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={kind === "confession" ? 500 : 200} rows={4} disabled={isClosed}
+            placeholder={kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : "Opini panasmu…"}
             className="w-full rounded-xl border border-input bg-background p-3 text-sm" />
-          {textKind !== "confession" && <Input placeholder="Nickname (opsional)" maxLength={30} value={nick} onChange={(e) => setNick(e.target.value)} />}
-          <Button size="lg" variant="live" className="w-full" disabled={busy || text.trim().length < 3}
-            onClick={() => submitText(textKind)}>Kirim</Button>
-          {textKind === "confession" && <p className="text-xs text-muted-foreground">Confession dikirim tanpa nama. Kyoka memilih mana yang dibacakan.</p>}
-        </div>
-      )}
+        )}
+        {kind === "thisorthat" && (
+          <div className="space-y-2">
+            <Input placeholder="Pilihan 1, contoh: Ronaldo" maxLength={60} value={pa} onChange={(e) => setPa(e.target.value)} disabled={isClosed} />
+            <p className="text-center text-xs font-bold text-muted-foreground">VS</p>
+            <Input placeholder="Pilihan 2, contoh: Messi" maxLength={60} value={pb} onChange={(e) => setPb(e.target.value)} disabled={isClosed} />
+          </div>
+        )}
+        {kind === "chaos" && (
+          <div className="grid grid-cols-3 gap-2">
+            {w.map((x, i) => (
+              <Input key={i} placeholder={`Kata ${i + 1}`} maxLength={24} value={x} disabled={isClosed}
+                onChange={(e) => setW(w.map((y, j) => (j === i ? e.target.value : y)))} />
+            ))}
+          </div>
+        )}
+
+        <Button size="lg" variant="live" className="w-full" disabled={busy || isClosed} onClick={submit}>{isClosed ? "Sedang ditutup" : "Kirim"}</Button>
+        <p className="text-xs text-muted-foreground">Dikirim tanpa nama. Hindari info pribadi, tautan, dan kata kasar. Kiriman bisa disaring sebelum tampil.</p>
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-border bg-panel p-5 text-sm">
+        <p className="font-display font-bold">Ikut main langsung lewat komentar TikTok</p>
+        {st.title && <p className="rounded-lg bg-background/60 px-3 py-2 text-xs"><span className="text-muted-foreground">Lagi tayang:</span> {st.title}</p>}
+        <ul className="space-y-1.5 text-xs text-muted-foreground">
+          {voting && st.gimmick === "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">SETUJU</b> atau <b className="text-foreground">TIDAK</b></li>}
+          {voting && st.gimmick !== "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">A</b> ({st.a}) atau <b className="text-foreground">B</b> ({st.b})</li>}
+          {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
+          <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
+          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑, kirimanmu didahulukan.</li>
+        </ul>
+      </div>
     </div>
   );
 }

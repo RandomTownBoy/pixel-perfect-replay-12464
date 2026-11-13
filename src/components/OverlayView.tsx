@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { OverlayState } from "@/lib/kyoka";
-import { GIMMICKS } from "@/lib/kyoka";
+import type { Intake, OverlayPayload, OverlayState } from "@/lib/kyoka";
+import { DEFAULT_INTAKE, GIMMICKS } from "@/lib/kyoka";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
 
@@ -13,6 +13,26 @@ function beep() {
     o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.3);
   } catch { /* autoplay blocked */ }
 }
+
+/** Tulisan panduan untuk penonton, menyesuaikan gimmick yang tayang dan input yang sedang dibuka. */
+function guideLines(p: OverlayPayload, intake?: Intake): string[] {
+  const it = { ...DEFAULT_INTAKE, ...(intake ?? {}) };
+  const link = (ok: boolean, text: string) => (ok ? [text] : []);
+  switch (p.gimmick) {
+    case "thisorthat": return ["Komen A atau B untuk vote", ...link(it.thisorthat, "Usul pilihan lewat link di bio")];
+    case "hottake": return ["Komen SETUJU atau TIDAK untuk vote", ...link(it.hottake, "Kirim hot take lewat link di bio")];
+    case "spin": return link(it.spin, "Ketik !spin lalu pertanyaanmu");
+    case "confession": return link(it.confession, "Confess anonim lewat link di bio");
+    case "chaos": return link(it.chaos, "Kirim 3 kata lewat link di bio");
+    case "audience":
+      return p.kind === "confession" ? link(it.confession, "Confess anonim lewat link di bio") : p.kind === "spin" ? link(it.spin, "Ketik !spin lalu pertanyaanmu") : [];
+    default: return [];
+  }
+}
+const GUIDE_POS: Record<string, string> = {
+  tr: "right-[3%] top-[11%] items-end text-right", tl: "left-[3%] top-[11%] items-start text-left",
+  br: "right-[3%] bottom-[3%] items-end text-right", bl: "left-[3%] bottom-[3%] items-start text-left",
+};
 
 export function OverlayView({ state, preview }: { state: OverlayState; preview?: boolean }) {
   const p = state.payload;
@@ -52,12 +72,23 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
           )}
           <Body state={state} />
           {state.votes && (p.gimmick === "thisorthat" || p.gimmick === "hottake") && <VoteBar votes={state.votes} labels={p.gimmick === "hottake" ? ["Setuju", "Gak setuju"] : ["A", "B"]} />}
-          {state.audienceCode && (p.gimmick === "thisorthat" || p.gimmick === "hottake") && (
-            <p className="text-center text-[0.85em] font-semibold">Komen <b className="text-zest">A</b> / <b className="text-zest">B</b> atau vote di link bio 💜</p>
+          {(p.gimmick === "thisorthat" || p.gimmick === "hottake") && (
+            <p className="text-center text-[0.85em] font-semibold">
+              {p.gimmick === "hottake" ? <>Komen <b className="text-zest">SETUJU</b> / <b className="text-zest">TIDAK</b> 🗳️</> : <>Komen <b className="text-zest">A</b> / <b className="text-zest">B</b> 🗳️</>}
+            </p>
           )}
           {state.showBadge && <div className="mt-[0.5em] font-display text-[0.7em] font-bold tracking-[0.3em] text-gradient">KYOKA LIVE</div>}
         </div>
       )}
+      {state.visible && p && state.guidePos !== "off" && (() => {
+        const lines = guideLines(p, state.intake);
+        if (!lines.length) return null;
+        return (
+          <div className={`pointer-events-none absolute z-[5] flex max-w-[48%] flex-col gap-[0.25em] rounded-[0.8em] bg-background/80 px-[0.9em] py-[0.6em] text-[0.72em] font-semibold leading-snug shadow-glow backdrop-blur ${GUIDE_POS[state.guidePos ?? "tr"] ?? GUIDE_POS.tr}`}>
+            {lines.map((l) => <span key={l}>💬 {l}</span>)}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -112,7 +143,7 @@ function Body({ state }: { state: OverlayState }) {
     case "audience":
       return (
         <>
-          <span className="rounded-full bg-pop/30 px-[1em] py-[0.2em] text-[0.9em] font-semibold">{p.kind === "confession" ? "🤫 Confession anonim" : p.kind === "problem" ? "🌀 Masalah dari penonton" : "💬 Dari penonton"}</span>
+          <span className="rounded-full bg-pop/30 px-[1em] py-[0.2em] text-[0.9em] font-semibold">{p.kind === "confession" ? "🤫 Confession anonim" : p.kind === "spin" ? "🎡 Pertanyaan dari penonton" : p.kind === "problem" ? "🌀 Masalah dari penonton" : "💬 Dari penonton"}</span>
           <Bubble big>{p.content}</Bubble>
           <p className="text-[0.9em] text-muted-foreground">— {p.nickname || "Anonim"}</p>
         </>

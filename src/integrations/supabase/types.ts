@@ -50,6 +50,51 @@ export type Database = {
         }
         Relationships: []
       }
+      live_events: {
+        Row: {
+          content: string | null
+          created_at: string
+          diamonds: number
+          gift_count: number
+          gift_name: string | null
+          id: string
+          nickname: string | null
+          owner_id: string
+          round_id: string | null
+          type: string
+          user_id: string | null
+          vote_choice: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          diamonds?: number
+          gift_count?: number
+          gift_name?: string | null
+          id?: string
+          nickname?: string | null
+          owner_id: string
+          round_id?: string | null
+          type: string
+          user_id?: string | null
+          vote_choice?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          diamonds?: number
+          gift_count?: number
+          gift_name?: string | null
+          id?: string
+          nickname?: string | null
+          owner_id?: string
+          round_id?: string | null
+          type?: string
+          user_id?: string | null
+          vote_choice?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -108,6 +153,7 @@ export type Database = {
         Row: {
           audience_code: string
           audience_state: Json
+          ingest_key: string
           overlay_state: Json
           overlay_token: string
           owner_id: string
@@ -116,6 +162,7 @@ export type Database = {
         Insert: {
           audience_code?: string
           audience_state?: Json
+          ingest_key?: string
           overlay_state?: Json
           overlay_token?: string
           owner_id: string
@@ -124,6 +171,7 @@ export type Database = {
         Update: {
           audience_code?: string
           audience_state?: Json
+          ingest_key?: string
           overlay_state?: Json
           overlay_token?: string
           owner_id?: string
@@ -138,6 +186,11 @@ export type Database = {
     Functions: {
       get_audience_state: { Args: { _code: string }; Returns: Json }
       get_overlay_state: { Args: { _token: string }; Returns: Json }
+      ingest_live_events: {
+        Args: { _events: Json; _key: string }
+        Returns: number
+      }
+      rotate_ingest_key: { Args: never; Returns: string }
       rotate_overlay_token: { Args: never; Returns: string }
       submit_audience: {
         Args: {

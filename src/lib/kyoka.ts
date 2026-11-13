@@ -25,7 +25,25 @@ export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
   sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
   countdown: number; giftRules: GiftRule[];
+  /** Detik tiap kiriman penonton tampil di overlay sebelum diganti item antrean berikutnya. */
+  queueSeconds: number;
+  /** Otomatis masukkan kiriman yang cocok dengan gimmick tayang ke antrean (yang ditandai review tidak pernah otomatis). */
+  autoQueue: boolean;
+  /** Posisi tulisan panduan interaksi di overlay. */
+  guidePosition: "tr" | "tl" | "br" | "bl" | "off";
+  /** Kata tambahan untuk detektor kata tidak pantas (digabung dengan daftar bawaan di database). */
+  bannedWords: string[];
+  /** Batas total diamond untuk tier ⭐ Supporter, 💎 VIP, 👑 Sultan. */
+  vipTiers: [number, number, number];
+  /** Kiriman !spin bersih dari penonton VIP otomatis masuk antrean (kalau Spin sedang tayang). */
+  vipAutoQueue: boolean;
+  /** Hitung VIP hanya dari gift setelah waktu ini (ms). 0 = 12 jam terakhir. */
+  vipSince: number;
 };
+
+/** Jendela input penonton: mana yang sedang menerima kiriman. */
+export type Intake = { spin: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean };
+export const DEFAULT_INTAKE: Intake = { spin: false, confession: true, thisorthat: true, hottake: true, chaos: true };
 
 export type OverlayPayload =
   | { gimmick: "spin"; question?: string | undefined; category?: string | undefined; spinning?: boolean | undefined }
@@ -45,6 +63,8 @@ export type OverlayState = {
   banner?: { text: string; at: number } | undefined;
   audienceCode?: string | undefined;
   accent: Settings["accent"]; textScale: number; sound: boolean; showTitle: boolean; showBadge: boolean;
+  intake?: Intake | undefined;
+  guidePos?: Settings["guidePosition"] | undefined;
 };
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
@@ -134,6 +154,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0,
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -157,12 +178,28 @@ function load() {
   } catch { /* ignore */ }
 }
 
+let silent = false;
+const persistListeners = new Set<() => void>();
 function setState(fn: (s: State) => State) {
   load();
+  const prev = state;
   state = fn(state);
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
   listeners.forEach((l) => l());
+  if (!silent && (prev.settings !== state.settings || prev.categories !== state.categories)) persistListeners.forEach((l) => l());
 }
+/** Dipanggil saat pengaturan atau kategori berubah oleh pengguna (bukan saat dimuat dari database). */
+export function onPersistChange(cb: () => void) { persistListeners.add(cb); return () => { persistListeners.delete(cb); }; }
+/** Terapkan pengaturan dari database tanpa memicu penyimpanan balik. */
+export function replaceSettings(patch: Partial<Settings>) {
+  silent = true;
+  try { setState((s) => ({ ...s, settings: { ...s.settings, ...patch } })); } finally { silent = false; }
+}
+export function replaceCategories(list: string[]) {
+  silent = true;
+  try { setState((s) => ({ ...s, categories: [...new Set([...s.categories, ...list])] })); } finally { silent = false; }
+}
+export function getCategories() { load(); return state.categories; }
 
 export function useKyoka<T>(sel: (s: State) => T): T {
   return useSyncExternalStore(
@@ -184,7 +221,10 @@ export const hasRemote = () => remote !== null;
 export const VIEWER_CATEGORY = "Dari Penonton";
 export function replaceQuestions(qs: Question[]) {
   // Kategori dimuat dari isi database juga, supaya konten tidak "hilang" dari dropdown kalau localStorage kosong/ganti perangkat.
-  setState((s) => ({ ...s, questions: qs, categories: [...new Set([...s.categories, ...qs.map((q) => q.category)])] }));
+  setState((s) => {
+    const merged = [...new Set([...s.categories, ...qs.map((q) => q.category)])];
+    return { ...s, questions: qs, categories: merged.length === s.categories.length ? s.categories : merged };
+  });
 }
 export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
 
@@ -230,6 +270,7 @@ function pick(p: Partial<Settings>): Partial<OverlayState> {
   if (p.sound !== undefined) out.sound = p.sound;
   if (p.showTitle !== undefined) out.showTitle = p.showTitle;
   if (p.showBadge !== undefined) out.showBadge = p.showBadge;
+  if (p.guidePosition) out.guidePos = p.guidePosition;
   return out;
 }
 
@@ -298,6 +339,10 @@ export function showBanner(text: string) {
 }
 export function setOverlayVotes(votes: { a: number; b: number }) {
   pushOverlay({ ...readOverlay(), votes });
+}
+/** Perbarui jendela input + posisi panduan yang dikirim ke overlay (dipakai untuk tulisan panduan penonton). */
+export function setOverlayIntake(intake: Intake) {
+  pushOverlay({ ...readOverlay(), intake, guidePos: state.settings.guidePosition });
 }
 export function resetOverlay() {
   pushOverlay({ ...defaultOverlay(), payload: null });

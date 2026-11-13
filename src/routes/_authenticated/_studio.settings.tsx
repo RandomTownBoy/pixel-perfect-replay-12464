@@ -25,6 +25,16 @@ function SettingsPage() {
   const ingestKey = useLive((l) => l.ingestKey);
   const tk = useLive((l) => l.tiktokLive);
   const [reveal, setReveal] = useState(false);
+  const bannedWords = useKyoka((x) => x.settings.bannedWords);
+  const guidePosition = useKyoka((x) => x.settings.guidePosition);
+  const vipTiers = useKyoka((x) => x.settings.vipTiers);
+  const [newWord, setNewWord] = useState("");
+  const addWord = () => {
+    const w = newWord.trim().toLowerCase();
+    if (!w) return;
+    if (!bannedWords.includes(w)) actions.updateSettings({ bannedWords: [...bannedWords, w] });
+    setNewWord("");
+  };
   const [handle, setHandle] = useState("");
   const envSnippet = () => [
     `SUPABASE_URL=${import.meta.env["VITE_SUPABASE_URL"] ?? ""}`,
@@ -90,6 +100,48 @@ function SettingsPage() {
           </div>
           <p className="text-xs text-muted-foreground">Sebelum konektor siap, kamu bisa menguji seluruh alurnya dari tombol <b>Feed</b> › “Uji tanpa TikTok” di pojok kanan bawah. Agar gift otomatis terhitung, nama gift di tabel atas harus sama dengan nama gift di TikTok (misalnya “Rose”).</p>
         </Panel>
+        <Panel className="space-y-3 text-sm">
+          <h3 className="font-display text-sm font-bold">Moderasi kata</h3>
+          <p className="text-muted-foreground">Kiriman penonton dan komentar yang mengandung kata di daftar bawaan (kata kasar Indonesia &amp; Inggris), tautan, atau nomor telepon otomatis masuk <b>Cek</b>, tidak langsung tampil. Tambahkan kata sendiri di sini. Detektor tidak sempurna, jadi tetap periksa sebelum menampilkan.</p>
+          <div className="flex gap-2">
+            <Input placeholder="Tambah kata/frasa…" value={newWord} onChange={(e) => setNewWord(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addWord(); }} />
+            <Button size="sm" variant="secondary" onClick={addWord}>Tambah</Button>
+          </div>
+          {bannedWords.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5">
+              {bannedWords.map((w) => (
+                <li key={w}><button className="rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-destructive/20" title="Klik untuk hapus" onClick={() => actions.updateSettings({ bannedWords: bannedWords.filter((x) => x !== w) })}>{w} ✕</button></li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel className="space-y-3 text-sm">
+          <h3 className="font-display text-sm font-bold">VIP Gifter</h3>
+          <p className="text-muted-foreground">Total diamond gift per penonton (dalam sesi ini) menentukan tier. VIP kirimannya didahulukan di antrean, tampil dengan lencana di overlay, dan kenaikan tier diumumkan lewat banner.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(["⭐ Supporter", "💎 VIP", "👑 Sultan"] as const).map((label, i) => (
+              <label key={label} className="text-xs">{label} ≥
+                <Input type="number" min={1} value={vipTiers[i]} onChange={(e) => { const next = [...vipTiers] as [number, number, number]; next[i] = Math.max(1, Number(e.target.value) || 1); actions.updateSettings({ vipTiers: next }); }} />
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Dalam diamond. Bawaan: 1 / 100 / 1000. Tombol Reset di panel Gift memulai hitungan dari nol.</p>
+        </Panel>
+
+        <Panel className="space-y-3 text-sm">
+          <h3 className="font-display text-sm font-bold">Panduan di overlay</h3>
+          <p className="text-muted-foreground">Tulisan kecil untuk penonton (misalnya “Ketik !spin …”, “Confess lewat link di bio”) yang menyesuaikan gimmick tayang dan input yang sedang dibuka.</p>
+          <select value={guidePosition} onChange={(e) => actions.updateSettings({ guidePosition: e.target.value as typeof guidePosition })} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+            <option value="tr">Kanan atas</option>
+            <option value="tl">Kiri atas</option>
+            <option value="br">Kanan bawah</option>
+            <option value="bl">Kiri bawah</option>
+            <option value="off">Sembunyikan</option>
+          </select>
+          <p className="text-xs text-muted-foreground">Tampilannya di overlay hadir di paket 3. Pengaturan ini sudah tersimpan.</p>
+        </Panel>
+
         <Panel className="space-y-2 text-sm md:col-span-2">
           <h3 className="font-display text-sm font-bold">Data Demo</h3>
           <Button variant="destructive" onClick={() => confirm("Reset semua data ke contoh awal?") && actions.resetDemo()}>Reset data demo</Button>

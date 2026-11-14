@@ -19,10 +19,11 @@ function beep() {
 function guideLines(p: OverlayPayload, intake?: Intake): string[] {
   const it = { ...DEFAULT_INTAKE, ...(intake ?? {}) };
   const link = (ok: boolean, text: string) => (ok ? [text] : []);
+  const fo = it.followersOnly ? ["🔒 Komentar khusus follower, follow dulu ya"] : [];
   switch (p.gimmick) {
-    case "thisorthat": return ["Komen A atau B untuk vote", ...link(it.thisorthat, "Usul pilihan lewat link di bio")];
-    case "hottake": return ["Komen SETUJU atau TIDAK untuk vote", ...link(it.hottake, "Kirim hot take lewat link di bio")];
-    case "spin": return link(it.spin, "Ketik !spin lalu pertanyaanmu");
+    case "thisorthat": return ["Komen A atau B untuk vote", ...fo, ...link(it.thisorthat, "Usul pilihan lewat link di bio")];
+    case "hottake": return ["Komen SETUJU atau TIDAK untuk vote", ...fo, ...link(it.hottake, "Kirim hot take lewat link di bio")];
+    case "spin": return it.spin ? ["Ketik !spin lalu pertanyaanmu", ...fo] : [];
     case "confession": return link(it.confession, "Confess anonim lewat link di bio");
     case "chaos": return link(it.chaos, "Kirim 3 kata lewat link di bio");
     case "audience":

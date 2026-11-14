@@ -27,6 +27,8 @@ export function LiveConsole() {
   const queue = useLive((l) => l.queue);
   const nowShowing = useLive((l) => l.nowShowing);
   const intake = useLive((l) => l.intake);
+  const followStats = useLive((l) => l.followStats);
+  const [testFollower, setTestFollowerUi] = useState(true);
   const queueSeconds = useKyoka((st) => st.settings.queueSeconds);
   const autoQueue = useKyoka((st) => st.settings.autoQueue);
   const vipAutoQueue = useKyoka((st) => st.settings.vipAutoQueue);
@@ -88,7 +90,7 @@ export function LiveConsole() {
     if (e.type === "gift") return `🎁 ${who} kirim ${e.gift_name ?? "gift"}${e.gift_count > 1 ? ` ×${e.gift_count}` : ""}`;
     if (e.type === "follow") return `➕ ${who} follow`;
     if (e.type === "share") return `🔁 ${who} membagikan LIVE`;
-    return `${e.flagged ? "⚠️ " : ""}${who}: ${e.content ?? ""}`;
+    return `${e.flagged ? "⚠️ " : ""}${who}: ${e.content ?? ""}${intake.followersOnly && e.is_follower !== true ? "  🚫 bukan follower" : ""}`;
   };
 
   const applyGift = (id: string) => {
@@ -195,6 +197,7 @@ export function LiveConsole() {
               <details className="rounded-lg border border-border p-2 text-xs">
                 <summary className="cursor-pointer font-semibold">Uji tanpa TikTok</summary>
                 <p className="my-2 text-muted-foreground">Kirim event palsu lewat jalur yang sama dengan konektor. Untuk tes vote, kirim This or That / Hot Take ke overlay dulu.</p>
+                <label className="mb-2 flex items-center gap-2"><input type="checkbox" checked={testFollower} onChange={(e) => { setTestFollowerUi(e.target.checked); liveActions.setTestFollower(e.target.checked); }} /> Penguji dianggap follower</label>
                 <form className="mb-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const v = testText.trim(); if (v) { void liveActions.sendTestEvent("custom", v); setTestText(""); } }}>
                   <input value={testText} onChange={(e) => setTestText(e.target.value)} placeholder="Komentar bebas, mis. !fast AB12C" className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs" />
                   <Button size="sm" variant="secondary" type="submit">Kirim</Button>
@@ -235,6 +238,13 @@ export function LiveConsole() {
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.spin} onChange={(e) => void liveActions.setIntake("spin", e.target.checked)} />
                 </label>
                 {intake.spin && onAir?.id !== "spin" && <p className="text-xs text-pop">Input spin terbuka, tapi gimmick Spin belum tayang.</p>}
+                <label className="flex items-center justify-between gap-2"><span>🔒 Komentar hanya dari <b>follower</b></span>
+                  <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.followersOnly} onChange={(e) => void liveActions.setIntake("followersOnly", e.target.checked)} />
+                </label>
+                {intake.followersOnly && <p className="text-xs text-muted-foreground">Berlaku untuk vote, !spin, dan !fast. Komentar non-follower tetap tampil di Feed, tapi tidak dihitung. Gift tidak difilter.</p>}
+                {intake.followersOnly && followStats.unknown >= 5 && followStats.known === 0 && (
+                  <p className="rounded-lg bg-destructive/15 p-2 text-xs text-pop">⚠️ Status follower tidak terbaca dari TikTok, jadi semua komentar dianggap non-follower dan ditolak. Perbarui konektor ke v1.2 atau matikan opsi ini.</p>
+                )}
                 <p className="text-xs text-muted-foreground">Vote This or That (A/B) dan Hot Take (setuju/tidak) otomatis aktif hanya saat gimmick-nya tayang.</p>
               </div>
 

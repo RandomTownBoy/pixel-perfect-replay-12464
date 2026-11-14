@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, SlidersHorizontal, X, Send } from "lucide-react";
+import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, ShieldAlert, SlidersHorizontal, X, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,22 @@ export function LiveConsole() {
   const [open, setOpen] = useState<"votes" | "gift" | "inbox" | "feed" | "control" | null>(null);
   const [, force] = useState(0);
   useEffect(() => subscribeOverlay(() => force((n) => n + 1)), []);
+  const overlayConnected = useLive((l) => l.overlayConnected);
+  const overlayVisible = readOverlay().visible;
+  const togglePanic = () => {
+    if (readOverlay().visible) {
+      liveActions.panic();
+      toast("🚨 Overlay disembunyikan, antrean dikosongkan", { action: { label: "Tampilkan lagi", onClick: () => liveActions.unpanic() }, duration: 8000 });
+    } else {
+      liveActions.unpanic();
+      toast.success("Overlay ditampilkan lagi");
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.altKey && e.shiftKey && e.code === "KeyH") { e.preventDefault(); togglePanic(); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
   const inbox = useLive((l) => l.inbox);
   const history = useLive((l) => l.history);
   const feed = useLive((l) => l.feed);
@@ -217,6 +233,17 @@ export function LiveConsole() {
 
           {open === "control" && (
             <div className="space-y-3 text-sm">
+              <div className="space-y-1 rounded-xl bg-background/60 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Cek siap live</p>
+                {([
+                  [overlayConnected, "Overlay terhubung", "Overlay belum dibuka di TikTok LIVE Studio"],
+                  [tk.connected, `Konektor TikTok aktif${tk.handle ? ` (@${tk.handle})` : ""}`, "Konektor TikTok belum jalan atau belum live"],
+                  [!!code, "Link penonton siap", "Link penonton belum tersedia"],
+                  [!!live.ingestKey, "Kunci konektor siap (database terbaru)", "Kunci konektor kosong. Jalankan migrasi database"],
+                  [overlayVisible, "Overlay tampil", "Overlay sedang disembunyikan (tombol Panik aktif)"],
+                ] as [boolean, string, string][]).map(([ok, good, bad]) => <p key={good} className={`text-xs ${ok ? "text-success" : "text-pop"}`}>{ok ? "✅" : "⚠️"} {ok ? good : bad}</p>)}
+                <p className="pt-1 text-xs text-muted-foreground">Biarkan dashboard di jendela sendiri yang terlihat, jangan diminimalkan. Pintasan panik: Alt+Shift+H.</p>
+              </div>
               <div className="rounded-xl bg-background/60 p-3">
                 <p className="text-xs text-muted-foreground">Sedang tayang di overlay</p>
                 <p className="font-display font-bold">{onAir ? `${onAir.emoji} ${onAir.name}` : "— belum ada —"}</p>
@@ -330,6 +357,11 @@ export function LiveConsole() {
         </div>
       )}
       <div className="flex gap-2">
+        <button aria-label={overlayVisible ? "Panik: sembunyikan overlay" : "Tampilkan overlay"} title="Alt+Shift+H"
+          onClick={togglePanic}
+          className={`flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-bold shadow-glow transition active:scale-95 ${overlayVisible ? "bg-destructive text-destructive-foreground" : "bg-success text-background"}`}>
+          <ShieldAlert className="h-5 w-5" />{overlayVisible ? "Panik" : "Tampilkan"}
+        </button>
         <Fab label="Vote" onClick={() => setOpen(open === "votes" ? null : "votes")} active={open === "votes"}><MessageCircle className="h-5 w-5" />{voting && <span className="text-xs font-bold">{totals.a}:{totals.b}</span>}</Fab>
         <Fab label="Gift" onClick={() => setOpen(open === "gift" ? null : "gift")} active={open === "gift"}><Gift className="h-5 w-5" /></Fab>
         <Fab label="Feed" onClick={() => setOpen(open === "feed" ? null : "feed")} active={open === "feed"}>

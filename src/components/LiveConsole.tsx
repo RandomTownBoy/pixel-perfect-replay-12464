@@ -4,10 +4,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BANKABLE_KINDS, liveActions, isFast, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
-import { actions, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
+import { actions, getSettings, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
-  return typeof window !== "undefined" && code ? `${window.location.origin}/live/${code}` : "";
+  if (typeof window === "undefined" || !code) return "";
+  // Kalau dashboard dijalankan lokal, link untuk penonton harus memakai alamat publik (Settings › Alamat publik).
+  const custom = getSettings().publicUrl.trim().replace(/\/+$/, "");
+  const base = custom ? (/^https?:\/\//i.test(custom) ? custom : `https://${custom}`) : window.location.origin;
+  return `${base}/live/${code}`;
 }
 
 /** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. */
@@ -28,6 +32,7 @@ export function LiveConsole() {
   const vipAutoQueue = useKyoka((st) => st.settings.vipAutoQueue);
   const [view, setView] = useState<"pending" | "review" | "history">("pending");
   const [kindFilter, setKindFilter] = useState("all");
+  const [testText, setTestText] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const code = useLive((l) => l.audienceCode);
   const live = useLive((l) => l);
@@ -55,7 +60,8 @@ export function LiveConsole() {
   const who = (s: Submission) => {
     const b = TIER_BADGE[vipOf(s)];
     const lead = `${isFast(s) ? "⚡ " : ""}${b ? `${b} ` : ""}`;
-    return s.nickname ? `${lead}@${s.nickname}` : `${lead}Anonim${s.tiktok_user && vipOf(s) > 0 ? ` (@${s.tiktok_user})` : ""}`;
+    const gifter = s.verified_uid ? live.gifters[s.verified_uid]?.nickname : undefined;
+    return s.nickname ? `${lead}@${s.nickname}` : `${lead}Anonim${gifter ? ` (@${gifter} ✓)` : ""}`;
   };
   const badgeOf = (uid: string | null) => { const d = uid ? live.gifters[uid]?.diamonds ?? 0 : 0; const t = tierFor(d); return t ? `${TIER_BADGE[t]} ` : ""; };
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
@@ -165,7 +171,7 @@ export function LiveConsole() {
                   {liveActions.topGifters(5).map((g, i) => <li key={g.user_id} className="flex justify-between gap-2"><span className="truncate">{i + 1}. {TIER_BADGE[tierFor(g.diamonds)]} @{g.nickname}</span><span className="text-muted-foreground">{g.diamonds} 💎 · {TIER_NAME[tierFor(g.diamonds)]}</span></li>)}
                 </ol>
               </div>
-              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). VIP: kiriman mereka (komentar !spin atau link dengan username TikTok) lewat jalur fast track: didahulukan dan tampil dengan lencana. Atur batas tier di Settings.</p>
+              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). VIP: kiriman mereka (komentar !spin, atau kiriman link yang diverifikasi lewat komentar !fast KODE) lewat jalur fast track: didahulukan dan tampil dengan lencana. Atur batas tier di Settings.</p>
             </div>
           )}
 
@@ -189,6 +195,10 @@ export function LiveConsole() {
               <details className="rounded-lg border border-border p-2 text-xs">
                 <summary className="cursor-pointer font-semibold">Uji tanpa TikTok</summary>
                 <p className="my-2 text-muted-foreground">Kirim event palsu lewat jalur yang sama dengan konektor. Untuk tes vote, kirim This or That / Hot Take ke overlay dulu.</p>
+                <form className="mb-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const v = testText.trim(); if (v) { void liveActions.sendTestEvent("custom", v); setTestText(""); } }}>
+                  <input value={testText} onChange={(e) => setTestText(e.target.value)} placeholder="Komentar bebas, mis. !fast AB12C" className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs" />
+                  <Button size="sm" variant="secondary" type="submit">Kirim</Button>
+                </form>
                 <div className="flex flex-wrap gap-1.5">
                   <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("comment-a")}>Komentar “A”</Button>
                   <Button size="sm" variant="secondary" onClick={() => void liveActions.sendTestEvent("comment-b")}>Komentar “B”</Button>

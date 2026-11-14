@@ -24,7 +24,7 @@ export function useAuthUser() {
 export type Submission = {
   id: string; kind: string; round_id: string | null; choice: string | null;
   content: string | null; nickname: string | null; status: string; created_at: string;
-  source?: string | null; fingerprint?: string | null; tiktok_user?: string | null; flagged?: boolean | null; flag_reason?: string | null;
+  source?: string | null; fingerprint?: string | null; verified_uid?: string | null; flagged?: boolean | null; flag_reason?: string | null;
 };
 export type LiveEvent = {
   id: string; type: string; user_id: string | null; nickname: string | null; content: string | null;
@@ -78,16 +78,9 @@ export function tierFor(diamonds: number): number {
   return diamonds >= t3 ? 3 : diamonds >= t2 ? 2 : diamonds >= t1 ? 1 : 0;
 }
 export const tierOfUser = (uid: string | null | undefined) => (uid ? tierFor(live.gifters[uid]?.diamonds ?? 0) : 0);
-/** Tier gifter berdasarkan username TikTok (@handle) yang dicocokkan dari event gift. */
-export function tierOfHandle(handle: string | null | undefined) {
-  const h = (handle ?? "").trim().replace(/^@/, "").toLowerCase();
-  if (!h) return 0;
-  const g = Object.values(live.gifters).find((x) => x.handle === h);
-  return g ? tierFor(g.diamonds) : 0;
-}
-/** Tier VIP pengirim sebuah kiriman: dari komentar TikTok (fingerprint "tt:<id>") atau dari kolom username opsional di form link. */
+/** Tier VIP pengirim sebuah kiriman: dari komentar TikTok (fingerprint "tt:<id>") atau dari kode verifikasi "!fast KODE" (verified_uid). */
 export const vipOf = (s: Submission) =>
-  s.fingerprint?.startsWith("tt:") ? tierOfUser(s.fingerprint.slice(3)) : s.tiktok_user ? tierOfHandle(s.tiktok_user) : 0;
+  s.fingerprint?.startsWith("tt:") ? tierOfUser(s.fingerprint.slice(3)) : s.verified_uid ? tierOfUser(s.verified_uid) : 0;
 /** Kiriman ini lewat jalur fast track (gifter dengan tier cukup). */
 export const isFast = (s: Submission) => { const t = getSettings().fastTrackTier; return t > 0 && vipOf(s) >= t; };
 /** Peringkat antrean: fast track dulu (tier tertinggi di atas), sisanya menurut waktu. */
@@ -286,7 +279,7 @@ export const liveActions = {
   },
   clearFeed() { setLive({ feed: [] }); },
   /** Kirim event palsu lewat jalur yang sama dengan konektor TikTok, untuk menguji alur tanpa live. */
-  async sendTestEvent(kind: "comment-a" | "comment-b" | "comment" | "spin" | "gift" | "gift-big" | "follow") {
+  async sendTestEvent(kind: "comment-a" | "comment-b" | "comment" | "spin" | "gift" | "gift-big" | "follow" | "custom", text?: string) {
     if (!live.ingestKey) { toast.error("Kunci konektor belum siap."); return false; }
     const newUser = () => `test-${Math.random().toString(36).slice(2, 8)}`;
     if (kind === "comment-a" || kind === "comment-b") testUser = newUser();
@@ -296,6 +289,7 @@ export const liveActions = {
       kind === "comment-b" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "B" } :
       kind === "comment" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "Halo Kyoka, tes komentar!" } :
       kind === "spin" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "!spin Makanan apa yang bikin kamu kangen rumah?" } :
+      kind === "custom" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: (text ?? "").slice(0, 300) } :
       kind === "gift-big" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: "Galaxy", gift_count: 1, diamonds: 1500 } :
       kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
       { type: "follow", user_id: user, nickname: "penonton_uji", handle: "penonton_uji" };
@@ -567,6 +561,16 @@ export function useCloudSync(userId: string | undefined) {
           const st = getSettings();
           if ((st.autoQueue || (st.vipAutoQueue && isFast(r))) && QUEUE_KINDS.has(r.kind) && onAirGimmick() === r.kind) liveActions.enqueue(r);
         } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, 100) });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
+        const r = e.new as Submission;
+        if (!r.verified_uid) return;
+        // Penonton memverifikasi kiriman lewat komentar "!fast KODE": perbarui tanda & urutan, lalu mungkin masuk antrean otomatis.
+        const patch = (l: Submission[]) => l.map((x) => (x.id === r.id ? { ...x, verified_uid: r.verified_uid ?? null } : x));
+        setLive({ inbox: sortVip(patch(live.inbox)), review: patch(live.review), history: patch(live.history), queue: patch(live.queue) });
+        const inInbox = live.inbox.find((x) => x.id === r.id);
+        const st = getSettings();
+        if (inInbox && st.vipAutoQueue && isFast(inInbox) && QUEUE_KINDS.has(inInbox.kind) && onAirGimmick() === inInbox.kind) liveActions.enqueue(inInbox);
       }).subscribe();
     // Channel terpisah: kalau tabel live_events belum ada, inbox penonton tetap jalan.
     const evCh = supabase.channel(`events-${crypto.randomUUID()}`)

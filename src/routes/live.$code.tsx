@@ -49,7 +49,7 @@ function Audience() {
   const [pb, setPb] = useState("");
   const [w, setW] = useState(["", "", ""]);
   const [busy, setBusy] = useState(false);
-  const [tt, setTt] = useState(() => { try { return localStorage.getItem("kyoka-tt") ?? ""; } catch { return ""; } });
+  const [sent, setSent] = useState<{ code: string; kind: KindId } | null>(null);
 
   useEffect(() => {
     supabase.rpc("get_audience_state", { _code: code }).then(({ data, error }) => {
@@ -86,13 +86,14 @@ function Audience() {
     const content = buildContent();
     if (content === null) return;
     setBusy(true);
-    const { error } = await supabase.rpc("submit_audience", {
-      _code: code, _kind: kind, _round: "", _choice: "", _content: content, _nickname: "", _fingerprint: fingerprint(), _tiktok: tt.trim().replace(/^@/, ""),
+    const { data, error } = await supabase.rpc("submit_audience", {
+      _code: code, _kind: kind, _round: "", _choice: "", _content: content, _nickname: "", _fingerprint: fingerprint(),
     } as never);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    try { localStorage.setItem("kyoka-tt", tt.trim().replace(/^@/, "")); } catch { /* abaikan */ }
     setText(""); setPa(""); setPb(""); setW(["", "", ""]);
+    const vcode = typeof data === "string" ? data : "";
+    setSent(vcode ? { code: vcode, kind } : null);
     toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : "Terkirim ke Kyoka!");
   };
 
@@ -147,11 +148,17 @@ function Audience() {
           </div>
         )}
 
-        <label className="block text-xs text-muted-foreground">Username TikTok (opsional)
-          <Input placeholder="@usernamekamu" maxLength={31} value={tt} onChange={(e) => setTt(e.target.value)} disabled={isClosed} className="mt-1" />
-        </label>
-        <p className="-mt-1 text-xs text-muted-foreground">Tidak ditampilkan di layar, kamu tetap anonim. Kalau kamu pernah kirim gift di LIVE, kirimanmu dapat jalur ⚡ fast track.</p>
         <Button size="lg" variant="live" className="w-full" disabled={busy || isClosed} onClick={submit}>{isClosed ? "Sedang ditutup" : "Kirim"}</Button>
+        {sent && (
+          <div className="space-y-2 rounded-xl border border-zest/50 bg-zest/10 p-3 text-xs">
+            <p className="font-semibold text-foreground">✅ Terkirim. Mau ⚡ fast track?</p>
+            <p className="text-muted-foreground">Kalau kamu sudah kirim gift di LIVE ini, komen kode ini di TikTok dalam 30 menit supaya kirimanmu didahulukan. Tetap anonim di layar.</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-lg bg-background px-3 py-2 text-sm font-bold tracking-wider">!fast {sent.code}</code>
+              <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard?.writeText(`!fast ${sent.code}`); toast("Disalin. Tempel di komentar LIVE."); }}>Salin</Button>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">Dikirim tanpa nama. Hindari info pribadi, tautan, dan kata kasar. Kiriman bisa disaring sebelum tampil.</p>
       </div>
 
@@ -163,7 +170,7 @@ function Audience() {
           {voting && st.gimmick !== "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">A</b> ({st.a}) atau <b className="text-foreground">B</b> ({st.b})</li>}
           {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
           <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
-          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑 dan kirimanmu lewat jalur ⚡ fast track.</li>
+          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑. Setelah mengirim lewat link, komen <b className="text-foreground">!fast KODE</b> untuk jalur ⚡ fast track.</li>
         </ul>
       </div>
     </div>

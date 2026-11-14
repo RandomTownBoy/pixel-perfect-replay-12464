@@ -29,7 +29,7 @@ export type Submission = {
 export type LiveEvent = {
   id: string; type: string; user_id: string | null; nickname: string | null; content: string | null;
   gift_name: string | null; gift_count: number; diamonds: number; vote_choice: string | null;
-  round_id: string | null; created_at: string; handle?: string | null; flagged?: boolean | null; flag_reason?: string | null;
+  round_id: string | null; created_at: string; handle?: string | null; is_follower?: boolean | null; flagged?: boolean | null; flag_reason?: string | null;
 };
 type TiktokStatus = { connected: boolean; handle: string; at: number };
 export type Gifter = { user_id: string; nickname: string; handle?: string; diamonds: number; gifts: number; lastAt: number };
@@ -39,13 +39,13 @@ type Live = {
   overlayToken: string | null; audienceCode: string | null; overlayConnected: boolean;
   round: string; web: Tally; tiktok: Tally; gift: Tally; inbox: Submission[]; history: Submission[];
   review: Submission[]; queue: Submission[]; nowShowing: Submission | null; intake: Intake;
-  gifters: Record<string, Gifter>; perks: Perk[];
+  gifters: Record<string, Gifter>; perks: Perk[]; followStats: { known: number; unknown: number };
   ingestKey: string | null; feed: LiveEvent[]; tiktokLive: TiktokStatus;
   giftLog: { id: string; text: string; at: number }[];
 };
 let live: Live = {
   overlayToken: null, audienceCode: null, overlayConnected: false, round: "",
-  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, intake: DEFAULT_INTAKE, gifters: {}, perks: [], giftLog: [],
+  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, intake: DEFAULT_INTAKE, gifters: {}, perks: [], followStats: { known: 0, unknown: 0 }, giftLog: [],
   ingestKey: null, feed: [], tiktokLive: { connected: false, handle: "", at: 0 },
 };
 const subs = new Set<() => void>();
@@ -199,6 +199,8 @@ export const liveActions = {
     }
     return true;
   },
+  /** Untuk uji: apakah penguji dianggap follower. */
+  setTestFollower(v: boolean) { testFollower = v; },
   donePerk(id: string) { setLive({ perks: live.perks.filter((x) => x.id !== id) }); },
   /** Mulai hitung VIP dari nol (mis. setiap awal live). */
   resetVip() { actions.updateSettings({ vipSince: Date.now() }); setLive({ gifters: {}, perks: [] }); },
@@ -293,6 +295,7 @@ export const liveActions = {
       kind === "gift-big" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: "Galaxy", gift_count: 1, diamonds: 1500 } :
       kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
       { type: "follow", user_id: user, nickname: "penonton_uji", handle: "penonton_uji" };
+    ev.is_follower = testFollower;
     const { error } = await supabase.rpc("ingest_live_events", { _key: live.ingestKey, _events: [ev] as never });
     if (error) { toast.error(`Event uji gagal: ${error.message}`); return false; }
     return true;
@@ -328,6 +331,7 @@ let audienceCh: RealtimeChannel | null = null;
 let dbTimer: ReturnType<typeof setTimeout> | null = null;
 let ownerId: string | null = null;
 let testUser = "test-awal";
+let testFollower = true;
 /** Siapa memilih sisi apa di ronde aktif (dari komentar A/B) — dipakai supaya gift mendukung sisi pilihannya. */
 const userSide = new Map<string, "a" | "b">();
 
@@ -408,6 +412,11 @@ function handleLiveEvent(e: LiveEvent) {
     return;
   }
   if (e.type === "join" || e.type === "like") return; // terlalu ramai untuk ditampilkan
+  if (e.type === "comment") {
+    // Hitung berapa komentar yang status follower-nya terbaca (untuk peringatan di opsi "hanya follower").
+    const known = e.is_follower === true || e.is_follower === false;
+    setLive({ followStats: { known: live.followStats.known + (known ? 1 : 0), unknown: live.followStats.unknown + (known ? 0 : 1) } });
+  }
   setLive({ feed: [e, ...live.feed.filter((x) => x.id !== e.id)].slice(0, 60) });
   const who = `@${e.nickname || e.user_id || "penonton"}`;
   if (e.type === "comment" && e.vote_choice && e.round_id === live.round && (e.vote_choice === "a" || e.vote_choice === "b")) {

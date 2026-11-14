@@ -48,8 +48,8 @@ export type Settings = {
 };
 
 /** Jendela input penonton: mana yang sedang menerima kiriman. */
-export type Intake = { spin: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean };
-export const DEFAULT_INTAKE: Intake = { spin: false, confession: true, thisorthat: true, hottake: true, chaos: true };
+export type Intake = { spin: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean; followersOnly: boolean };
+export const DEFAULT_INTAKE: Intake = { spin: false, confession: true, thisorthat: true, hottake: true, chaos: true, followersOnly: false };
 
 export type OverlayPayload =
   | { gimmick: "spin"; question?: string | undefined; category?: string | undefined; spinning?: boolean | undefined }

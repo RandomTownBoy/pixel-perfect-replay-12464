@@ -49,6 +49,7 @@ function Audience() {
   const [pb, setPb] = useState("");
   const [w, setW] = useState(["", "", ""]);
   const [busy, setBusy] = useState(false);
+  const [tt, setTt] = useState(() => { try { return localStorage.getItem("kyoka-tt") ?? ""; } catch { return ""; } });
 
   useEffect(() => {
     supabase.rpc("get_audience_state", { _code: code }).then(({ data, error }) => {
@@ -86,10 +87,11 @@ function Audience() {
     if (content === null) return;
     setBusy(true);
     const { error } = await supabase.rpc("submit_audience", {
-      _code: code, _kind: kind, _round: "", _choice: "", _content: content, _nickname: "", _fingerprint: fingerprint(),
+      _code: code, _kind: kind, _round: "", _choice: "", _content: content, _nickname: "", _fingerprint: fingerprint(), _tiktok: tt.trim().replace(/^@/, ""),
     } as never);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
+    try { localStorage.setItem("kyoka-tt", tt.trim().replace(/^@/, "")); } catch { /* abaikan */ }
     setText(""); setPa(""); setPb(""); setW(["", "", ""]);
     toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : "Terkirim ke Kyoka!");
   };
@@ -145,6 +147,10 @@ function Audience() {
           </div>
         )}
 
+        <label className="block text-xs text-muted-foreground">Username TikTok (opsional)
+          <Input placeholder="@usernamekamu" maxLength={31} value={tt} onChange={(e) => setTt(e.target.value)} disabled={isClosed} className="mt-1" />
+        </label>
+        <p className="-mt-1 text-xs text-muted-foreground">Tidak ditampilkan di layar, kamu tetap anonim. Kalau kamu pernah kirim gift di LIVE, kirimanmu dapat jalur ⚡ fast track.</p>
         <Button size="lg" variant="live" className="w-full" disabled={busy || isClosed} onClick={submit}>{isClosed ? "Sedang ditutup" : "Kirim"}</Button>
         <p className="text-xs text-muted-foreground">Dikirim tanpa nama. Hindari info pribadi, tautan, dan kata kasar. Kiriman bisa disaring sebelum tampil.</p>
       </div>
@@ -157,7 +163,7 @@ function Audience() {
           {voting && st.gimmick !== "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">A</b> ({st.a}) atau <b className="text-foreground">B</b> ({st.b})</li>}
           {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
           <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
-          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑, kirimanmu didahulukan.</li>
+          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑 dan kirimanmu lewat jalur ⚡ fast track.</li>
         </ul>
       </div>
     </div>

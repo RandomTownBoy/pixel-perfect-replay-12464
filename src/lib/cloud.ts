@@ -1,10 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
+import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVotes, setRemote, showBanner, VIEWER_CATEGORY,
+  replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings,
 } from "@/lib/kyoka";
 
@@ -55,10 +56,10 @@ export function useLive<T>(sel: (l: Live) => T): T {
 }
 export const totalVotes = (l: Live): Tally => ({ a: l.web.a + l.tiktok.a + l.gift.a, b: l.web.b + l.tiktok.b + l.gift.b });
 
-let voteTimer: ReturnType<typeof setTimeout> | null = null;
+let voteTimer: TimerHandle | null = null;
 function scheduleVotePush() {
   if (voteTimer) return;
-  voteTimer = setTimeout(() => { voteTimer = null; setOverlayVotes(totalVotes(live)); }, 400);
+  voteTimer = startTimer(() => { voteTimer = null; setOverlayVotes(totalVotes(live)); }, 400);
 }
 /** Tujuan bawaan di bagian Gimmick untuk tiap jenis kiriman penonton. */
 export const KIND_TO_GIMMICK: Record<string, GimmickId> = {
@@ -111,12 +112,12 @@ function recordGift(e: LiveEvent): { tierUp?: string; newlyFast: boolean } {
 
 /* ---------- antrean banner (notifikasi gift tidak saling menimpa) ---------- */
 const bannerQ: string[] = [];
-let bannerTimer: ReturnType<typeof setTimeout> | null = null;
+let bannerTimer: TimerHandle | null = null;
 function nextBanner() {
   const t = bannerQ.shift();
   if (!t) { bannerTimer = null; return; }
   showBanner(t);
-  bannerTimer = setTimeout(nextBanner, 4500);
+  bannerTimer = startTimer(nextBanner, 4500);
 }
 function pushBanner(text: string) {
   bannerQ.push(text);
@@ -125,7 +126,7 @@ function pushBanner(text: string) {
 }
 
 /* ---------- antrean overlay ---------- */
-let queueTimer: ReturnType<typeof setTimeout> | null = null;
+let queueTimer: TimerHandle | null = null;
 let queueBase: OverlayPayload | null = null;
 const stillOurs = () => readOverlay().payload?.gimmick === "audience";
 /** Gimmick yang sedang tayang (gelembung antrean dihitung sebagai gimmick dasarnya). */
@@ -149,7 +150,7 @@ function queueTick() {
   const label = isFast(next) ? `⚡ ${badge ? `${badge} ` : ""}${next.nickname ? `@${next.nickname}` : "Anonim"}` : next.nickname ? `${badge ? `${badge} ` : ""}${next.nickname}` : "";
   sendToOverlay({ gimmick: "audience", kind: next.kind, content: next.content ?? "", ...(label ? { nickname: label } : {}) });
   void liveActions.setStatus(next.id, "shown");
-  queueTimer = setTimeout(queueTick, Math.max(2, getSettings().queueSeconds) * 1000);
+  queueTimer = startTimer(queueTick, Math.max(2, getSettings().queueSeconds) * 1000);
 }
 
 export const liveActions = {
@@ -211,8 +212,19 @@ export const liveActions = {
     if (!top.length) { toast("Belum ada gifter di sesi ini."); return; }
     showBanner(`🏆 Top Gifter: ${top.map((g, i) => `${i + 1}. ${TIER_BADGE[tierFor(g.diamonds)]} @${g.nickname} ${g.diamonds}💎`).join("  ·  ")}`);
   },
-  skipQueue() { if (queueTimer) clearTimeout(queueTimer); queueTick(); },
-  clearQueue() { if (queueTimer) clearTimeout(queueTimer); setLive({ queue: [] }); queueTick(); },
+  /** Tombol panik: sembunyikan overlay seketika, kosongkan antrean dan banner. Kiriman di Inbox tetap aman. */
+  panic() {
+    stopTimer(queueTimer); queueTimer = null; queueBase = null;
+    stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
+    setLive({ queue: [], nowShowing: null });
+    const o = { ...readOverlay() };
+    delete o.banner;
+    pushOverlay({ ...o, visible: false });
+    actions.log("🚨 Panik: overlay disembunyikan dan antrean dikosongkan");
+  },
+  unpanic() { setOverlayVisible(true); },
+  skipQueue() { stopTimer(queueTimer); queueTick(); },
+  clearQueue() { stopTimer(queueTimer); setLive({ queue: [] }); queueTick(); },
   /** Jadikan kiriman penonton sebagai ronde/cerita (This or That, Hot Take, Random Chaos). Mengganti tampilan overlay. */
   startRound(s: Submission): boolean {
     const text = (s.content ?? "").trim();
@@ -328,7 +340,7 @@ function audienceStateFor(o: OverlayState) {
 /* ---------- channels ---------- */
 let overlayCh: RealtimeChannel | null = null;
 let audienceCh: RealtimeChannel | null = null;
-let dbTimer: ReturnType<typeof setTimeout> | null = null;
+let dbTimer: TimerHandle | null = null;
 let ownerId: string | null = null;
 let testUser = "test-awal";
 let testFollower = true;
@@ -354,8 +366,8 @@ function pushRemote(s: OverlayState) {
   overlayCh?.send({ type: "broadcast", event: "state", payload: withCode });
   const aud = audienceStateFor(s);
   audienceCh?.send({ type: "broadcast", event: "state", payload: { ...aud, intake: live.intake } });
-  if (dbTimer) clearTimeout(dbTimer);
-  dbTimer = setTimeout(() => {
+  stopTimer(dbTimer);
+  dbTimer = startTimer(() => {
     if (!ownerId) return;
     supabase.from("studio_sessions").update({ overlay_state: withCode as never, audience_state: aud as never, updated_at: new Date().toISOString() }).eq("owner_id", ownerId).then();
   }, 600);
@@ -592,11 +604,11 @@ export function useCloudSync(userId: string | undefined) {
       persistTimer = setTimeout(() => persistSettingsNow(userId), 1000);
     });
     // Koneksi dianggap putus kalau konektor tidak mengirim heartbeat selama 60 detik.
-    const staleTimer = setInterval(() => {
+    const staleTimer = startTimer(() => {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
-    }, 10_000);
+    }, 10_000, true);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); clearInterval(staleTimer); offPersist(); if (persistTimer) clearTimeout(persistTimer); if (queueTimer) clearTimeout(queueTimer); if (bannerTimer) clearTimeout(bannerTimer); bannerTimer = null; bannerQ.length = 0;
+      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

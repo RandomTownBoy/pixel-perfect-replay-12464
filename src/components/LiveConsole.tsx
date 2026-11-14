@@ -3,7 +3,7 @@ import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, Slide
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BANKABLE_KINDS, liveActions, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
+import { BANKABLE_KINDS, liveActions, isFast, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
 import { actions, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
@@ -52,7 +52,11 @@ export function LiveConsole() {
   };
   const kindLabel = (k: string) => KIND_LABEL[k] ?? k;
   const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
-  const who = (s: Submission) => (s.nickname ? `${TIER_BADGE[vipOf(s)] ? `${TIER_BADGE[vipOf(s)]} ` : ""}@${s.nickname}` : "Anonim");
+  const who = (s: Submission) => {
+    const b = TIER_BADGE[vipOf(s)];
+    const lead = `${isFast(s) ? "⚡ " : ""}${b ? `${b} ` : ""}`;
+    return s.nickname ? `${lead}@${s.nickname}` : `${lead}Anonim${s.tiktok_user && vipOf(s) > 0 ? ` (@${s.tiktok_user})` : ""}`;
+  };
   const badgeOf = (uid: string | null) => { const d = uid ? live.gifters[uid]?.diamonds ?? 0 : 0; const t = tierFor(d); return t ? `${TIER_BADGE[t]} ` : ""; };
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
   const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id;
@@ -161,7 +165,7 @@ export function LiveConsole() {
                   {liveActions.topGifters(5).map((g, i) => <li key={g.user_id} className="flex justify-between gap-2"><span className="truncate">{i + 1}. {TIER_BADGE[tierFor(g.diamonds)]} @{g.nickname}</span><span className="text-muted-foreground">{g.diamonds} 💎 · {TIER_NAME[tierFor(g.diamonds)]}</span></li>)}
                 </ol>
               </div>
-              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). VIP: kiriman !spin mereka didahulukan dan tampil dengan lencana. Atur batas tier di Settings.</p>
+              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). VIP: kiriman mereka (komentar !spin atau link dengan username TikTok) lewat jalur fast track: didahulukan dan tampil dengan lencana. Atur batas tier di Settings.</p>
             </div>
           )}
 
@@ -232,7 +236,7 @@ export function LiveConsole() {
                 <label className="flex items-center justify-between gap-2"><span>Otomatis antrekan yang cocok dengan gimmick tayang</span>
                   <input type="checkbox" className="h-4 w-4" checked={autoQueue} onChange={(e) => actions.updateSettings({ autoQueue: e.target.checked })} />
                 </label>
-                <label className="flex items-center justify-between gap-2"><span>VIP (⭐💎👑) otomatis masuk antrean</span>
+                <label className="flex items-center justify-between gap-2"><span>⚡ Fast track otomatis masuk antrean</span>
                   <input type="checkbox" className="h-4 w-4" checked={vipAutoQueue} onChange={(e) => actions.updateSettings({ vipAutoQueue: e.target.checked })} />
                 </label>
                 {(autoQueue || vipAutoQueue) && <p className="text-xs text-muted-foreground">Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>}

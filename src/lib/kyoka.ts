@@ -39,6 +39,10 @@ export type Settings = {
   vipAutoQueue: boolean;
   /** Hitung VIP hanya dari gift setelah waktu ini (ms). 0 = 12 jam terakhir. */
   vipSince: number;
+  /** Tier minimal untuk jalur fast track (0 = mati, 1 = ⭐ semua gifter, 2 = 💎, 3 = 👑). */
+  fastTrackTier: 0 | 1 | 2 | 3;
+  /** Tampilkan notifikasi tiap gift di overlay. */
+  giftNotify: boolean;
 };
 
 /** Jendela input penonton: mana yang sedang menerima kiriman. */
@@ -154,7 +158,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0,
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true,
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },

@@ -24,15 +24,15 @@ export function useAuthUser() {
 export type Submission = {
   id: string; kind: string; round_id: string | null; choice: string | null;
   content: string | null; nickname: string | null; status: string; created_at: string;
-  source?: string | null; fingerprint?: string | null; flagged?: boolean | null; flag_reason?: string | null;
+  source?: string | null; fingerprint?: string | null; tiktok_user?: string | null; flagged?: boolean | null; flag_reason?: string | null;
 };
 export type LiveEvent = {
   id: string; type: string; user_id: string | null; nickname: string | null; content: string | null;
   gift_name: string | null; gift_count: number; diamonds: number; vote_choice: string | null;
-  round_id: string | null; created_at: string; flagged?: boolean | null; flag_reason?: string | null;
+  round_id: string | null; created_at: string; handle?: string | null; flagged?: boolean | null; flag_reason?: string | null;
 };
 type TiktokStatus = { connected: boolean; handle: string; at: number };
-export type Gifter = { user_id: string; nickname: string; diamonds: number; gifts: number; lastAt: number };
+export type Gifter = { user_id: string; nickname: string; handle?: string; diamonds: number; gifts: number; lastAt: number };
 export type Perk = { id: string; who: string; text: string; at: number; tier: number };
 type Tally = { a: number; b: number };
 type Live = {
@@ -78,22 +78,57 @@ export function tierFor(diamonds: number): number {
   return diamonds >= t3 ? 3 : diamonds >= t2 ? 2 : diamonds >= t1 ? 1 : 0;
 }
 export const tierOfUser = (uid: string | null | undefined) => (uid ? tierFor(live.gifters[uid]?.diamonds ?? 0) : 0);
-/** Tier VIP pengirim sebuah kiriman (hanya yang berasal dari komentar TikTok, fingerprint "tt:<id>"). */
-export const vipOf = (s: Submission) => (s.fingerprint?.startsWith("tt:") ? tierOfUser(s.fingerprint.slice(3)) : 0);
-const byVipThenNewest = (x: Submission, y: Submission) => vipOf(y) - vipOf(x) || Date.parse(y.created_at) - Date.parse(x.created_at);
+/** Tier gifter berdasarkan username TikTok (@handle) yang dicocokkan dari event gift. */
+export function tierOfHandle(handle: string | null | undefined) {
+  const h = (handle ?? "").trim().replace(/^@/, "").toLowerCase();
+  if (!h) return 0;
+  const g = Object.values(live.gifters).find((x) => x.handle === h);
+  return g ? tierFor(g.diamonds) : 0;
+}
+/** Tier VIP pengirim sebuah kiriman: dari komentar TikTok (fingerprint "tt:<id>") atau dari kolom username opsional di form link. */
+export const vipOf = (s: Submission) =>
+  s.fingerprint?.startsWith("tt:") ? tierOfUser(s.fingerprint.slice(3)) : s.tiktok_user ? tierOfHandle(s.tiktok_user) : 0;
+/** Kiriman ini lewat jalur fast track (gifter dengan tier cukup). */
+export const isFast = (s: Submission) => { const t = getSettings().fastTrackTier; return t > 0 && vipOf(s) >= t; };
+/** Peringkat antrean: fast track dulu (tier tertinggi di atas), sisanya menurut waktu. */
+export const fastRank = (s: Submission) => (isFast(s) ? vipOf(s) : 0);
+const byVipThenNewest = (x: Submission, y: Submission) => fastRank(y) - fastRank(x) || Date.parse(y.created_at) - Date.parse(x.created_at);
 export const sortVip = (l: Submission[]) => [...l].sort(byVipThenNewest);
 
-/** Catat gift ke total pengirim. Mengembalikan teks naik-tier (kalau ada) untuk digabung ke banner. */
-function recordGift(e: LiveEvent): string | undefined {
+/** Catat gift ke total pengirim. Mengembalikan teks naik-tier dan apakah baru masuk jalur fast track. */
+function recordGift(e: LiveEvent): { tierUp?: string; newlyFast: boolean } {
   const uid = e.user_id;
-  if (!uid) return undefined;
+  if (!uid) return { newlyFast: false };
   const prev = live.gifters[uid];
   const add = e.diamonds > 0 ? e.diamonds : Math.max(1, e.gift_count || 1);
-  const next: Gifter = { user_id: uid, nickname: e.nickname || prev?.nickname || uid, diamonds: (prev?.diamonds ?? 0) + add, gifts: (prev?.gifts ?? 0) + Math.max(1, e.gift_count || 1), lastAt: Date.now() };
+  const handle = (e.handle ?? prev?.handle ?? "").toLowerCase();
+  const next: Gifter = {
+    user_id: uid, nickname: e.nickname || prev?.nickname || uid, ...(handle ? { handle } : {}),
+    diamonds: (prev?.diamonds ?? 0) + add, gifts: (prev?.gifts ?? 0) + Math.max(1, e.gift_count || 1), lastAt: Date.now(),
+  };
   setLive({ gifters: { ...live.gifters, [uid]: next } });
   const before = tierFor(prev?.diamonds ?? 0);
   const after = tierFor(next.diamonds);
-  return after > before ? `${TIER_BADGE[after]} @${next.nickname} jadi ${TIER_NAME[after]}! (${next.diamonds} 💎)` : undefined;
+  const ft = getSettings().fastTrackTier;
+  return {
+    ...(after > before ? { tierUp: `${TIER_BADGE[after]} @${next.nickname} jadi ${TIER_NAME[after]}! (${next.diamonds} 💎)` } : {}),
+    newlyFast: ft > 0 && after >= ft && before < ft,
+  };
+}
+
+/* ---------- antrean banner (notifikasi gift tidak saling menimpa) ---------- */
+const bannerQ: string[] = [];
+let bannerTimer: ReturnType<typeof setTimeout> | null = null;
+function nextBanner() {
+  const t = bannerQ.shift();
+  if (!t) { bannerTimer = null; return; }
+  showBanner(t);
+  bannerTimer = setTimeout(nextBanner, 4500);
+}
+function pushBanner(text: string) {
+  bannerQ.push(text);
+  if (bannerQ.length > 8) bannerQ.shift();
+  if (!bannerTimer) nextBanner();
 }
 
 /* ---------- antrean overlay ---------- */
@@ -118,7 +153,8 @@ function queueTick() {
   }
   setLive({ queue: live.queue.slice(1), nowShowing: next });
   const badge = TIER_BADGE[vipOf(next)] ?? "";
-  sendToOverlay({ gimmick: "audience", kind: next.kind, content: next.content ?? "", ...(next.nickname ? { nickname: `${badge ? `${badge} ` : ""}${next.nickname}` } : {}) });
+  const label = isFast(next) ? `⚡ ${badge ? `${badge} ` : ""}${next.nickname ? `@${next.nickname}` : "Anonim"}` : next.nickname ? `${badge ? `${badge} ` : ""}${next.nickname}` : "";
+  sendToOverlay({ gimmick: "audience", kind: next.kind, content: next.content ?? "", ...(label ? { nickname: label } : {}) });
   void liveActions.setStatus(next.id, "shown");
   queueTimer = setTimeout(queueTick, Math.max(2, getSettings().queueSeconds) * 1000);
 }
@@ -160,8 +196,8 @@ export const liveActions = {
   enqueue(s: Submission) {
     if (!QUEUE_KINDS.has(s.kind) || s.flagged || s.status === "review") return false;
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
-    const tier = vipOf(s);
-    const at = live.queue.findIndex((x) => vipOf(x) < tier); // VIP didahulukan, tapi tidak memotong item yang sedang tampil
+    const rank = fastRank(s);
+    const at = live.queue.findIndex((x) => fastRank(x) < rank); // fast track didahulukan, tapi tidak memotong item yang sedang tampil
     setLive({ queue: at === -1 ? [...live.queue, s] : [...live.queue.slice(0, at), s, ...live.queue.slice(at)] });
     if (!queueTimer && !live.nowShowing) {
       const cur = readOverlay().payload;
@@ -256,13 +292,13 @@ export const liveActions = {
     if (kind === "comment-a" || kind === "comment-b") testUser = newUser();
     const user = kind === "comment" || kind === "follow" ? newUser() : testUser; // spin & gift memakai penguji yang sama agar VIP bisa dicoba
     const ev: Record<string, unknown> =
-      kind === "comment-a" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "A" } :
-      kind === "comment-b" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "B" } :
-      kind === "comment" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "Halo Kyoka, tes komentar!" } :
-      kind === "spin" ? { type: "comment", user_id: user, nickname: "penonton_uji", content: "!spin Makanan apa yang bikin kamu kangen rumah?" } :
-      kind === "gift-big" ? { type: "gift", user_id: user, nickname: "penonton_uji", gift_name: "Galaxy", gift_count: 1, diamonds: 1500 } :
-      kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
-      { type: "follow", user_id: user, nickname: "penonton_uji" };
+      kind === "comment-a" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "A" } :
+      kind === "comment-b" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "B" } :
+      kind === "comment" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "Halo Kyoka, tes komentar!" } :
+      kind === "spin" ? { type: "comment", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", content: "!spin Makanan apa yang bikin kamu kangen rumah?" } :
+      kind === "gift-big" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: "Galaxy", gift_count: 1, diamonds: 1500 } :
+      kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
+      { type: "follow", user_id: user, nickname: "penonton_uji", handle: "penonton_uji" };
     const { error } = await supabase.rpc("ingest_live_events", { _key: live.ingestKey, _events: [ev] as never });
     if (error) { toast.error(`Event uji gagal: ${error.message}`); return false; }
     return true;
@@ -386,22 +422,25 @@ function handleLiveEvent(e: LiveEvent) {
     return;
   }
   if (e.type !== "gift") return;
-  const tierUp = recordGift(e);
-  const tail = tierUp ? `  ·  ${tierUp}` : "";
+  const { tierUp, newlyFast } = recordGift(e);
+  const st = getSettings();
+  const extra = [tierUp, newlyFast ? "⚡ Fast track aktif!" : undefined].filter(Boolean).join("  ·  ");
+  const tail = extra ? `  ·  ${extra}` : "";
+  const notify = (text: string) => { if (st.giftNotify) pushBanner(text); };
   const rule = matchGiftRule(e.gift_name);
   const count = Math.max(1, e.gift_count || 1);
   const p = readOverlay().payload;
   const voting = p?.gimmick === "thisorthat" || p?.gimmick === "hottake";
-  if (!rule) { liveActions.logGift(`🎁 ${who} kirim ${e.gift_name ?? "gift"} ×${count}`); if (tierUp) showBanner(tierUp); return; }
+  if (!rule) { liveActions.logGift(`🎁 ${who} kirim ${e.gift_name ?? "gift"} ×${count}`); notify(`🎁 ${who} kirim ${e.gift_name ?? "gift"}${count > 1 ? ` ×${count}` : ""}!${tail}`); return; }
   if (rule.effect === "vote" && voting) {
     const side = e.user_id ? userSide.get(e.user_id) : undefined;
     if (side) {
       const w = rule.weight * count;
       liveActions.addGift(side, w, `${rule.emoji} ${who} → ${side.toUpperCase()} +${w}`);
-      showBanner(`${rule.emoji} ${who} kirim ${rule.name}! ${side.toUpperCase()} +${w} suara${tail}`);
+      notify(`${rule.emoji} ${who} kirim ${rule.name}! ${side.toUpperCase()} +${w} suara${tail}`);
     } else {
       liveActions.logGift(`${rule.emoji} ${who} kirim ${rule.name} — belum pilih A/B lewat komentar, suara tidak dihitung`);
-      if (tierUp) showBanner(tierUp);
+      notify(`${rule.emoji} ${who} kirim ${rule.name}!${tail}`);
     }
     return;
   }
@@ -409,7 +448,7 @@ function handleLiveEvent(e: LiveEvent) {
   if (rule.effect === "shoutout") {
     setLive({ perks: [{ id: crypto.randomUUID(), who, text: `${rule.emoji} ${rule.name}: ${rule.reward}`, at: Date.now(), tier: tierOfUser(e.user_id) }, ...live.perks].slice(0, 20) });
   }
-  showBanner(`${rule.emoji} Makasih ${who} untuk ${rule.name}! ${rule.reward}${tail}`);
+  notify(`${rule.emoji} Makasih ${who} untuk ${rule.name}! ${rule.reward}${tail}`);
 }
 
 let settingsSync = false;
@@ -475,11 +514,14 @@ export function useCloudSync(userId: string | undefined) {
       const intake: Intake = { ...DEFAULT_INTAKE, ...(cfgRow?.intake ?? {}) };
       // Hitung ulang VIP dari gift 12 jam terakhir (atau sejak reset VIP terakhir).
       const since = Math.max(Date.now() - 12 * 3600_000, getSettings().vipSince || 0);
-      const { data: gv } = await supabase.from("live_events").select("user_id, nickname, diamonds, gift_count, created_at").eq("type", "gift").gte("created_at", new Date(since).toISOString()).limit(2000);
+      const sinceIso = new Date(since).toISOString();
+      let gres = await supabase.from("live_events").select("user_id, nickname, handle, diamonds, gift_count, created_at").eq("type", "gift").gte("created_at", sinceIso).limit(2000);
+      if (gres.error) gres = await supabase.from("live_events").select("user_id, nickname, diamonds, gift_count, created_at").eq("type", "gift").gte("created_at", sinceIso).limit(2000) as typeof gres; // kolom handle (paket 4) belum ada
       const gifters: Record<string, Gifter> = {};
-      for (const r of (gv ?? []) as unknown as { user_id: string | null; nickname: string | null; diamonds: number; gift_count: number; created_at: string }[]) {
+      for (const r of (gres.data ?? []) as unknown as { user_id: string | null; nickname: string | null; handle?: string | null; diamonds: number; gift_count: number; created_at: string }[]) {
         if (!r.user_id) continue;
         const g = gifters[r.user_id] ?? { user_id: r.user_id, nickname: r.nickname || r.user_id, diamonds: 0, gifts: 0, lastAt: 0 };
+        if (r.handle) g.handle = r.handle.toLowerCase();
         g.diamonds += r.diamonds > 0 ? r.diamonds : Math.max(1, r.gift_count || 1);
         g.gifts += Math.max(1, r.gift_count || 1);
         g.lastAt = Math.max(g.lastAt, Date.parse(r.created_at));
@@ -523,7 +565,7 @@ export function useCloudSync(userId: string | undefined) {
           setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, 100) });
           // Antrean otomatis: hanya kiriman bersih yang cocok dengan gimmick yang sedang tayang.
           const st = getSettings();
-          if ((st.autoQueue || (st.vipAutoQueue && vipOf(r) > 0)) && QUEUE_KINDS.has(r.kind) && onAirGimmick() === r.kind) liveActions.enqueue(r);
+          if ((st.autoQueue || (st.vipAutoQueue && isFast(r))) && QUEUE_KINDS.has(r.kind) && onAirGimmick() === r.kind) liveActions.enqueue(r);
         } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, 100) });
       }).subscribe();
     // Channel terpisah: kalau tabel live_events belum ada, inbox penonton tetap jalan.
@@ -541,7 +583,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); clearInterval(staleTimer); offPersist(); if (persistTimer) clearTimeout(persistTimer); if (queueTimer) clearTimeout(queueTimer);
+      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); clearInterval(staleTimer); offPersist(); if (persistTimer) clearTimeout(persistTimer); if (queueTimer) clearTimeout(queueTimer); if (bannerTimer) clearTimeout(bannerTimer); bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

@@ -30,6 +30,7 @@ function SettingsPage() {
   const vipTiers = useKyoka((x) => x.settings.vipTiers);
   const fastTrackTier = useKyoka((x) => x.settings.fastTrackTier);
   const giftNotify = useKyoka((x) => x.settings.giftNotify);
+  const publicUrl = useKyoka((x) => x.settings.publicUrl);
   const [newWord, setNewWord] = useState("");
   const addWord = () => {
     const w = newWord.trim().toLowerCase();
@@ -102,6 +103,13 @@ function SettingsPage() {
           </div>
           <p className="text-xs text-muted-foreground">Sebelum konektor siap, kamu bisa menguji seluruh alurnya dari tombol <b>Feed</b> › “Uji tanpa TikTok” di pojok kanan bawah. Agar gift otomatis terhitung, nama gift di tabel atas harus sama dengan nama gift di TikTok (misalnya “Rose”).</p>
         </Panel>
+        <Panel className="space-y-3 text-sm">
+          <h3 className="font-display text-sm font-bold">Alamat publik (link penonton)</h3>
+          <p className="text-muted-foreground">Kalau kamu menjalankan studio ini di komputermu (localhost), link untuk penonton harus memakai alamat yang bisa dibuka orang lain, misalnya situs yang sudah dipublish. Kosongkan kalau studio ini sudah dibuka lewat alamat publik.</p>
+          <Input placeholder="https://situsmu.lovable.app" value={publicUrl} onChange={(e) => actions.updateSettings({ publicUrl: e.target.value })} />
+          <p className="text-xs text-muted-foreground">Contoh link yang terbentuk: {(publicUrl.trim() || "alamat halaman ini").replace(/\/+$/, "")}/live/kode-kamu</p>
+        </Panel>
+
         <Panel className="space-y-3 text-sm">
           <h3 className="font-display text-sm font-bold">Moderasi kata</h3>
           <p className="text-muted-foreground">Kiriman penonton dan komentar yang mengandung kata di daftar bawaan (kata kasar Indonesia &amp; Inggris), tautan, atau nomor telepon otomatis masuk <b>Cek</b>, tidak langsung tampil. Tambahkan kata sendiri di sini. Detektor tidak sempurna, jadi tetap periksa sebelum menampilkan.</p>

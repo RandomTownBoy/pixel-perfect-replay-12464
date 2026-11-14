@@ -21,7 +21,7 @@ export const Route = createFileRoute("/live/$code")({
 type KindId = "confession" | "thisorthat" | "hottake" | "chaos";
 type AState = {
   live?: boolean; round?: string; mode?: string; gimmick?: string; a?: string; b?: string; title?: string;
-  intake?: Partial<Record<KindId | "spin", boolean>>;
+  intake?: Partial<Record<KindId | "spin" | "followersOnly", boolean>>;
 };
 
 const KINDS: { id: KindId; emoji: string; name: string; hint: string }[] = [
@@ -169,6 +169,7 @@ function Audience() {
           {voting && st.gimmick === "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">SETUJU</b> atau <b className="text-foreground">TIDAK</b></li>}
           {voting && st.gimmick !== "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">A</b> ({st.a}) atau <b className="text-foreground">B</b> ({st.b})</li>}
           {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
+          {st.intake?.followersOnly && <li>🔒 Komentar hanya dihitung dari <b className="text-foreground">follower</b>. Follow dulu ya.</li>}
           <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
           <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑. Setelah mengirim lewat link, komen <b className="text-foreground">!fast KODE</b> untuk jalur ⚡ fast track.</li>
         </ul>

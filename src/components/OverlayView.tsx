@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Intake, OverlayPayload, OverlayState } from "@/lib/kyoka";
-import { DEFAULT_INTAKE, GIMMICKS } from "@/lib/kyoka";
+import type { CardPayload, Intake, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
+import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
+import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
 import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
@@ -103,6 +104,7 @@ function Body({ state }: { state: OverlayState }) {
   const p = state.payload!;
   switch (p.gimmick) {
     case "spin":
+      if (p.phase) return <SpinStage p={p} />;
       return (
         <div className="ov-body">
           {p.spinning ? (
@@ -126,6 +128,7 @@ function Body({ state }: { state: OverlayState }) {
         </div>
       );
     case "card":
+      if (p.phase) return <CardStage p={p} />;
       return (
         <div className="ov-body">
           <div className="ov-cards">
@@ -153,10 +156,8 @@ function Body({ state }: { state: OverlayState }) {
     case "chaos":
       return p.mode === "story" ? (
         <div className="ov-body">
-          <span className="ov-muted">Bikin cerita dari 3 kata ini!</span>
-          <div className="ov-words">
-            {p.words.map((w, i) => <div key={w} className="ov-word" style={{ animationDelay: `${i * 0.18}s`, background: COLORS[i % 3] }}>{w}</div>)}
-          </div>
+          <span className="ov-muted">{p.rolling ? "Mengacak kata…" : "Bikin cerita dari 3 kata ini!"}</span>
+          <ChaosWords words={p.words} rolling={!!p.rolling} />
         </div>
       ) : (
         <div className="ov-body">
@@ -216,6 +217,173 @@ function ThisOrThat({ a, b, end, votes }: { a?: string | undefined; b?: string |
         {opt(1, "B", b, "var(--electric)")}
       </div>
       <div className="ov-foot"><span className="ov-hint">Komen <b>A</b> atau <b>B</b> untuk vote 🗳️</span></div>
+    </div>
+  );
+}
+
+/* ---------- Spin the Question: roda tampil di overlay ---------- */
+
+/** Easing cubic-bezier (sama dengan CSS) supaya animasi bisa dilanjutkan dari tengah setelah overlay di-refresh. */
+function bezier(x1: number, y1: number, x2: number, y2: number) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const X = (u: number) => ((ax * u + bx) * u + cx) * u;
+  const Y = (u: number) => ((ay * u + by) * u + cy) * u;
+  const dX = (u: number) => (3 * ax * u + 2 * bx) * u + cx;
+  return (t: number) => {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    let u = t;
+    for (let i = 0; i < 8; i++) {
+      const e = X(u) - t;
+      if (Math.abs(e) < 1e-5) break;
+      const d = dX(u);
+      if (Math.abs(d) < 1e-6) break;
+      u -= e / d;
+    }
+    if (!(u >= 0 && u <= 1) || Math.abs(X(u) - t) > 1e-4) {
+      let lo = 0, hi = 1; u = t;
+      for (let i = 0; i < 30; i++) { const v = X(u); if (Math.abs(v - t) < 1e-5) break; if (v < t) lo = u; else hi = u; u = (lo + hi) / 2; }
+    }
+    return Y(u);
+  };
+}
+const SPIN_EASE = bezier(0.15, 0.85, 0.2, 1);
+
+/** Sudut roda pada waktu `now`: sudah lewat durasi → langsung sudut akhir; masih jalan → posisi sisa animasinya. */
+function wheelAngleAt(p: SpinPayload, now: number): number {
+  const to = p.rotation ?? 0;
+  if (p.phase !== "spinning" || p.startedAt === undefined || !p.durationMs) return to;
+  const t = (now - p.startedAt) / p.durationMs;
+  if (t >= 1) return to;
+  const from = p.fromRotation ?? 0;
+  return from + (to - from) * SPIN_EASE(Math.max(0, t));
+}
+
+function useWheelAngle(p: SpinPayload) {
+  const [angle, setAngle] = useState(() => wheelAngleAt(p, Date.now()));
+  useEffect(() => {
+    let raf = 0;
+    const step = () => {
+      const now = Date.now();
+      setAngle(wheelAngleAt(p, now));
+      if (p.phase === "spinning" && p.startedAt !== undefined && !!p.durationMs && now - p.startedAt < p.durationMs) raf = requestAnimationFrame(step);
+    };
+    step();
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.phase, p.rotation, p.fromRotation, p.startedAt, p.durationMs]);
+  return angle;
+}
+
+/** True selama `ms` setelah waktu `at` (dipakai untuk chip sementara). */
+function useFlash(at: number | undefined, ms: number) {
+  const [on, setOn] = useState(() => at !== undefined && Date.now() - at < ms);
+  useEffect(() => {
+    if (at === undefined) { setOn(false); return; }
+    const left = ms - (Date.now() - at);
+    if (left <= 0) { setOn(false); return; }
+    setOn(true);
+    const t = setTimeout(() => setOn(false), left);
+    return () => clearTimeout(t);
+  }, [at, ms]);
+  return on;
+}
+
+function SpinStage({ p }: { p: SpinPayload }) {
+  const items = p.items ?? [];
+  const n = items.length;
+  const phase = p.phase ?? "standby";
+  const angle = useWheelAngle(p);
+  const flash = useFlash(p.addedAt, 3000);
+  const winner = phase === "result" ? p.winnerIndex : undefined;
+  const fresh = new Set(p.addedAt !== undefined && Date.now() - p.addedAt < 3500 ? p.added ?? [] : []);
+  const dense = n > 5;
+  return (
+    <div className={`ov-body ov-spin${dense ? " dense" : ""}${phase === "result" ? " res" : ""}`}>
+      <div className="ov-spin-top">
+        {p.category && <span className="ov-chip soft">{p.category}</span>}
+        {flash && <span className="ov-chip add">➕ Ditambahkan ke roda</span>}
+      </div>
+      <div className="ov-wheelwrap">
+        <span className="ov-pointer" />
+        <SpinWheelSvg count={n} winner={winner} className="ov-wheel" style={{ transform: `rotate(${angle}deg)` }} />
+      </div>
+      {n === 0 ? (
+        <p className="ov-empty">Roda masih kosong, ketik !spin lalu pertanyaanmu</p>
+      ) : (
+        <ol className={`ov-items${dense ? " two" : ""}`}>
+          {items.map((t, i) => (
+            <li key={t} title={t} className={`ov-item${winner === undefined ? "" : i === winner ? " win" : " dim"}${fresh.has(t) ? " fresh" : ""}`}>
+              <b style={{ background: wheelColor(i) }}>{i + 1}</b><span>{t}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {phase === "spinning" && <span className="ov-muted">Memutar…</span>}
+      {phase === "result" && p.question && (
+        <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
+          <Quote text={p.question} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Pick a Card: kartu tertutup → kocok → bagi → balik ---------- */
+
+function CardStage({ p }: { p: CardPayload }) {
+  const phase = p.phase ?? "standby";
+  const n = Math.max(0, Math.min(6, p.count));
+  const rows = Math.ceil(n / 3) || 1;
+  const revealed = phase === "revealed" ? p.revealed : undefined;
+  return (
+    <div className="ov-body">
+      <div className={`ov-deck ${phase}`}>
+        {Array.from({ length: n }).map((_, i) => {
+          const row = Math.floor(i / 3);
+          const inRow = Math.min(3, n - row * 3);
+          const dx = -((i % 3) - (inRow - 1) / 2); // arah ke tengah tumpukan
+          const dy = (rows - 1) / 2 - row;
+          const on = revealed === i;
+          const dim = revealed !== undefined && !on;
+          return (
+            <div key={i} className={`flip-card ov-fc${on ? " on" : ""}${dim ? " dim" : ""}`}
+              style={{ "--dx": dx, "--dy": dy, "--r": ((i * 7) % 9) - 4, "--i": i } as CSSProperties}>
+              <div className={`flip-inner${on ? " flipped" : ""}`}>
+                <div className="flip-face ov-face front">{i + 1}</div>
+                <div className="flip-face flip-back ov-face back">✦</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {phase === "shuffling" && <span className="ov-muted">Mengocok kartu…</span>}
+      {(phase === "standby" || phase === "dealt") && <span className="ov-prompt">Pilih satu kartu!</span>}
+      {phase === "revealed" && p.text && (
+        <div key={p.text} className="ov-result animate-pop-in" style={{ animationDelay: "0.55s" }}>
+          <Quote text={p.text} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Random Chaos (cerita): kata digulir dulu, lalu berhenti ---------- */
+
+function ChaosWords({ words, rolling }: { words: string[]; rolling: boolean }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!rolling) return;
+    const t = setInterval(() => setTick((x) => x + 1), 90);
+    return () => clearInterval(t);
+  }, [rolling]);
+  const pool = DEMO.words;
+  return (
+    <div className="ov-words">
+      {words.map((w, i) => rolling
+        ? <div key={`roll-${i}`} className="ov-word roll" style={{ background: COLORS[i % 3] }}>{pool[(tick * (i + 3) + i * 7) % pool.length]}</div>
+        : <div key={w} className="ov-word" style={{ animationDelay: `${i * 0.18}s`, background: COLORS[i % 3] }}>{w}</div>)}
     </div>
   );
 }

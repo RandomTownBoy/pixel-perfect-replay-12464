@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookmarkPlus, Copy, Gift, Inbox, MessageCircle, Radio, RotateCcw, ShieldAlert, SlidersHorizontal, X, Send } from "lucide-react";
+import { BookmarkPlus, Copy, Gift, Inbox, LayoutGrid, MessageCircle, Radio, RotateCcw, ShieldAlert, SlidersHorizontal, X, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,20 @@ export function audienceUrl(code: string | null) {
   return `${base}/live/${code}`;
 }
 
-/** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. */
+const EXPANDED_KEY = "kyoka:console:expanded";
+
+/** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. Terlipat jadi satu tombol secara default. */
 export function LiveConsole() {
   const [open, setOpen] = useState<"votes" | "gift" | "inbox" | "feed" | "control" | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  // Dibaca setelah mount (bukan di initial state) supaya render server dan klien sama.
+  useEffect(() => { try { setExpanded(localStorage.getItem(EXPANDED_KEY) === "1"); } catch { /* ignore */ } }, []);
+  const toggleExpanded = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (!next) setOpen(null); // melipat juga menutup panel yang terbuka
+    try { localStorage.setItem(EXPANDED_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+  };
   const [, force] = useState(0);
   useEffect(() => subscribeOverlay(() => force((n) => n + 1)), []);
   const overlayConnected = useLive((l) => l.overlayConnected);
@@ -356,25 +367,42 @@ export function LiveConsole() {
           )}
         </div>
       )}
-      <div className="flex max-w-full flex-wrap justify-end gap-2">
-        <button aria-label={overlayVisible ? "Panik: sembunyikan overlay" : "Tampilkan overlay"} title="Alt+Shift+H"
-          onClick={togglePanic}
-          className={`flex h-12 items-center gap-1.5 rounded-full px-3 text-sm font-bold shadow-glow transition active:scale-95 sm:px-4 ${overlayVisible ? "bg-destructive text-destructive-foreground" : "bg-success text-background"}`}>
-          <ShieldAlert className="h-5 w-5" /><span className="hidden sm:inline">{overlayVisible ? "Panik" : "Tampilkan"}</span>
-        </button>
-        <Fab label="Vote" onClick={() => setOpen(open === "votes" ? null : "votes")} active={open === "votes"}><MessageCircle className="h-5 w-5" />{voting && <span className="text-xs font-bold">{totals.a}:{totals.b}</span>}</Fab>
-        <Fab label="Gift" onClick={() => setOpen(open === "gift" ? null : "gift")} active={open === "gift"}><Gift className="h-5 w-5" /></Fab>
-        <Fab label="Feed" onClick={() => setOpen(open === "feed" ? null : "feed")} active={open === "feed"}>
-          <Radio className="h-5 w-5" /><span className={`h-2 w-2 rounded-full ${tk.connected ? "animate-pulse bg-success" : "bg-muted-foreground"}`} />
-        </Fab>
-        <Fab label="Inbox" onClick={() => setOpen(open === "inbox" ? null : "inbox")} active={open === "inbox"}>
-          <Inbox className="h-5 w-5" />{inbox.length > 0 && <span className="rounded-full bg-pop px-1.5 text-xs font-bold text-background">{inbox.length}</span>}
-          {review.length > 0 && <span title="Perlu dicek">⚠️</span>}
-        </Fab>
-        <Fab label="Kontrol" onClick={() => setOpen(open === "control" ? null : "control")} active={open === "control"}>
-          <SlidersHorizontal className="h-5 w-5" />{(queue.length > 0 || nowShowing) && <span className="rounded-full bg-pop px-1.5 text-xs font-bold text-background">{queue.length + (nowShowing ? 1 : 0)}</span>}
-        </Fab>
-      </div>
+      {expanded && (
+        <div className="flex max-w-full flex-wrap justify-end gap-2 duration-200 animate-in fade-in-0 slide-in-from-bottom-2">
+          <button aria-label={overlayVisible ? "Panik: sembunyikan overlay" : "Tampilkan overlay"} title="Alt+Shift+H"
+            onClick={togglePanic}
+            className={`flex h-12 items-center gap-1.5 rounded-full px-3 text-sm font-bold shadow-glow transition active:scale-95 sm:px-4 ${overlayVisible ? "bg-destructive text-destructive-foreground" : "bg-success text-background"}`}>
+            <ShieldAlert className="h-5 w-5" /><span className="hidden sm:inline">{overlayVisible ? "Panik" : "Tampilkan"}</span>
+          </button>
+          <Fab label="Vote" onClick={() => setOpen(open === "votes" ? null : "votes")} active={open === "votes"}><MessageCircle className="h-5 w-5" />{voting && <span className="text-xs font-bold">{totals.a}:{totals.b}</span>}</Fab>
+          <Fab label="Gift" onClick={() => setOpen(open === "gift" ? null : "gift")} active={open === "gift"}><Gift className="h-5 w-5" /></Fab>
+          <Fab label="Feed" onClick={() => setOpen(open === "feed" ? null : "feed")} active={open === "feed"}>
+            <Radio className="h-5 w-5" /><span className={`h-2 w-2 rounded-full ${tk.connected ? "animate-pulse bg-success" : "bg-muted-foreground"}`} />
+          </Fab>
+          <Fab label="Inbox" onClick={() => setOpen(open === "inbox" ? null : "inbox")} active={open === "inbox"}>
+            <Inbox className="h-5 w-5" />{inbox.length > 0 && <span className="rounded-full bg-pop px-1.5 text-xs font-bold text-background">{inbox.length}</span>}
+            {review.length > 0 && <span title="Perlu dicek">⚠️</span>}
+          </Fab>
+          <Fab label="Kontrol" onClick={() => setOpen(open === "control" ? null : "control")} active={open === "control"}>
+            <SlidersHorizontal className="h-5 w-5" />{(queue.length > 0 || nowShowing) && <span className="rounded-full bg-pop px-1.5 text-xs font-bold text-background">{queue.length + (nowShowing ? 1 : 0)}</span>}
+          </Fab>
+        </div>
+      )}
+      <button aria-label={expanded ? "Lipat menu live" : "Buka menu live"} aria-expanded={expanded} onClick={toggleExpanded}
+        className={`relative flex h-12 w-12 items-center justify-center rounded-full shadow-glow transition active:scale-95 ${expanded ? "bg-party" : "border border-border bg-card"} ${!expanded && !overlayVisible ? "ring-4 ring-destructive/80" : ""}`}>
+        {expanded ? <X className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+        {!expanded && (
+          <>
+            <span title={tk.connected ? "Konektor TikTok aktif" : "Konektor TikTok belum aktif"} className={`absolute bottom-0 left-0 h-3 w-3 rounded-full border-2 border-card ${tk.connected ? "bg-success" : "bg-muted-foreground"}`} />
+            {(inbox.length > 0 || review.length > 0) && (
+              <span title={review.length > 0 ? "Ada kiriman yang perlu dicek" : "Kiriman penonton menunggu"} className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-pop px-1 text-[10px] font-bold text-background">
+                {inbox.length > 0 && inbox.length}{review.length > 0 && "⚠️"}
+              </span>
+            )}
+            {!overlayVisible && <span title="Overlay disembunyikan (mode Panik)" className="absolute -left-1 -top-1 h-3.5 w-3.5 animate-pulse rounded-full border-2 border-card bg-destructive" />}
+          </>
+        )}
+      </button>
     </div>
   );
 }

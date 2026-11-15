@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  actions, DEMO, sample, sendToOverlay, useKyoka, VIEWER_CATEGORY, type GimmickId,
+  actions, DEMO, getQuestions, readOverlay, sample, sendToOverlay, SPIN_DURATION_MS, SPIN_EASING, spinPoolOf, subscribeOverlay,
+  updateOverlayPayload, useKyoka, VIEWER_CATEGORY, type GimmickId, type OverlayPayload,
 } from "@/lib/kyoka";
-import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check } from "lucide-react";
+import { SpinWheelSvg } from "@/components/SpinWheel";
+import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check, Tv } from "lucide-react";
 import { toast } from "sonner";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
@@ -31,6 +33,16 @@ function markUsed(text: string) {
   if (q) actions.updateQuestion(q.id, { used: true });
 }
 let snap: { id: string; text: string }[] = [];
+
+/** Payload overlay yang sedang tayang (diperbarui realtime), untuk tahu apakah roda/kartu/cerita sedang ada di overlay. */
+function useOverlayPayload(): OverlayPayload | null {
+  const [p, setP] = useState<OverlayPayload | null>(null);
+  useEffect(() => {
+    setP(readOverlay().payload);
+    return subscribeOverlay((s) => setP(s.payload));
+  }, []);
+  return p;
+}
 function useKyokaSnapshotFind(text: string) { return snap.find((x) => x.text === text); }
 
 /* ---------------- SPIN ---------------- */
@@ -40,7 +52,7 @@ export function SpinGimmick() {
   const [category, setCategory] = useState("Daily Life");
   const [count, setCount] = useState(5);
   const [manual, setManual] = useState("");
-  const pool = useMemo(() => all.filter((q) => q.gimmick === "spin" && q.category === category && !q.used).slice(0, 10), [all, category]);
+  const pool = useMemo(() => spinPoolOf(all, category), [all, category]);
   const viewerCount = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used).length;
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -48,43 +60,71 @@ export function SpinGimmick() {
   const [drafts, setDrafts] = useState<string[]>([]);
   const ai = useAi();
 
+  // Roda "tayang di overlay" = payload spin yang sudah memakai fase (phase). Payload lama (tanpa phase) tidak dihitung.
+  const ov = useOverlayPayload();
+  const wheelLive = ov?.gimmick === "spin" && ov.phase !== undefined;
+  const resultShown = ov?.gimmick === "spin" && ov.phase === "result";
+  const isWheelLive = () => { const c = readOverlay().payload; return c?.gimmick === "spin" && c.phase !== undefined; };
+  const poolTexts = (c: string) => spinPoolOf(getQuestions(), c).map((q) => q.text);
+
+  const showWheel = () => {
+    sendToOverlay({ gimmick: "spin", phase: "standby", items: pool.map((q) => q.text), category, rotation: rot });
+  };
+  /** Kembalikan overlay ke standby dengan isi roda terbaru (in-place, tanpa remount). */
+  const backToStandby = (c = category, markAdded = false) => {
+    const items = poolTexts(c);
+    updateOverlayPayload({
+      gimmick: "spin", phase: "standby", items, category: c, rotation: rot,
+      added: markAdded && items.length ? items : undefined, addedAt: markAdded && items.length ? Date.now() : undefined,
+    });
+  };
+  const chooseCategory = (c: string) => {
+    if (spinning) return;
+    setCategory(c); setPicked(null);
+    // Pertanyaan penonton dihitung sebagai penambahan ke roda; kategori biasa hanya mengganti isi roda.
+    if (isWheelLive()) backToStandby(c, c === VIEWER_CATEGORY);
+  };
+
   const spin = () => {
     if (!pool.length) { toast("Belum ada pertanyaan di kategori ini"); return; }
     const idx = Math.floor(Math.random() * pool.length);
     const seg = 360 / pool.length;
     const target = rot + 360 * 5 + (360 - (rot % 360)) - (idx * seg + seg / 2);
+    const winner = pool[idx]?.text ?? null;
+    const live = isWheelLive();
+    const startedAt = Date.now();
     setSpinning(true); setPicked(null); setRot(target);
-    sendToOverlay({ gimmick: "spin", spinning: true, category });
-    setTimeout(() => { setSpinning(false); setPicked(pool[idx]?.text ?? null); }, 3600);
+    if (live) {
+      updateOverlayPayload({
+        gimmick: "spin", phase: "spinning", items: pool.map((q) => q.text), category, rotation: target, fromRotation: rot,
+        winnerIndex: idx, durationMs: SPIN_DURATION_MS, startedAt,
+      });
+    } else {
+      sendToOverlay({ gimmick: "spin", spinning: true, category });
+    }
+    setTimeout(() => {
+      setSpinning(false); setPicked(winner);
+      if (!live || !winner) return;
+      const cur = readOverlay().payload;
+      // Hanya lanjut kalau overlay masih memutar roda yang sama (tidak diganti gimmick lain / dikirim ulang).
+      if (cur?.gimmick === "spin" && cur.phase === "spinning" && cur.startedAt === startedAt) updateOverlayPayload({ ...cur, phase: "result", question: winner });
+    }, SPIN_DURATION_MS + 100);
   };
-  const colors = ["var(--primary)", "var(--electric)", "var(--pop)", "var(--chart-5)", "var(--zest)"];
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       <Panel>
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <CategorySelect value={category} onChange={(c) => { setCategory(c); setPicked(null); }} />
+          <CategorySelect value={category} onChange={chooseCategory} />
           {viewerCount > 0 && category !== VIEWER_CATEGORY && (
-            <Button size="sm" variant="secondary" onClick={() => { setCategory(VIEWER_CATEGORY); setPicked(null); }}>🙋 Pertanyaan penonton ({viewerCount})</Button>
+            <Button size="sm" variant="secondary" onClick={() => chooseCategory(VIEWER_CATEGORY)}>🙋 Pertanyaan penonton ({viewerCount})</Button>
           )}
+          <Button size="sm" variant="live" disabled={spinning} onClick={showWheel}><Tv /> Tampilkan Roda di Overlay</Button>
         </div>
         <div className="flex flex-col items-center gap-5">
           <div className="relative aspect-square w-full max-w-72">
             <div className="absolute left-1/2 top-[-6px] z-10 h-0 w-0 -translate-x-1/2 border-x-[12px] border-t-[22px] border-x-transparent border-t-zest" />
-            <svg viewBox="-100 -100 200 200" className="h-full w-full drop-shadow-xl" style={{ transform: `rotate(${rot}deg)`, transition: spinning ? "transform 3.5s cubic-bezier(.15,.85,.2,1)" : "none" }}>
-              {(pool.length ? pool : [{ id: "x", text: "?" }]).map((q, i, arr) => {
-                const seg = (2 * Math.PI) / arr.length; const a0 = i * seg - Math.PI / 2; const a1 = a0 + seg;
-                const large = seg > Math.PI ? 1 : 0;
-                const d = arr.length === 1 ? "M0,-98 A98,98 0 1,1 -0.01,-98 Z" : `M0,0 L${98 * Math.cos(a0)},${98 * Math.sin(a0)} A98,98 0 ${large},1 ${98 * Math.cos(a1)},${98 * Math.sin(a1)} Z`;
-                return (
-                  <g key={q.id}>
-                    <path d={d} style={{ fill: colors[i % colors.length] }} stroke="var(--background)" strokeWidth="1.5" />
-                    <text x={60 * Math.cos(a0 + seg / 2)} y={60 * Math.sin(a0 + seg / 2)} textAnchor="middle" dominantBaseline="middle" fontSize="14" fontWeight="800" style={{ fill: "var(--background)" }}>{i + 1}</text>
-                  </g>
-                );
-              })}
-              <circle r="16" style={{ fill: "var(--background)" }} />
-            </svg>
+            <SpinWheelSvg count={pool.length} className="h-full w-full drop-shadow-xl" style={{ transform: `rotate(${rot}deg)`, transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s ${SPIN_EASING}` : "none" }} />
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <Button size="lg" onClick={spin} disabled={spinning}><RotateCw /> {picked ? "Spin Lagi" : "SPIN!"}</Button>
@@ -93,9 +133,14 @@ export function SpinGimmick() {
             <Stage>
               <p className="animate-pop-in font-display text-xl font-bold">{picked}</p>
               <div className="flex flex-wrap justify-center gap-2">
-                <SendBtn onClick={() => sendToOverlay({ gimmick: "spin", question: picked, category })} />
-                <Button variant="secondary" onClick={() => { markUsed(picked); setPicked(null); spin(); }}><SkipForward /> Next</Button>
-                <Button variant="ghost" onClick={() => { setPicked(null); }}>Skip</Button>
+                {resultShown
+                  ? <span className="flex h-11 items-center gap-1.5 rounded-lg bg-success/15 px-3 text-sm font-semibold text-success"><Check className="h-4 w-4" /> Tampil di overlay</span>
+                  : <SendBtn onClick={() => sendToOverlay({ gimmick: "spin", question: picked, category })} />}
+                <Button variant="secondary" onClick={() => {
+                  markUsed(picked); setPicked(null);
+                  if (wheelLive) backToStandby(); else spin();
+                }}><SkipForward /> Next</Button>
+                <Button variant="ghost" onClick={() => { setPicked(null); if (wheelLive) backToStandby(); }}>Skip</Button>
               </div>
             </Stage>
           )}
@@ -201,6 +246,7 @@ export function ThisOrThatGimmick() {
 }
 
 /* ---------------- PICK A CARD ---------------- */
+const SHUFFLE_MS = 1200;
 export function CardGimmick() {
   const all = useKyoka((s) => s.questions);
   snap = all;
@@ -210,19 +256,61 @@ export function CardGimmick() {
   const [flipped, setFlipped] = useState<number | null>(null);
   const [newCard, setNewCard] = useState("");
   const source = all.filter((q) => q.gimmick === "card" && (pack === "all" || q.category === pack)).map((q) => q.text);
-  const deal = () => { setDeck(sample(source, Math.min(6, source.length))); setFlipped(null); sendToOverlay({ gimmick: "card", count: Math.min(6, source.length) }); };
   const cards = deck.length ? deck : source.slice(0, 6);
+
+  // Kartu "tayang di overlay" = payload card yang memakai fase. Payload lama (tanpa phase) tidak dihitung.
+  const ov = useOverlayPayload();
+  const isCardLive = () => { const c = readOverlay().payload; return c?.gimmick === "card" && c.phase !== undefined; };
+
+  const showCards = () => {
+    if (!cards.length) { toast("Belum ada kartu di pack ini"); return; }
+    sendToOverlay({ gimmick: "card", phase: "standby", count: cards.length });
+  };
+  const deal = () => {
+    const next = sample(source, Math.min(6, source.length));
+    setDeck(next); setFlipped(null);
+    if (isCardLive()) {
+      // kocok ±1,2 dtk lalu bagi satu per satu; semua in-place supaya kartu overlay tidak berkedip
+      updateOverlayPayload({ gimmick: "card", phase: "shuffling", count: next.length });
+      setTimeout(() => {
+        const cur = readOverlay().payload;
+        if (cur?.gimmick === "card" && cur.phase === "shuffling") updateOverlayPayload({ gimmick: "card", phase: "dealt", count: next.length });
+      }, SHUFFLE_MS);
+    } else {
+      sendToOverlay({ gimmick: "card", count: Math.min(6, source.length) });
+    }
+  };
+  const pick = (i: number, c: string) => {
+    setFlipped(i); markUsed(c);
+    if (isCardLive()) updateOverlayPayload({ gimmick: "card", phase: "revealed", count: cards.length, revealed: i, text: c });
+    else sendToOverlay({ gimmick: "card", count: cards.length, revealed: i, text: c });
+  };
+  const changePack = (v: string) => {
+    setPack(v); setDeck([]); setFlipped(null);
+    if (isCardLive()) {
+      const n = Math.min(6, all.filter((q) => q.gimmick === "card" && (v === "all" || q.category === v)).length);
+      updateOverlayPayload({ gimmick: "card", phase: "standby", count: n });
+    }
+  };
+  // Kartu ditambah/dihapus sebelum dibagikan: jumlah kartu di overlay (saat standby) ikut diperbarui in-place.
+  useEffect(() => {
+    const c = readOverlay().payload;
+    if (c?.gimmick === "card" && c.phase === "standby" && c.count !== cards.length) updateOverlayPayload({ gimmick: "card", phase: "standby", count: cards.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.length, ov]);
+
   return (
     <Panel className="space-y-5">
       <div className="flex flex-wrap gap-2">
-        <select value={pack} onChange={(e) => { setPack(e.target.value); setDeck([]); setFlipped(null); }} className="h-10 rounded-lg border border-input bg-background px-3 text-sm">
+        <select value={pack} onChange={(e) => changePack(e.target.value)} className="h-10 rounded-lg border border-input bg-background px-3 text-sm">
           <option value="all">Semua pack</option>{packs.map((p) => <option key={p}>{p}</option>)}
         </select>
         <Button variant="secondary" onClick={deal}><Shuffle /> Kocok & Bagikan</Button>
+        <Button variant="live" onClick={showCards}><Tv /> Tampilkan Kartu di Overlay</Button>
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {cards.map((c, i) => (
-          <button key={c + i} className="flip-card aspect-[3/4]" onClick={() => { setFlipped(i); sendToOverlay({ gimmick: "card", count: cards.length, revealed: i, text: c }); markUsed(c); }}>
+          <button key={c + i} className="flip-card aspect-[3/4]" onClick={() => pick(i, c)}>
             <div className={`flip-inner h-full w-full ${flipped === i ? "flipped" : ""}`}>
               <div className="flip-face flex items-center justify-center rounded-xl border border-primary/50 bg-party font-display text-2xl font-black shadow-glow">{i + 1}</div>
               <div className="flip-face flip-back flex items-center justify-center rounded-xl bg-card p-2 text-[11px] font-semibold leading-tight">{c}</div>
@@ -328,7 +416,21 @@ export function ChaosGimmick() {
   const [audience, setAudience] = useState("");
   const viewerProblems = useKyoka((st) => st.questions).filter((q) => q.gimmick === "chaos" && q.category === VIEWER_CATEGORY && !q.used);
   const ai = useAi();
-  const aiWords = async () => { const l = await ai.run({ task: "words", gimmick: "chaos" }); if (l && l.length >= 3) setWords(l.slice(0, 3)); };
+  // Kalau cerita 3 kata sedang tayang di overlay, mengacak kata juga digulirkan di overlay (in-place), lalu berhenti di kata baru.
+  const isStoryLive = () => { const c = readOverlay().payload; return c?.gimmick === "chaos" && c.mode === "story"; };
+  const overlayWords = () => { const c = readOverlay().payload; return c?.gimmick === "chaos" && c.mode === "story" ? c.words : []; };
+  const rollStart = () => { if (isStoryLive()) updateOverlayPayload({ gimmick: "chaos", mode: "story", words: overlayWords(), rolling: true }); return Date.now(); };
+  const rollStop = (final: string[], t0: number) => {
+    setTimeout(() => { if (isStoryLive()) updateOverlayPayload({ gimmick: "chaos", mode: "story", words: final, rolling: false }); }, Math.max(0, 1100 - (Date.now() - t0)));
+  };
+  const shuffleWords = () => { const next = sample(DEMO.words, 3); setWords(next); const t0 = rollStart(); rollStop(next, t0); };
+  const aiWords = async () => {
+    const t0 = rollStart();
+    const l = await ai.run({ task: "words", gimmick: "chaos" });
+    const next = l && l.length >= 3 ? l.slice(0, 3) : null;
+    if (next) setWords(next);
+    rollStop(next ?? overlayWords(), t0);
+  };
   const aiProblem = async (given = "") => {
     const l = await ai.run({ task: "problem", gimmick: "chaos", text: given });
     if (l && l.length >= 2) { setProblem(given || l[0]!); setSols(l.slice(1, 4)); }
@@ -351,7 +453,7 @@ export function ChaosGimmick() {
           </Stage>
           <div className="flex flex-wrap gap-2">
             <SendBtn onClick={() => sendToOverlay({ gimmick: "chaos", mode: "story", words })} />
-            <Button size="lg" variant="secondary" onClick={() => setWords(sample(DEMO.words, 3))}><Shuffle /> Acak</Button>
+            <Button size="lg" variant="secondary" onClick={shuffleWords}><Shuffle /> Acak</Button>
             <Button size="lg" variant="secondary" disabled={ai.loading} onClick={aiWords}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Kata AI</Button>
           </div>
         </>

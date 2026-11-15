@@ -10,7 +10,7 @@ import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
+  return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
 }
 function Stage({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-primary/40 bg-background/50 p-6 text-center">{children}</div>;

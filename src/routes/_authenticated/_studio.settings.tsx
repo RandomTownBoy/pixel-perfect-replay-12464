@@ -93,7 +93,7 @@ function SettingsPage() {
           </div>
           <p className="text-muted-foreground">Konektor adalah program kecil yang kamu jalankan di komputer saat LIVE. Ia membaca komentar dan gift TikTok-mu, lalu mengirimnya ke studio ini lewat kunci di bawah. Kunci ini <b>bukan</b> password TikTok — jangan pernah membagikannya, dan jangan pernah memasukkan password TikTok di mana pun.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-lg bg-background/60 px-3 py-2 text-xs">{ingestKey ? (reveal ? ingestKey : "•".repeat(24)) : "Kunci belum tersedia"}</code>
+            <code className="min-w-0 flex-1 break-all rounded-lg bg-background/60 px-3 py-2 text-xs">{ingestKey ? (reveal ? ingestKey : "•".repeat(24)) : "Kunci belum tersedia"}</code>
             <Button size="sm" variant="ghost" onClick={() => setReveal(!reveal)}>{reveal ? "Sembunyikan" : "Tampilkan"}</Button>
             <Button size="sm" variant="ghost" onClick={async () => { if (await liveActions.rotateIngestKey()) toast.success("Kunci diganti. Perbarui juga di konektor."); }}>Ganti kunci</Button>
           </div>
@@ -107,7 +107,7 @@ function SettingsPage() {
           <h3 className="font-display text-sm font-bold">Alamat publik (link penonton)</h3>
           <p className="text-muted-foreground">Kalau kamu menjalankan studio ini di komputermu (localhost), link untuk penonton harus memakai alamat yang bisa dibuka orang lain, misalnya situs yang sudah dipublish. Kosongkan kalau studio ini sudah dibuka lewat alamat publik.</p>
           <Input placeholder="https://situsmu.lovable.app" value={publicUrl} onChange={(e) => actions.updateSettings({ publicUrl: e.target.value })} />
-          <p className="text-xs text-muted-foreground">Contoh link yang terbentuk: {(publicUrl.trim() || "alamat halaman ini").replace(/\/+$/, "")}/live/kode-kamu</p>
+          <p className="break-all text-xs text-muted-foreground">Contoh link yang terbentuk: {(publicUrl.trim() || "alamat halaman ini").replace(/\/+$/, "")}/live/kode-kamu</p>
         </Panel>
 
         <Panel className="space-y-3 text-sm">

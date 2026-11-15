@@ -38,7 +38,7 @@ function Studio() {
     <>
       <PageHeader title="Overlay Studio" sub="Kontrol overlay tanpa menyentuh jendela OBS."><StatusPill connected={connected} /></PageHeader>
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Panel className="grid grid-cols-2 gap-2">
             <Button asChild size="lg" variant="live" className="col-span-2"><a href={url || undefined} target="_blank" rel="noreferrer" onClick={() => setOverlayVisible(true)}><Play /> Start Overlay (tab baru)</a></Button>
             <Button size="lg" variant="secondary" className="col-span-2" onClick={() => setFull(true)}><Maximize2 /> Preview layar penuh</Button>
@@ -46,14 +46,14 @@ function Studio() {
             <Button size="lg" variant="secondary" onClick={() => setOverlayVisible(false)}><EyeOff /> Hide</Button>
             <Button size="lg" variant="secondary" onClick={resetOverlay}><RotateCcw /> Reset</Button>
             <Button size="lg" variant="secondary" onClick={() => { navigator.clipboard.writeText(url); toast("URL overlay disalin"); }}><Copy /> Copy URL</Button>
-            <a href={url} target="_blank" rel="noreferrer" className="col-span-2 flex items-center gap-1 truncate text-xs text-muted-foreground"><ExternalLink className="h-3 w-3" />{url}</a>
+            <a href={url} target="_blank" rel="noreferrer" className="col-span-2 flex min-w-0 items-start gap-1 break-all text-xs text-muted-foreground"><ExternalLink className="mt-0.5 h-3 w-3 shrink-0" />{url}</a>
             <Button size="sm" variant="ghost" className="col-span-2" onClick={async () => { if (confirm("Ganti link overlay? Link lama di OBS langsung berhenti.")) { if (await liveActions.rotateToken()) toast("Link overlay baru dibuat"); } }}>Ganti link overlay (cabut akses lama)</Button>
           </Panel>
           <Panel className="space-y-2 text-sm">
             <h3 className="font-display text-sm font-bold">Link Penonton</h3>
             <p className="text-xs text-muted-foreground">Taruh di bio / pin komentar. Penonton bisa vote, confess anonim & kirim pertanyaan.</p>
             {aUrl && <img alt="QR link penonton" className="mx-auto h-32 w-32 rounded-lg bg-foreground p-1.5" src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(aUrl)}`} />}
-            <Button size="sm" variant="secondary" className="w-full" onClick={() => { navigator.clipboard.writeText(aUrl); toast("Link penonton disalin"); }}><Copy /> {aUrl.replace(/^https?:\/\//, "")}</Button>
+            <Button size="sm" variant="secondary" className="h-auto min-h-8 w-full whitespace-normal break-all py-2 text-left" onClick={() => { navigator.clipboard.writeText(aUrl); toast("Link penonton disalin"); }}><Copy className="shrink-0" /> <span className="min-w-0">{aUrl.replace(/^https?:\/\//, "")}</span></Button>
           </Panel>
           <Panel className="space-y-4 text-sm">
             <h3 className="font-display text-sm font-bold">Kustomisasi</h3>

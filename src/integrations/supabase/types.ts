@@ -19,34 +19,55 @@ export type Database = {
           choice: string | null
           content: string | null
           created_at: string
+          fingerprint: string | null
+          flag_reason: string | null
+          flagged: boolean
           id: string
           kind: string
           nickname: string | null
           owner_id: string
           round_id: string | null
+          source: string
           status: string
+          tiktok_user: string | null
+          verified_uid: string | null
+          verify_code: string | null
         }
         Insert: {
           choice?: string | null
           content?: string | null
           created_at?: string
+          fingerprint?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
           id?: string
           kind: string
           nickname?: string | null
           owner_id: string
           round_id?: string | null
+          source?: string
           status?: string
+          tiktok_user?: string | null
+          verified_uid?: string | null
+          verify_code?: string | null
         }
         Update: {
           choice?: string | null
           content?: string | null
           created_at?: string
+          fingerprint?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
           id?: string
           kind?: string
           nickname?: string | null
           owner_id?: string
           round_id?: string | null
+          source?: string
           status?: string
+          tiktok_user?: string | null
+          verified_uid?: string | null
+          verify_code?: string | null
         }
         Relationships: []
       }
@@ -55,9 +76,13 @@ export type Database = {
           content: string | null
           created_at: string
           diamonds: number
+          flag_reason: string | null
+          flagged: boolean
           gift_count: number
           gift_name: string | null
+          handle: string | null
           id: string
+          is_follower: boolean | null
           nickname: string | null
           owner_id: string
           round_id: string | null
@@ -69,9 +94,13 @@ export type Database = {
           content?: string | null
           created_at?: string
           diamonds?: number
+          flag_reason?: string | null
+          flagged?: boolean
           gift_count?: number
           gift_name?: string | null
+          handle?: string | null
           id?: string
+          is_follower?: boolean | null
           nickname?: string | null
           owner_id: string
           round_id?: string | null
@@ -83,9 +112,13 @@ export type Database = {
           content?: string | null
           created_at?: string
           diamonds?: number
+          flag_reason?: string | null
+          flagged?: boolean
           gift_count?: number
           gift_name?: string | null
+          handle?: string | null
           id?: string
+          is_follower?: boolean | null
           nickname?: string | null
           owner_id?: string
           round_id?: string | null
@@ -154,27 +187,33 @@ export type Database = {
           audience_code: string
           audience_state: Json
           ingest_key: string
+          intake: Json
           overlay_state: Json
           overlay_token: string
           owner_id: string
+          settings: Json
           updated_at: string
         }
         Insert: {
           audience_code?: string
           audience_state?: Json
           ingest_key?: string
+          intake?: Json
           overlay_state?: Json
           overlay_token?: string
           owner_id: string
+          settings?: Json
           updated_at?: string
         }
         Update: {
           audience_code?: string
           audience_state?: Json
           ingest_key?: string
+          intake?: Json
           overlay_state?: Json
           overlay_token?: string
           owner_id?: string
+          settings?: Json
           updated_at?: string
         }
         Relationships: []
@@ -190,6 +229,11 @@ export type Database = {
         Args: { _events: Json; _key: string }
         Returns: number
       }
+      kyoka_default_badwords: { Args: never; Returns: string[] }
+      kyoka_flag: { Args: { _owner: string; _text: string }; Returns: string }
+      kyoka_norm: { Args: { _t: string }; Returns: string }
+      kyoka_purge: { Args: { _owner: string }; Returns: undefined }
+      purge_my_old_inputs: { Args: never; Returns: undefined }
       rotate_ingest_key: { Args: never; Returns: string }
       rotate_overlay_token: { Args: never; Returns: string }
       submit_audience: {
@@ -197,11 +241,13 @@ export type Database = {
           _choice: string
           _code: string
           _content: string
+          _fingerprint?: string
           _kind: string
           _nickname: string
           _round: string
+          _tiktok?: string
         }
-        Returns: boolean
+        Returns: string
       }
     }
     Enums: {

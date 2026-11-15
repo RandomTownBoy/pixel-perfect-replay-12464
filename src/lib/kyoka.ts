@@ -51,15 +51,45 @@ export type Settings = {
 export type Intake = { spin: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean; followersOnly: boolean };
 export const DEFAULT_INTAKE: Intake = { spin: false, confession: true, thisorthat: true, hottake: true, chaos: true, followersOnly: false };
 
+/** Fase Spin the Question di overlay: roda siap (standby) → berputar → berhenti di pemenang (result). */
+export type SpinPhase = "standby" | "spinning" | "result";
+/** Fase Pick a Card di overlay: kartu tertutup (standby) → dikocok → dibagikan → satu kartu dibuka. */
+export type CardPhase = "standby" | "shuffling" | "dealt" | "revealed";
+
 export type OverlayPayload =
-  | { gimmick: "spin"; question?: string | undefined; category?: string | undefined; spinning?: boolean | undefined }
+  | {
+    gimmick: "spin"; question?: string | undefined; category?: string | undefined; spinning?: boolean | undefined;
+    /** Kosong = perilaku lama (hanya "Memutar…" lalu teks hasil). */
+    phase?: SpinPhase | undefined;
+    /** Isi roda (maks. SPIN_WHEEL_MAX), urutannya = penomoran segmen. */
+    items?: string[] | undefined;
+    /** Sudut roda kumulatif (derajat) di akhir fase ini. */
+    rotation?: number | undefined;
+    /** Sudut awal putaran (fase spinning), supaya overlay yang dimuat ulang bisa melanjutkan animasi. */
+    fromRotation?: number | undefined;
+    durationMs?: number | undefined; startedAt?: number | undefined; winnerIndex?: number | undefined;
+    /** Item yang baru masuk roda + kapan, untuk animasi masuk dan chip "Ditambahkan ke roda". */
+    added?: string[] | undefined; addedAt?: number | undefined;
+  }
   | { gimmick: "thisorthat"; a?: string | undefined; b?: string | undefined; countdownEnd?: number | undefined }
-  | { gimmick: "card"; count: number; revealed?: number | undefined; text?: string | undefined }
+  | { gimmick: "card"; count: number; revealed?: number | undefined; text?: string | undefined; phase?: CardPhase | undefined }
   | { gimmick: "hottake"; topic?: string | undefined; followups?: string[] | undefined }
   | { gimmick: "confession"; prompt?: string | undefined; category?: string | undefined }
-  | { gimmick: "chaos"; mode: "story"; words: string[] }
+  | { gimmick: "chaos"; mode: "story"; words: string[]; /** Kata sedang diacak (animasi gulir) di overlay. */ rolling?: boolean | undefined }
   | { gimmick: "chaos"; mode: "solution"; problem: string; solutions: string[] }
   | { gimmick: "audience"; kind: string; content: string; nickname?: string | undefined };
+
+export type SpinPayload = Extract<OverlayPayload, { gimmick: "spin" }>;
+export type CardPayload = Extract<OverlayPayload, { gimmick: "card" }>;
+
+/** Jumlah item maksimal di roda, durasi & easing putaran (sama di dashboard dan overlay). */
+export const SPIN_WHEEL_MAX = 10;
+export const SPIN_DURATION_MS = 3500;
+export const SPIN_EASING = "cubic-bezier(.15,.85,.2,1)";
+/** Isi roda untuk satu kategori: sumber tunggal dipakai dashboard, overlay, dan sinkronisasi otomatis. */
+export function spinPoolOf(qs: Question[], category: string): Question[] {
+  return qs.filter((q) => q.gimmick === "spin" && q.category === category && !q.used).slice(0, SPIN_WHEEL_MAX);
+}
 
 export type GiftRule = { id: string; name: string; emoji: string; effect: "vote" | "shoutout"; weight: number; reward: string };
 
@@ -194,6 +224,7 @@ function setState(fn: (s: State) => State) {
   state = fn(state);
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
   listeners.forEach((l) => l());
+  if (prev.questions !== state.questions) syncSpinWheel();
   if (!silent && (prev.settings !== state.settings || prev.categories !== state.categories)) persistListeners.forEach((l) => l());
 }
 /** Dipanggil saat pengaturan atau kategori berubah oleh pengguna (bukan saat dimuat dari database). */
@@ -337,6 +368,32 @@ export function sendToOverlay(payload: OverlayPayload) {
   pushOverlay({ ...o, payload, visible: true, payloadAt: Date.now(), votes: undefined });
   const g = GIMMICKS.find((x) => x.id === payload.gimmick);
   actions.log(`Overlay: ${g?.name ?? payload.gimmick} dikirim`);
+}
+/**
+ * Ganti payload overlay di tempat: `payloadAt` dan `votes` tidak berubah, jadi kartu overlay tidak remount/berkedip
+ * (di OverlayView kartu memakai key={payloadAt}). Dipakai untuk pergantian fase dan penambahan isi roda.
+ */
+export function updateOverlayPayload(payload: OverlayPayload) {
+  const o = readOverlay();
+  if (!o.payload) { sendToOverlay(payload); return; }
+  pushOverlay({ ...o, payload });
+}
+
+/**
+ * Kalau roda sedang standby di overlay dan isi pool kategorinya berubah (pertanyaan ditambah/disimpan/dipakai),
+ * kirim ulang standby secara in-place. Fase spinning/result tidak disentuh supaya animasi dan pemenang tidak rusak.
+ */
+function syncSpinWheel() {
+  if (typeof window === "undefined") return;
+  const o = readOverlay();
+  const p = o.payload;
+  if (!p || p.gimmick !== "spin" || p.phase !== "standby" || !p.category) return;
+  const items = spinPoolOf(state.questions, p.category).map((x) => x.text);
+  const prev = p.items ?? [];
+  if (items.length === prev.length && items.every((t, i) => t === prev[i])) return;
+  const had = new Set(prev);
+  const added = items.filter((t) => !had.has(t));
+  pushOverlay({ ...o, payload: { ...p, items, added: added.length ? added : undefined, addedAt: added.length ? Date.now() : undefined } });
 }
 export function setOverlayVisible(visible: boolean) {
   pushOverlay({ ...readOverlay(), visible });

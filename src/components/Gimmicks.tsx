@@ -69,7 +69,7 @@ export function SpinGimmick() {
           )}
         </div>
         <div className="flex flex-col items-center gap-5">
-          <div className="relative h-72 w-72">
+          <div className="relative aspect-square w-full max-w-72">
             <div className="absolute left-1/2 top-[-6px] z-10 h-0 w-0 -translate-x-1/2 border-x-[12px] border-t-[22px] border-x-transparent border-t-zest" />
             <svg viewBox="-100 -100 200 200" className="h-full w-full drop-shadow-xl" style={{ transform: `rotate(${rot}deg)`, transition: spinning ? "transform 3.5s cubic-bezier(.15,.85,.2,1)" : "none" }}>
               {(pool.length ? pool : [{ id: "x", text: "?" }]).map((q, i, arr) => {

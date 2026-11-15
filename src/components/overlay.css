@@ -1,7 +1,9 @@
 /* Overlay Kyoka LIVE — tata letak untuk layar portrait TikTok (9:16).
    Semua ukuran memakai em, jadi ikut skala font dari route overlay / pratinjau.
    Zona aman: bagian atas (profil & jumlah penonton) dan bawah (komentar, gift) TikTok dibiarkan kosong. */
-.ov-root { position: absolute; inset: 0; color: var(--foreground); font-family: var(--font-sans, system-ui, sans-serif); overflow: hidden; }
+/* relative + 100% (bukan absolute): overlay harus terkurung di wadahnya (pratinjau/halaman overlay),
+   kalau tidak ia menutupi seluruh halaman dan memblokir tombol. pointer-events: none = tidak pernah menangkap klik. */
+.ov-root { position: relative; width: 100%; height: 100%; color: var(--foreground); font-family: var(--font-sans, system-ui, sans-serif); overflow: hidden; pointer-events: none; }
 /* inset (bukan padding): persentase atas/bawah mengikuti TINGGI layar, bukan lebar */
 .ov-safe { position: absolute; inset: 13% 5% 31% 5%; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.7em; }
 .ov-idle { margin: auto; font-size: 0.9em; color: var(--muted-foreground); text-align: center; }

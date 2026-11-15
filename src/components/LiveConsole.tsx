@@ -123,10 +123,10 @@ export function LiveConsole() {
   };
 
   return (
-    <div className="fixed bottom-20 right-3 z-30 flex flex-col items-end gap-2 md:bottom-5 md:right-5">
+    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-3 z-30 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-2 md:bottom-5 md:right-5">
       {open && (
-        <div className="w-[min(92vw,360px)] rounded-2xl border border-border bg-popover p-4 shadow-glow animate-pop-in">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="max-h-[calc(100dvh-12.5rem)] w-[min(92vw,360px)] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover px-4 pb-4 shadow-glow animate-pop-in md:max-h-[calc(100dvh-8rem)]">
+          <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-border bg-popover px-4 py-3">
             <h3 className="font-display text-sm font-bold">{open === "votes" ? "Vote Penonton" : open === "gift" ? "Gift TikTok" : open === "feed" ? "Live Feed TikTok" : open === "control" ? "Kontrol Siaran" : `Inbox Penonton (${inbox.length})`}</h3>
             <button onClick={() => setOpen(null)} aria-label="Tutup"><X className="h-4 w-4" /></button>
           </div>
@@ -200,7 +200,7 @@ export function LiveConsole() {
                 {tk.connected ? `Konektor TikTok aktif${tk.handle ? ` · @${tk.handle}` : ""}` : "Konektor TikTok belum aktif — lihat Settings › TikTok LIVE"}
               </div>
               {!feed.length && <p className="py-4 text-center text-muted-foreground">Belum ada komentar atau gift masuk.</p>}
-              <ul className="max-h-64 space-y-1.5 overflow-auto">
+              <ul className="space-y-1.5">
                 {feed.map((e) => (
                   <li key={e.id} className="flex items-start gap-2 rounded-lg bg-background/60 px-2.5 py-1.5">
                     <span className="min-w-0 flex-1 break-words text-xs">{feedLine(e)}</span>
@@ -319,7 +319,7 @@ export function LiveConsole() {
               {view === "review" && !matches(review).length && <p className="py-6 text-center text-muted-foreground">Tidak ada yang perlu dicek. Kiriman dengan kata tidak pantas, tautan, atau nomor telepon muncul di sini.</p>}
               {view === "history" && !matches(history).length && <p className="py-6 text-center text-muted-foreground">Belum ada riwayat.</p>}
 
-              <ul className="max-h-80 space-y-2 overflow-auto">
+              <ul className="space-y-2">
                 {view === "pending" && matches(inbox).map((s) => (
                   <li key={s.id} className="rounded-xl bg-background/60 p-3">
                     <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {who(s)}</p>
@@ -356,11 +356,11 @@ export function LiveConsole() {
           )}
         </div>
       )}
-      <div className="flex gap-2">
+      <div className="flex max-w-full flex-wrap justify-end gap-2">
         <button aria-label={overlayVisible ? "Panik: sembunyikan overlay" : "Tampilkan overlay"} title="Alt+Shift+H"
           onClick={togglePanic}
-          className={`flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-bold shadow-glow transition active:scale-95 ${overlayVisible ? "bg-destructive text-destructive-foreground" : "bg-success text-background"}`}>
-          <ShieldAlert className="h-5 w-5" />{overlayVisible ? "Panik" : "Tampilkan"}
+          className={`flex h-12 items-center gap-1.5 rounded-full px-3 text-sm font-bold shadow-glow transition active:scale-95 sm:px-4 ${overlayVisible ? "bg-destructive text-destructive-foreground" : "bg-success text-background"}`}>
+          <ShieldAlert className="h-5 w-5" /><span className="hidden sm:inline">{overlayVisible ? "Panik" : "Tampilkan"}</span>
         </button>
         <Fab label="Vote" onClick={() => setOpen(open === "votes" ? null : "votes")} active={open === "votes"}><MessageCircle className="h-5 w-5" />{voting && <span className="text-xs font-bold">{totals.a}:{totals.b}</span>}</Fab>
         <Fab label="Gift" onClick={() => setOpen(open === "gift" ? null : "gift")} active={open === "gift"}><Gift className="h-5 w-5" /></Fab>
@@ -381,6 +381,6 @@ export function LiveConsole() {
 
 function Fab({ children, onClick, active, label }: { children: React.ReactNode; onClick: () => void; active: boolean; label: string }) {
   return (
-    <button aria-label={label} onClick={onClick} className={`flex h-12 items-center gap-1.5 rounded-full px-4 shadow-glow transition active:scale-95 ${active ? "bg-party" : "border border-border bg-card"}`}>{children}</button>
+    <button aria-label={label} onClick={onClick} className={`flex h-12 items-center gap-1.5 rounded-full px-3 shadow-glow transition active:scale-95 sm:px-4 ${active ? "bg-party" : "border border-border bg-card"}`}>{children}</button>
   );
 }

@@ -3,12 +3,22 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
+function isClientAbort(error: unknown): boolean {
+  if (error == null || typeof error !== "object") return false;
+  const { name, message, code } = error as { name?: unknown; message?: unknown; code?: unknown };
+  return name === "AbortError" || message === "aborted" || code === "ECONNRESET" || code === "ABORT_ERR";
+}
+
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
     return await next();
   } catch (error) {
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
+    }
+    // A refresh or closed tab cancels the request mid-render; that is not a server failure.
+    if (isClientAbort(error)) {
+      return new Response(null, { status: 499 });
     }
     console.error(error);
     return new Response(renderErrorPage(), {

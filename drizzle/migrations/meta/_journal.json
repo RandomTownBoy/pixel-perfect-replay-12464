@@ -8,6 +8,13 @@
       "when": 1794102593596,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794747112369,
+      "tag": "0001_refresh_studio_schema_types",
+      "breakpoints": true
     }
   ]
 }

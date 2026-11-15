@@ -307,7 +307,7 @@ export const liveActions = {
       kind === "gift-big" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: "Galaxy", gift_count: 1, diamonds: 1500 } :
       kind === "gift" ? { type: "gift", user_id: user, nickname: "penonton_uji", handle: "penonton_uji", gift_name: getSettings().giftRules[0]?.name ?? "Rose", gift_count: 1, diamonds: 1 } :
       { type: "follow", user_id: user, nickname: "penonton_uji", handle: "penonton_uji" };
-    ev.is_follower = testFollower;
+    ev["is_follower"] = testFollower;
     const { error } = await supabase.rpc("ingest_live_events", { _key: live.ingestKey, _events: [ev] as never });
     if (error) { toast.error(`Event uji gagal: ${error.message}`); return false; }
     return true;

@@ -1,0 +1,1 @@
+COMMENT ON TABLE public.studio_sessions IS 'Per-creator live studio session: overlay/audience state, settings and audience intake windows.';

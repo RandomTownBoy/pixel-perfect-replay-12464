@@ -84,8 +84,10 @@ const uid = () => {
   });
 };
 const now = Date.now();
+// Seed rows are built at module load, where the live server forbids random values: use fixed ids.
+let seedCount = 0;
 const q = (text: string, gimmick: GimmickId, category: string): Question => ({
-  id: uid(), text, gimmick, category, createdAt: now, favorite: false, used: false, demo: true,
+  id: `00000000-0000-4000-8000-${String(++seedCount).padStart(12, "0")}`, text, gimmick, category, createdAt: now, favorite: false, used: false, demo: true,
 });
 
 export const DEMO = {
@@ -156,7 +158,7 @@ const OVERLAY_KEY = "kyoka:overlay:v1";
 const defaultState: State = {
   questions: seedQuestions,
   categories: DEFAULT_CATEGORIES,
-  activity: [{ id: uid(), text: "Demo Mode aktif — data contoh dimuat", at: now }],
+  activity: [{ id: "demo-start", text: "Demo Mode aktif — data contoh dimuat", at: now }],
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,

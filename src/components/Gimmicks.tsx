@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 import { liveActions, useLive } from "@/lib/cloud";
+import { AudienceHistory } from "@/components/AudienceHistory";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -113,6 +114,7 @@ export function SpinGimmick() {
   };
 
   return (
+    <div className="space-y-5">
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       <Panel>
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -166,6 +168,8 @@ export function SpinGimmick() {
           ))}
         </ul>
       </Panel>
+    </div>
+    <Panel><AudienceHistory gimmick="spin" /></Panel>
     </div>
   );
 }
@@ -242,6 +246,7 @@ export function ThisOrThatGimmick() {
         <Input placeholder="Pilihan B" value={b} onChange={(e) => setB(e.target.value)} className="flex-1" />
         <Button variant="secondary" onClick={() => { if (a && b) { setPair([a, b]); setK(k + 1); setA(""); setB(""); } }}>Pakai</Button>
       </div>
+      <AudienceHistory gimmick="thisorthat" />
     </Panel>
   );
 }
@@ -349,6 +354,7 @@ export function CardGimmick() {
           </li>)}
         </ul>
       </section>
+      <AudienceHistory gimmick="card" />
     </Panel>
   );
 }
@@ -362,7 +368,7 @@ export function HotTakeGimmick() {
   const [fu, setFu] = useState<string[]>([]);
   const ai = useAi();
   const more = async () => { const l = await ai.run({ task: "hottake", gimmick: "hottake", category: "kehidupan sehari-hari", count: 5 }); if (l) { actions.addQuestions(l.map((text) => ({ text, gimmick: "hottake", category: "Random Thoughts" }))); toast.success("Hot take baru masuk"); } };
-  if (!cur) return <Panel><Stage><p>Semua hot take sudah dipakai.</p><Button variant="live" disabled={ai.loading} onClick={more}><Sparkles /> Bikin hot take baru (AI)</Button></Stage></Panel>;
+  if (!cur) return <Panel className="space-y-5"><Stage><p>Semua hot take sudah dipakai.</p><Button variant="live" disabled={ai.loading} onClick={more}><Sparkles /> Bikin hot take baru (AI)</Button></Stage><AudienceHistory gimmick="hottake" /></Panel>;
   return (
     <Panel className="space-y-5">
       <Stage>
@@ -377,6 +383,7 @@ export function HotTakeGimmick() {
         <Button size="lg" variant="ghost" disabled={ai.loading} onClick={more}>+ Hot take AI</Button>
         <Button size="lg" variant="ghost" onClick={() => { actions.updateQuestion(cur.id, { used: true }); setFu([]); }}><Check /> Tandai dipakai</Button>
       </div>
+      <AudienceHistory gimmick="hottake" />
     </Panel>
   );
 }
@@ -429,6 +436,7 @@ export function ConfessionGimmick() {
         </ul>
       </div>
       <p className="text-xs text-muted-foreground">Tip: jangan minta penonton membagikan info pribadi yang sensitif.</p>
+      <AudienceHistory gimmick="confession" />
     </Panel>
   );
 }
@@ -514,6 +522,7 @@ export function ChaosGimmick() {
           </div>
         </>
       )}
+      <AudienceHistory gimmick="chaos" />
     </Panel>
   );
 }

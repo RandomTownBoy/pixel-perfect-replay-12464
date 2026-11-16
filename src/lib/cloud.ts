@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  actions, DEFAULT_INTAKE, getCategories, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, VIEWER_CATEGORY,
-  type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings,
+  actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
+  replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, spinPoolOf, VIEWER_CATEGORY,
+  type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 
 /* ---------- auth ---------- */
@@ -136,6 +136,17 @@ let queueTimer: TimerHandle | null = null;
 let queueBase: OverlayPayload | null = null;
 const stillOurs = () => readOverlay().payload?.gimmick === "audience";
 /** Gimmick yang sedang tayang (gelembung antrean dihitung sebagai gimmick dasarnya). */
+/** Roda standby yang disimpan selama gelembung antrean tayang bisa ketinggalan item baru: hitung ulang isinya dari bank. */
+function refreshWheel(p: OverlayPayload): OverlayPayload {
+  if (p.gimmick !== "spin" || p.phase !== "standby" || !p.category) return p;
+  return { ...p, items: spinPoolOf(getQuestions(), p.category).map((q) => q.text), added: undefined, addedAt: undefined };
+}
+/** Roda (Spin the Question) yang sedang tayang di overlay, termasuk saat tertutup gelembung antrean. Null kalau bukan roda berfase. */
+function spinOnAir(): SpinPayload | null {
+  const p = readOverlay().payload;
+  const c = p?.gimmick === "audience" ? queueBase : p;
+  return c?.gimmick === "spin" && c.phase !== undefined ? c : null;
+}
 export function onAirGimmick(): string | null {
   const p = readOverlay().payload;
   if (p?.gimmick === "audience") return queueBase?.gimmick ?? null;
@@ -146,7 +157,7 @@ function queueTick() {
   if (live.nowShowing && !stillOurs()) { queueBase = null; setLive({ queue: [], nowShowing: null }); return; } // kamu pindah gimmick manual
   const next = live.queue[0];
   if (!next) {
-    if (queueBase) pushOverlay({ ...readOverlay(), payload: queueBase, visible: true, payloadAt: Date.now(), votes: undefined });
+    if (queueBase) pushOverlay({ ...readOverlay(), payload: refreshWheel(queueBase), visible: true, payloadAt: Date.now(), votes: undefined });
     queueBase = null;
     setLive({ nowShowing: null });
     return;
@@ -266,7 +277,7 @@ export const liveActions = {
     sendAudience();
   },
   /** Simpan isi kiriman penonton ke Question Bank, lalu tandai sebagai "approved". */
-  async saveToBank(s: Submission, target?: GimmickId): Promise<{ ok: boolean; message: string }> {
+  async saveToBank(s: Submission, target?: GimmickId, category: string = VIEWER_CATEGORY): Promise<{ ok: boolean; message: string }> {
     let text = (s.content ?? "").trim();
     if (!text) return { ok: false, message: "Isi kosong, tidak bisa disimpan." };
     if (!BANKABLE_KINDS.has(s.kind)) return { ok: false, message: "Jenis kiriman ini tidak disimpan ke Question Bank." };
@@ -278,13 +289,13 @@ export const liveActions = {
     if (!duplicate) {
       const { error } = await supabase.from("questions").insert({
         id: crypto.randomUUID(), text, gimmick: dest,
-        category: VIEWER_CATEGORY, favorite: false, used: false, demo: false,
+        category, favorite: false, used: false, demo: false,
       });
       if (error) {
         console.error("saveToBank gagal", error);
         return { ok: false, message: `Gagal menyimpan ke Question Bank: ${error.message}` };
       }
-      actions.addCategory(VIEWER_CATEGORY);
+      actions.addCategory(category);
       await resyncQuestions();
     }
     const marked = await liveActions.setStatus(s.id, "approved");
@@ -324,6 +335,15 @@ export const liveActions = {
     return !error;
   },
 };
+
+/** Masukkan kiriman !spin ke bank di kategori roda yang tayang; roda di overlay ikut diperbarui (chip \"Ditambahkan ke roda\"). */
+async function addSpinToWheel(r: Submission) {
+  const w = spinOnAir();
+  if (!w) return;
+  const res = await liveActions.saveToBank(r, "spin", w.category || VIEWER_CATEGORY);
+  if (res.ok) toast.success(`🎡 ${r.nickname ? `@${r.nickname}: ` : ""}pertanyaan masuk ke roda`);
+  else toast.error(res.message);
+}
 
 /* ---------- audience view derived from overlay ---------- */
 function audienceStateFor(o: OverlayState) {
@@ -422,6 +442,29 @@ function matchGiftRule(name: string | null) {
   return getSettings().giftRules.find((r) => normName(r.name) === n);
 }
 
+/** Id komentar yang sudah dihitung sebagai vote (mencegah hitung ganda kalau event datang dua kali). */
+const countedVotes = new Set<string>();
+const AGREE = new Set(["setuju", "sepakat", "iya", "ya", "yes", "agree", "👍"]);
+const DISAGREE = new Set(["tidak", "tidaksetuju", "gaksetuju", "gak", "ga", "nggak", "enggak", "engga", "tdk", "no", "disagree", "👎"]);
+/** Pilihan vote dari isi komentar untuk gimmick yang tayang (This or That: A/B, Hot Take: setuju/tidak). */
+function parseVote(text: string | null, gimmick: string): "a" | "b" | null {
+  const t = (text ?? "").toLowerCase().replace(/[^\p{L}\p{N}\p{Extended_Pictographic}]/gu, "");
+  if (gimmick === "thisorthat") { const m = /^(?:pilih)?([ab])$/.exec(t); return m ? (m[1] as "a" | "b") : null; }
+  if (gimmick === "hottake") return AGREE.has(t) ? "a" : DISAGREE.has(t) ? "b" : null;
+  return null;
+}
+/** Sisi yang harus dihitung untuk komentar ini, atau null (bukan vote / bukan saat gimmick vote / sudah memilih / ditolak filter). */
+function voteOf(e: LiveEvent): "a" | "b" | null {
+  const o = readOverlay();
+  const g = o.payload?.gimmick;
+  if (!o.visible || (g !== "thisorthat" && g !== "hottake")) return null;
+  if (e.flagged || countedVotes.has(e.id)) return null;
+  if (e.user_id && userSide.has(e.user_id)) return null;
+  if (e.vote_choice === "a" || e.vote_choice === "b") return e.vote_choice;
+  if (live.intake.followersOnly && e.is_follower !== true) return null;
+  return parseVote(e.content, g);
+}
+
 /** Proses satu event dari konektor TikTok (komentar, gift, follow, share, status koneksi). */
 function handleLiveEvent(e: LiveEvent) {
   if (e.type === "system") {
@@ -435,11 +478,17 @@ function handleLiveEvent(e: LiveEvent) {
     const known = e.is_follower === true || e.is_follower === false;
     setLive({ followStats: { known: live.followStats.known + (known ? 1 : 0), unknown: live.followStats.unknown + (known ? 0 : 1) } });
   }
-  setLive({ feed: [e, ...live.feed.filter((x) => x.id !== e.id)].slice(0, 60) });
+  // Vote dari komentar. Dipercaya dari tanda vote_choice database kalau ada; kalau tidak ada (atau round_id tidak cocok),
+  // isi komentar dibaca di sini (A/B, setuju/tidak) selama gimmick vote sedang tayang. Satu penonton = satu suara per ronde.
+  const counted = e.type === "comment" ? voteOf(e) : null;
+  const shown: LiveEvent = counted && !e.vote_choice ? { ...e, vote_choice: counted } : e;
+  setLive({ feed: [shown, ...live.feed.filter((x) => x.id !== e.id)].slice(0, 60) });
   const who = `@${e.nickname || e.user_id || "penonton"}`;
-  if (e.type === "comment" && e.vote_choice && e.round_id === live.round && (e.vote_choice === "a" || e.vote_choice === "b")) {
-    if (e.user_id) userSide.set(e.user_id, e.vote_choice);
-    liveActions.addTiktok(e.vote_choice, 1);
+  if (counted) {
+    if (countedVotes.size > 3000) countedVotes.clear();
+    countedVotes.add(e.id);
+    if (e.user_id) userSide.set(e.user_id, counted);
+    liveActions.addTiktok(counted, 1);
     return;
   }
   if (e.type !== "gift") return;
@@ -586,6 +635,8 @@ export function useCloudSync(userId: string | undefined) {
           setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, 100) });
           // Antrean otomatis: hanya kiriman bersih yang cocok dengan gimmick yang sedang tayang.
           const st = getSettings();
+          // Komentar !spin bersih langsung masuk ke roda yang sedang tayang (tanpa menunggu Simpan ke Bank).
+          if (r.kind === "spin" && live.intake.spin) void addSpinToWheel(r);
           if ((st.autoQueue || (st.vipAutoQueue && isFast(r))) && QUEUE_KINDS.has(r.kind) && onAirGimmick() === r.kind) liveActions.enqueue(r);
         } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, 100) });
       })

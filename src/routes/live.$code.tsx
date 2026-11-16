@@ -96,7 +96,7 @@ function Audience() {
     if (error) { toast.error(error.message); return; }
     setText(""); setPa(""); setPb(""); setW(["", "", ""]);
     const vcode = typeof data === "string" ? data : "";
-    setSent(vcode ? { code: vcode, kind } : null);
+    setSent({ code: vcode, kind });
     toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : "Terkirim ke Kyoka!");
   };
 
@@ -153,16 +153,7 @@ function Audience() {
         )}
 
         <Button size="lg" variant="live" className="w-full" disabled={busy || isClosed} onClick={submit}>{isClosed ? "Sedang ditutup" : "Kirim"}</Button>
-        {sent && (
-          <div className="space-y-2 rounded-xl border border-zest/50 bg-zest/10 p-3 text-xs">
-            <p className="font-semibold text-foreground">✅ Terkirim. Mau ⚡ fast track?</p>
-            <p className="text-muted-foreground">Kalau kamu sudah kirim gift di LIVE ini, komen kode ini di TikTok dalam 30 menit supaya kirimanmu didahulukan. Tetap anonim di layar.</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-lg bg-background px-3 py-2 text-sm font-bold tracking-wider">!fast {sent.code}</code>
-              <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard?.writeText(`!fast ${sent.code}`); toast("Disalin. Tempel di komentar LIVE."); }}>Salin</Button>
-            </div>
-          </div>
-        )}
+        {sent && <p className="rounded-xl border border-success/40 bg-success/10 p-3 text-center text-sm font-semibold text-success">✅ Terkirim ke Kyoka!</p>}
         <p className="text-xs text-muted-foreground">Dikirim tanpa nama. Hindari info pribadi, tautan, dan kata kasar. Kiriman bisa disaring sebelum tampil.</p>
       </div>
 
@@ -175,7 +166,6 @@ function Audience() {
           {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
           {st.intake?.followersOnly && <li>🔒 Komentar hanya dihitung dari <b className="text-foreground">follower</b>. Follow dulu ya.</li>}
           <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
-          <li>🎁 Kirim gift: kamu jadi VIP ⭐💎👑. Setelah mengirim lewat link, komen <b className="text-foreground">!fast KODE</b> untuk jalur ⚡ fast track.</li>
         </ul>
       </div>
     </div>

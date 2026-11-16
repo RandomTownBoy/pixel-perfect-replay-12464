@@ -65,6 +65,12 @@ function scheduleVotePush() {
 export const KIND_TO_GIMMICK: Record<string, GimmickId> = {
   confession: "confession", card: "card", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
 };
+/** Jenis kiriman penonton yang ditampilkan di riwayat tiap gimmick. */
+export const GIMMICK_KINDS: Record<GimmickId, string[]> = {
+  spin: ["spin", "question"], thisorthat: ["thisorthat"], card: ["card"], hottake: ["hottake"], confession: ["confession"], chaos: ["chaos", "problem"],
+};
+/** Jumlah maksimal riwayat kiriman yang dimuat (semua jenis digabung). */
+export const HISTORY_LIMIT = 300;
 /** Jenis kiriman yang tampil sebagai gelembung antrean di overlay (bukan mengganti ronde). */
 export const QUEUE_KINDS = new Set(["confession", "spin"]);
 /** Jenis kiriman yang bisa disimpan ke Question Bank. */
@@ -174,7 +180,7 @@ export const liveActions = {
       setLive({
         inbox: status === "pending" ? [moved, ...without(live.inbox)].sort(byNewest).slice(0, 100) : without(live.inbox),
         review: status === "review" ? [moved, ...without(live.review)].sort(byNewest).slice(0, 100) : without(live.review),
-        history: status !== "pending" && status !== "review" ? [moved, ...without(live.history)].sort(byNewest).slice(0, 100) : without(live.history),
+        history: status !== "pending" && status !== "review" ? [moved, ...without(live.history)].sort(byNewest).slice(0, HISTORY_LIMIT) : without(live.history),
       });
     }
     const { data, error } = await supabase.from("audience_submissions").update({ status }).eq("id", id).select("id");
@@ -506,7 +512,7 @@ export function useCloudSync(userId: string | undefined) {
       // Pengaturan + jendela input (kolom baru paket 1); dilewati kalau migrasinya belum jalan.
       const cfg = await supabase.from("studio_sessions").select("settings, intake").eq("owner_id", userId).maybeSingle();
       const cfgRow = cfg.error ? null : (cfg.data as unknown as { settings?: Record<string, unknown> | null; intake?: Partial<Intake> | null } | null);
-      const { data: hist } = await supabase.from("audience_submissions").select("*").in("status", ["approved", "shown", "rejected"]).order("created_at", { ascending: false }).limit(100);
+      const { data: hist } = await supabase.from("audience_submissions").select("*").in("status", ["approved", "shown", "rejected"]).order("created_at", { ascending: false }).limit(HISTORY_LIMIT);
       const { data: evs } = await supabase.from("live_events").select("*").order("created_at", { ascending: false }).limit(80);
       if (cancelled) return;
       const events = (evs ?? []) as unknown as LiveEvent[];

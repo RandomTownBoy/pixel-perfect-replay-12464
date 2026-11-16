@@ -5,7 +5,7 @@ import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, SPIN_WHEEL_MAX, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, spinPoolOf, VIEWER_CATEGORY,
+  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 
@@ -39,14 +39,16 @@ type Tally = { a: number; b: number };
 type Live = {
   overlayToken: string | null; audienceCode: string | null; overlayConnected: boolean;
   round: string; web: Tally; tiktok: Tally; gift: Tally; inbox: Submission[]; history: Submission[];
-  review: Submission[]; queue: Submission[]; nowShowing: Submission | null; paused: boolean; endsAt: number; intake: Intake;
+  review: Submission[]; queue: Submission[]; nowShowing: Submission | null; intake: Intake;
   gifters: Record<string, Gifter>; perks: Perk[]; followStats: { known: number; unknown: number };
   ingestKey: string | null; feed: LiveEvent[]; tiktokLive: TiktokStatus;
   giftLog: { id: string; text: string; at: number }[];
+  /** Timer antrean overlay sedang ditahan host. */
+  queuePaused: boolean;
 };
 let live: Live = {
   overlayToken: null, audienceCode: null, overlayConnected: false, round: "",
-  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, paused: false, endsAt: 0, intake: DEFAULT_INTAKE, gifters: {}, perks: [], followStats: { known: 0, unknown: 0 }, giftLog: [],
+  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, intake: DEFAULT_INTAKE, gifters: {}, perks: [], followStats: { known: 0, unknown: 0 }, giftLog: [], queuePaused: false,
   ingestKey: null, feed: [], tiktokLive: { connected: false, handle: "", at: 0 },
 };
 const subs = new Set<() => void>();
@@ -63,7 +65,7 @@ function scheduleVotePush() {
 }
 /** Tujuan bawaan di bagian Gimmick untuk tiap jenis kiriman penonton. */
 export const KIND_TO_GIMMICK: Record<string, GimmickId> = {
-  confession: "confession", card: "card", hottake: "hottake", chaos: "chaos", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
+  confession: "confession", card: "card", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
 };
 /** Jenis kiriman penonton yang ditampilkan di riwayat tiap gimmick. */
 export const GIMMICK_KINDS: Record<GimmickId, string[]> = {
@@ -71,18 +73,8 @@ export const GIMMICK_KINDS: Record<GimmickId, string[]> = {
 };
 /** Jumlah maksimal riwayat kiriman yang dimuat (semua jenis digabung). */
 export const HISTORY_LIMIT = 300;
-/** Jenis kiriman yang tampil sebagai gelembung antrean di overlay (bukan mengganti ronde). */
-export const QUEUE_KINDS = new Set(["confession", "hottake", "thisorthat", "chaos", "problem"]);
-/** Lama tiap kiriman penonton tayang sebelum diganti antrean berikutnya (detik). Antrean habis = tampilan terakhir tetap diam. */
-export const QUEUE_SECONDS: Partial<Record<GimmickId, number>> = { confession: 180, hottake: 120, chaos: 120, thisorthat: 90 };
-export const queueSecondsFor = (kind: string) => QUEUE_SECONDS[KIND_TO_GIMMICK[kind] ?? "confession"] ?? 120;
-/** Tujuan otomatis kiriman bersih: tayang (antre) kalau cocok dengan gimmick di layar, roda kalau Spin belum penuh, selain itu Question Bank. */
-export function routeFor(kind: string, onAir: string | null, wheelSize: number): "queue" | "wheel" | "bank" {
-  const g = KIND_TO_GIMMICK[kind];
-  if (g && g === onAir && QUEUE_KINDS.has(kind)) return "queue";
-  if (g === "spin" && onAir === "spin" && wheelSize < SPIN_WHEEL_MAX) return "wheel";
-  return "bank";
-}
+/** Jenis kiriman yang masuk antrean tayang di overlay saat gimmick-nya sedang tayang. Spin → roda, Card → bank (isi kartu tetap tersembunyi). */
+export const QUEUE_KINDS = new Set(["confession", "hottake", "chaos", "thisorthat"]);
 /** Jenis kiriman yang bisa disimpan ke Question Bank. */
 export const BANKABLE_KINDS = new Set(["confession", "card", "hottake", "spin", "thisorthat", "problem", "question"]);
 
@@ -143,51 +135,86 @@ function pushBanner(text: string) {
 
 /* ---------- antrean overlay ---------- */
 let queueTimer: TimerHandle | null = null;
-/** Roda (Spin the Question) berfase yang sedang tayang di overlay. */
+let queueDeadline = 0;
+let queueLeft = 0;
+/** payloadAt overlay milik item antrean yang sedang tayang. Kalau berubah, host mengganti gimmick sendiri. */
+let shownAt = 0;
+let presenting = false;
+
+/** Gimmick yang sedang tayang (kiriman confession yang tampil dihitung sebagai gimmick Confession). */
+export function onAirGimmick(): string | null {
+  const p = readOverlay().payload;
+  if (p?.gimmick === "audience") return KIND_TO_GIMMICK[p.kind] ?? null;
+  return p?.gimmick ?? null;
+}
+/** Roda (Spin the Question) yang sedang tayang di overlay. Null kalau bukan roda berfase. */
 function spinOnAir(): SpinPayload | null {
   const p = readOverlay().payload;
   return p?.gimmick === "spin" && p.phase !== undefined ? p : null;
 }
-/** Gimmick yang sedang tayang (kiriman penonton yang tampil dihitung sebagai gimmick jenisnya). */
-export function onAirGimmick(): string | null {
-  const o = readOverlay();
-  if (!o.visible) return null;
-  const p = o.payload;
-  if (p?.gimmick === "audience") return KIND_TO_GIMMICK[p.kind] ?? null;
-  return p?.gimmick ?? null;
+/** Tampilkan satu kiriman di overlay sesuai jenisnya. False kalau isinya tidak valid. */
+function present(s: Submission): boolean {
+  const text = (s.content ?? "").trim();
+  if (!text) return false;
+  if (s.kind === "confession") sendToOverlay({ gimmick: "audience", kind: "confession", content: text, ...(s.nickname ? { nickname: s.nickname } : {}) });
+  else if (s.kind === "hottake") sendToOverlay({ gimmick: "hottake", topic: text });
+  else if (s.kind === "thisorthat") {
+    const [a, b] = text.split(" | ");
+    if (!a?.trim() || !b?.trim()) return false;
+    sendToOverlay({ gimmick: "thisorthat", a: a.trim(), b: b.trim() });
+  } else if (s.kind === "chaos") {
+    const words = text.split(",").map((w) => w.trim()).filter(Boolean);
+    if (words.length !== 3) return false;
+    sendToOverlay({ gimmick: "chaos", mode: "story", words });
+  } else return false;
+  return true;
 }
-function showItem(s: Submission): boolean {
-  if (s.kind === "confession") {
-    sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "" });
-    void liveActions.setStatus(s.id, "shown");
-    return true;
-  }
-  return liveActions.startRound(s);
-}
-function armTimer(ms: number) {
-  stopTimer(queueTimer);
-  queueTimer = startTimer(queueTick, ms);
-  setLive({ endsAt: Date.now() + ms });
-}
+/** Item berikutnya tampil dan bertahan sesuai durasi gimmick-nya. Antrean habis: layar tetap di item terakhir (tidak kembali ke gimmick sebelumnya). */
 function queueTick() {
   queueTimer = null;
-  setLive({ endsAt: 0 });
-  // Host pindah gimmick manual: sisa antrean disimpan ke Question Bank, overlay tidak diubah.
-  if (live.nowShowing && onAirGimmick() !== KIND_TO_GIMMICK[live.nowShowing.kind]) {
-    const rest = live.queue; setLive({ queue: [], nowShowing: null });
-    rest.forEach((x) => void liveActions.saveToBank(x));
+  const next = live.queue[0];
+  if (!next) { setLive({ nowShowing: null, queuePaused: false }); return; }
+  setLive({ queue: live.queue.slice(1), nowShowing: next, queuePaused: false });
+  presenting = true;
+  let ok = false;
+  try { ok = present(next); } finally { presenting = false; }
+  if (!ok) { void liveActions.setStatus(next.id, "review"); setLive({ nowShowing: null }); queueTick(); return; }
+  shownAt = readOverlay().payloadAt;
+  void liveActions.setStatus(next.id, "shown");
+  const ms = queueSecondsFor(next.kind) * 1000;
+  queueDeadline = Date.now() + ms;
+  queueTimer = startTimer(queueTick, ms);
+}
+/** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, otomatis disimpan ke Question Bank. */
+function abandonQueue() {
+  stopTimer(queueTimer); queueTimer = null;
+  const rest = live.queue;
+  setLive({ queue: [], nowShowing: null, queuePaused: false });
+  for (const s of rest) void liveActions.saveToBank(s);
+  if (rest.length) toast(`${rest.length} kiriman yang antre disimpan ke Question Bank`);
+}
+function watchHostSwitch(o: OverlayState) {
+  if (presenting || !live.nowShowing) return;
+  if (o.payloadAt !== shownAt) abandonQueue();
+}
+
+/** Penyaluran otomatis kiriman bersih: cocok dengan gimmick tayang → antre tayang; selain itu → Question Bank ("Dari Penonton"). */
+async function saveRouted(r: Submission, target?: GimmickId, category?: string, toWheel = false) {
+  const res = await liveActions.saveToBank(r, target, category);
+  if (!res.ok) toast.error(res.message);
+  else if (toWheel) toast.success(`🎡 ${r.nickname ? `@${r.nickname}: ` : ""}pertanyaan masuk ke roda`);
+}
+function routeSubmission(r: Submission) {
+  if (r.flagged || r.status !== "pending") return;
+  if (r.kind === "spin" || r.kind === "question") {
+    const w = spinOnAir();
+    // Roda belum penuh (< 10 irisan) → masuk roda yang tayang; sudah penuh atau Spin tidak tayang → Bank.
+    if (w && spinPoolOf(getQuestions(), w.category ?? "").length < SPIN_WHEEL_MAX) void saveRouted(r, "spin", w.category || VIEWER_CATEGORY, true);
+    else void saveRouted(r, "spin");
     return;
   }
-  if (live.paused) return;
-  let next = live.queue[0];
-  while (next) {
-    setLive({ queue: live.queue.slice(1) });
-    if (showItem(next)) break;
-    next = live.queue[0];
-  }
-  if (!next) { setLive({ nowShowing: null }); return; } // antrean habis: tampilan terakhir tetap di layar
-  setLive({ nowShowing: next });
-  armTimer(queueSecondsFor(next.kind) * 1000);
+  if (QUEUE_KINDS.has(r.kind) && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) { liveActions.enqueue(r); return; }
+  if (BANKABLE_KINDS.has(r.kind)) void saveRouted(r);
 }
 
 export const liveActions = {
@@ -223,15 +250,27 @@ export const liveActions = {
     }
     return true;
   },
-  /** Masukkan kiriman ke antrean overlay (confession / spin). Tiap item tampil `queueSeconds` detik lalu diganti berikutnya. */
+  /** Masukkan kiriman ke antrean overlay. Tiap item tampil sesuai durasi gimmick-nya (Confession 3 mnt, Hot Take/Chaos 2 mnt, This or That 1,5 mnt). */
   enqueue(s: Submission) {
     if (!QUEUE_KINDS.has(s.kind) || s.flagged || s.status === "review") return false;
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
-    const rank = fastRank(s);
-    const at = live.queue.findIndex((x) => fastRank(x) < rank); // fast track didahulukan, tapi tidak memotong item yang sedang tampil
-    setLive({ queue: at === -1 ? [...live.queue, s] : [...live.queue.slice(0, at), s, ...live.queue.slice(at)] });
-    if (!queueTimer && !live.nowShowing && !live.paused) queueTick();
+    setLive({ queue: [...live.queue, s] });
+    if (!queueTimer && !live.nowShowing) queueTick();
     return true;
+  },
+  /** ⏸️ Tahan: bekukan timer item yang sedang tampil. */
+  pauseQueue() {
+    if (!queueTimer) return;
+    stopTimer(queueTimer); queueTimer = null;
+    queueLeft = Math.max(1000, queueDeadline - Date.now());
+    setLive({ queuePaused: true });
+  },
+  /** ▶️ Lanjutkan timer yang ditahan. */
+  resumeQueue() {
+    if (!live.queuePaused) return;
+    setLive({ queuePaused: false });
+    queueDeadline = Date.now() + queueLeft;
+    queueTimer = startTimer(queueTick, queueLeft);
   },
   /** Untuk uji: apakah penguji dianggap follower. */
   setTestFollower(v: boolean) { testFollower = v; },
@@ -249,21 +288,16 @@ export const liveActions = {
   panic() {
     stopTimer(queueTimer); queueTimer = null;
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
-    setLive({ queue: [], nowShowing: null, endsAt: 0, paused: false });
+    setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
     delete o.banner;
     pushOverlay({ ...o, visible: false });
     actions.log("🚨 Panik: overlay disembunyikan dan antrean dikosongkan");
   },
   unpanic() { setOverlayVisible(true); },
-  /** Lanjut ke kiriman berikutnya sekarang. */
-  skipQueue() { stopTimer(queueTimer); queueTimer = null; const p = live.paused; setLive({ paused: false }); queueTick(); if (p && !live.nowShowing) setLive({ paused: false }); },
-  /** Tahan: timer berhenti, tampilan sekarang diam sampai Lanjut. */
-  togglePause() {
-    if (live.paused) { setLive({ paused: false }); if (live.nowShowing) armTimer(queueSecondsFor(live.nowShowing.kind) * 1000); else queueTick(); return; }
-    stopTimer(queueTimer); queueTimer = null; setLive({ paused: true, endsAt: 0 });
-  },
-  clearQueue() { setLive({ queue: [] }); },
+  /** ⏭️ Lanjut: langsung ke item berikutnya tanpa menunggu waktu habis. */
+  skipQueue() { stopTimer(queueTimer); queueTimer = null; queueTick(); },
+  clearQueue() { stopTimer(queueTimer); queueTimer = null; setLive({ queue: [] }); queueTick(); },
   /** Jadikan kiriman penonton sebagai ronde/cerita (This or That, Hot Take, Random Chaos). Mengganti tampilan overlay. */
   startRound(s: Submission): boolean {
     const text = (s.content ?? "").trim();
@@ -357,15 +391,6 @@ export const liveActions = {
     return !error;
   },
 };
-
-/** Masukkan kiriman !spin ke bank di kategori roda yang tayang; roda di overlay ikut diperbarui (chip \"Ditambahkan ke roda\"). */
-async function addSpinToWheel(r: Submission) {
-  const w = spinOnAir();
-  if (!w) return;
-  const res = await liveActions.saveToBank(r, "spin", w.category || VIEWER_CATEGORY);
-  if (res.ok) toast.success(`🎡 ${r.nickname ? `@${r.nickname}: ` : ""}pertanyaan masuk ke roda`);
-  else toast.error(res.message);
-}
 
 /* ---------- audience view derived from overlay ---------- */
 function audienceStateFor(o: OverlayState) {
@@ -655,30 +680,22 @@ export function useCloudSync(userId: string | undefined) {
           }
         } else if (r.status === "pending") {
           setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, 100) });
-          // Antrean otomatis: hanya kiriman bersih yang cocok dengan gimmick yang sedang tayang.
-          const st = getSettings();
-          void st;
-          if (r.flagged) return;
-          const route = routeFor(r.kind, onAirGimmick(), spinOnAir()?.items?.length ?? 0);
-          if (route === "queue") liveActions.enqueue(r);
-          else if (route === "wheel") void addSpinToWheel(r);
-          else if (BANKABLE_KINDS.has(r.kind)) void liveActions.saveToBank(r);
+          // Penyaluran otomatis: cocok dengan gimmick tayang → antre; selain itu → Question Bank. Yang kena moderasi (review) tidak pernah lewat sini.
+          routeSubmission(r);
         } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, 100) });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
         const r = e.new as Submission;
         if (!r.verified_uid) return;
-        // Penonton memverifikasi kiriman lewat komentar "!fast KODE": perbarui tanda & urutan, lalu mungkin masuk antrean otomatis.
+        // Tanda verifikasi lama (!fast) dari database: hanya memperbarui lencana di daftar.
         const patch = (l: Submission[]) => l.map((x) => (x.id === r.id ? { ...x, verified_uid: r.verified_uid ?? null } : x));
         setLive({ inbox: sortVip(patch(live.inbox)), review: patch(live.review), history: patch(live.history), queue: patch(live.queue) });
-        const inInbox = live.inbox.find((x) => x.id === r.id);
-        const st = getSettings();
-        void inInbox; void st;
       }).subscribe();
     // Channel terpisah: kalau tabel live_events belum ada, inbox penonton tetap jalan.
     const evCh = supabase.channel(`events-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
       .subscribe();
+    const offHostSwitch = subscribeOverlay(watchHostSwitch);
     // Simpan perubahan pengaturan/kategori ke database (ditunda 1 detik agar tidak menulis setiap ketikan).
     const offPersist = onPersistChange(() => {
       if (!settingsSync) return;
@@ -690,7 +707,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000, true);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
+      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

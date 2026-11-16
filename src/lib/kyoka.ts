@@ -84,6 +84,9 @@ export type CardPayload = Extract<OverlayPayload, { gimmick: "card" }>;
 
 /** Jumlah item maksimal di roda, durasi & easing putaran (sama di dashboard dan overlay). */
 export const SPIN_WHEEL_MAX = 10;
+/** Lama tiap kiriman penonton tampil di overlay (detik), menurut jenis gimmick. Host bisa menahan atau melompat lewat tombol di Kontrol. */
+export const QUEUE_SECONDS: Record<string, number> = { confession: 180, hottake: 120, chaos: 120, thisorthat: 90 };
+export const queueSecondsFor = (kind: string) => QUEUE_SECONDS[kind] ?? 120;
 export const SPIN_DURATION_MS = 3500;
 export const SPIN_EASING = "cubic-bezier(.15,.85,.2,1)";
 /** Isi roda untuk satu kategori: sumber tunggal dipakai dashboard, overlay, dan sinkronisasi otomatis. */

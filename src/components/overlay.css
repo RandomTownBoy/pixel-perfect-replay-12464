@@ -5,17 +5,28 @@
    kalau tidak ia menutupi seluruh halaman dan memblokir tombol. pointer-events: none = tidak pernah menangkap klik. */
 .ov-root { position: relative; width: 100%; height: 100%; color: var(--foreground); font-family: var(--font-sans, system-ui, sans-serif); overflow: hidden; pointer-events: none; }
 /* inset (bukan padding): persentase atas/bawah mengikuti TINGGI layar, bukan lebar */
-.ov-safe { position: absolute; inset: 13% 5% 31% 5%; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.7em; }
+.ov-safe { position: absolute; inset: 11% 5% 36% 5%; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.7em; }
 .ov-idle { margin: auto; font-size: 0.9em; color: var(--muted-foreground); text-align: center; }
 
 /* kartu utama */
-.ov-card { position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1.1em 1.1em 1.2em;
+/* Ukuran bawaan tiap gimmick (tinggi minimum, lebar selalu penuh) supaya tampil rapi dan konsisten. Isi dipusatkan di dalam kartu;
+   batas atas = zona aman dikurangi slot panduan, jadi kartu tidak pernah turun ke area komentar TikTok. */
+.ov-card { --h: 15em; min-height: var(--h); max-height: calc(100% - 3em); overflow: hidden; justify-content: center;
+  position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.1em;
   border-radius: 1.4em; border: 0.1em solid color-mix(in oklab, var(--ov) 70%, transparent);
   background: color-mix(in oklab, var(--background) 84%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 0.9em 2.6em -0.8em color-mix(in oklab, var(--ov) 55%, transparent), 0 0.2em 0.8em rgba(0,0,0,0.35);
   animation: ov-pop 0.5s cubic-bezier(.2,.9,.3,1.25) both; }
 .ov-card::before { content: ""; position: absolute; left: 1.4em; right: 1.4em; top: -0.1em; height: 0.3em; border-radius: 0 0 0.4em 0.4em;
   background: linear-gradient(90deg, var(--primary), var(--pop), var(--electric)); }
+.ov-card[data-g="spin"] { --h: 22em; justify-content: flex-start; }
+.ov-card[data-g="card"] { --h: 20em; justify-content: flex-start; }
+.ov-card[data-g="thisorthat"] { --h: 17em; }
+.ov-card[data-g="hottake"] { --h: 18em; }
+.ov-card[data-g="chaos-story"], .ov-card[data-g="chaos-solution"] { --h: 17em; }
+.ov-card[data-g="confession"], .ov-card[data-g="audience"] { --h: 15em; }
+.ov-card[data-g="hottake"] .ov-emoji { font-size: 1.8em; }
+.ov-card[data-g="hottake"] .ov-list li { padding: 0.3em 0.7em; font-size: 0.8em; }
 .ov-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6em; }
 .ov-chip { display: inline-flex; align-items: center; gap: 0.4em; padding: 0.3em 0.9em; border-radius: 999px; background: var(--ov); color: #fff;
   font-family: var(--font-display, system-ui); font-weight: 800; font-size: 0.78em; letter-spacing: 0.02em; }
@@ -72,20 +83,23 @@
   background: linear-gradient(120deg, var(--primary), var(--pop) 55%, var(--electric)); box-shadow: 0 0.6em 2em -0.4em color-mix(in oklab, var(--pop) 60%, transparent); animation: ov-slide 0.45s cubic-bezier(.2,.9,.3,1.2) both; }
 
 /* panduan interaksi */
-.ov-guide { display: flex; flex-direction: column; gap: 0.25em; max-width: 78%; box-sizing: border-box; padding: 0.55em 0.95em; border-radius: 1em; font-size: 0.74em; font-weight: 700; line-height: 1.3;
+.ov-guide-slot { display: flex; flex: none; min-height: 2.3em; }
+.ov-guide-slot.l { justify-content: flex-start; }
+.ov-guide-slot.r { justify-content: flex-end; }
+.ov-guide { display: flex; flex-flow: row wrap; gap: 0.1em 0.9em; max-width: 100%; box-sizing: border-box; padding: 0.4em 0.9em; border-radius: 1em; font-size: 0.66em; font-weight: 700; line-height: 1.3; align-self: flex-start;
   background: color-mix(in oklab, var(--background) 78%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   border: 0.08em solid color-mix(in oklab, var(--foreground) 16%, transparent); animation: ov-pop 0.5s 0.15s cubic-bezier(.2,.9,.3,1.25) both; }
-.ov-guide.l { align-self: flex-start; text-align: left; }
-.ov-guide.r { align-self: flex-end; text-align: right; }
+.ov-guide-slot.l .ov-guide { text-align: left; }
+.ov-guide-slot.r .ov-guide { text-align: right; }
 
 /* ---------- Spin the Question: roda di overlay ---------- */
-.ov-spin { gap: 0.6em; }
-.ov-spin-top { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4em; min-height: 1.6em; }
+.ov-spin { gap: 0.5em; }
+.ov-spin-top { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4em; min-height: 1.5em; }
 .ov-chip.add { background: color-mix(in oklab, var(--zest) 85%, transparent); color: #241a00; animation: ov-pop 0.4s cubic-bezier(.2,.9,.3,1.25) both; }
-.ov-wheelwrap { position: relative; width: 12em; max-width: 100%; aspect-ratio: 1; transition: width 0.5s cubic-bezier(.2,.8,.2,1); }
-.ov-spin.dense .ov-wheelwrap { width: 10em; }
-.ov-spin.res .ov-wheelwrap { width: 8.5em; }
-.ov-spin.res.dense .ov-wheelwrap { width: 7.5em; }
+.ov-wheelwrap { position: relative; width: 10em; max-width: 100%; aspect-ratio: 1; transition: width 0.5s cubic-bezier(.2,.8,.2,1); }
+.ov-spin.dense .ov-wheelwrap { width: 8.5em; }
+.ov-spin.res .ov-wheelwrap { width: 7em; }
+.ov-spin.res.dense .ov-wheelwrap { width: 6.5em; }
 .ov-wheel { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0.35em 0.7em rgba(0,0,0,0.4)); will-change: transform; }
 .ov-wheel g { transition: opacity 0.45s, filter 0.45s; }
 .ov-wheel .ov-dim { opacity: 0.22; }
@@ -97,7 +111,11 @@
 
 /* daftar bernomor di bawah roda (ukuran menyesuaikan jumlah item) */
 .ov-items { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; grid-template-columns: 1fr; gap: 0.3em; font-size: 0.92em; }
-.ov-items.two { grid-template-columns: 1fr 1fr; font-size: 0.74em; gap: 0.35em 0.5em; }
+.ov-items.two { grid-template-columns: 1fr 1fr; font-size: 0.68em; gap: 0.3em 0.5em; }
+.ov-items.two .ov-item { padding: 0.22em 0.55em 0.22em 0.3em; }
+/* saat hasil keluar: hanya pemenang yang tersisa di daftar, supaya kartu tidak memanjang ke bawah */
+.ov-spin.res .ov-items, .ov-spin.res .ov-items.two { grid-template-columns: 1fr; font-size: 0.85em; }
+.ov-spin.res .ov-item.dim { display: none; }
 .ov-item { display: flex; align-items: center; gap: 0.55em; min-width: 0; padding: 0.3em 0.6em 0.3em 0.35em; border-radius: 0.8em; text-align: left; font-weight: 700; line-height: 1.2;
   background: color-mix(in oklab, var(--foreground) 9%, transparent); transition: opacity 0.45s, transform 0.45s, box-shadow 0.45s, background 0.45s; }
 .ov-item b { flex: none; display: grid; place-items: center; width: 1.6em; height: 1.6em; border-radius: 0.5em; color: var(--background); font-family: var(--font-display, system-ui); font-weight: 900; font-size: 0.9em; }
@@ -108,11 +126,12 @@
 .ov-result { width: 100%; box-sizing: border-box; padding: 0.7em 0.9em; border-radius: 1.1em; background: color-mix(in oklab, var(--ov) 22%, transparent); border: 0.08em solid color-mix(in oklab, var(--ov) 60%, transparent); }
 
 /* ---------- Pick a Card: kartu di overlay ---------- */
-.ov-deck { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.55em; width: min(100%, 21em); }
+.ov-deck { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.55em; width: min(100%, 14.5em); transition: width 0.4s; }
+.ov-deck.revealed { width: min(100%, 11.5em); }
 .ov-fc { width: calc((100% - 1.1em) / 3); aspect-ratio: 4 / 5; transition: opacity 0.4s, transform 0.4s, filter 0.4s;
   --tx: calc(var(--dx) * (100% + 0.55em)); --ty: calc(var(--dy) * (100% + 0.55em)); }
 .ov-fc .flip-inner { width: 100%; height: 100%; }
-.ov-face { display: grid; place-items: center; border-radius: 0.8em; font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.9em; }
+.ov-face { display: grid; place-items: center; border-radius: 0.8em; font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.6em; }
 .ov-face.front { color: #fff; background: linear-gradient(140deg, var(--primary), var(--pop)); border: 0.05em solid rgba(255,255,255,0.35); box-shadow: 0 0.3em 1em -0.2em color-mix(in oklab, var(--pop) 55%, transparent); }
 .ov-face.back { color: var(--zest); background: color-mix(in oklab, var(--background) 70%, var(--ov)); border: 0.06em solid var(--ov); }
 .ov-fc.dim { opacity: 0.28; transform: scale(0.92); filter: saturate(0.5); }

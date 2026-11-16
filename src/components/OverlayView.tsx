@@ -61,8 +61,11 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
   const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
   const pos = state.guidePos ?? "tr";
-  const guide = state.visible && lines.length > 0 && (
-    <div className={`ov-guide ${pos === "tl" || pos === "bl" ? "l" : "r"}`}>{lines.map((l) => <span key={l}>💬 {l}</span>)}</div>
+  // Slot panduan selalu ada (tinggi tetap) supaya kartu tidak bergeser naik-turun antar gimmick.
+  const guide = state.visible && !!p && state.guidePos !== "off" && (
+    <div className={`ov-guide-slot ${pos === "tl" || pos === "bl" ? "l" : "r"}`}>
+      {lines.length > 0 && <div className="ov-guide">{lines.map((l) => <span key={l}>💬 {l}</span>)}</div>}
+    </div>
   );
   const guideOnTop = pos === "tl" || pos === "tr";
 
@@ -74,7 +77,7 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
         ) : (
           <>
             {guideOnTop && guide}
-            <div key={state.payloadAt} className="ov-card">
+            <div key={state.payloadAt} className="ov-card" data-g={p.gimmick === "chaos" ? `chaos-${p.mode}` : p.gimmick} data-phase={"phase" in p ? p.phase : undefined}>
               {(state.showTitle || state.showBadge) && (
                 <div className="ov-head">
                   {state.showTitle && g ? <span className="ov-chip">{g.emoji} {g.name}</span> : <span />}
@@ -92,8 +95,8 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
   );
 }
 
-function Quote({ text, quoted }: { text: string; quoted?: boolean }) {
-  return <p className={`ov-quote${quoted ? " q" : ""}`} style={{ fontSize: `${fit(text)}em` }}>{text}</p>;
+function Quote({ text, quoted, max }: { text: string; quoted?: boolean; max?: number }) {
+  return <p className={`ov-quote${quoted ? " q" : ""}`} style={{ fontSize: `${Math.min(fit(text), max ?? 99)}em` }}>{text}</p>;
 }
 
 function Attribution({ name }: { name?: string | undefined }) {
@@ -121,10 +124,10 @@ function Body({ state }: { state: OverlayState }) {
       return (
         <div className="ov-body">
           <div className="ov-emoji float">🔥</div>
-          <Quote text={p.topic ?? ""} quoted />
+          <Quote text={p.topic ?? ""} quoted max={1.45} />
           <Opts votes={state.votes} items={[{ key: "👍", label: "SETUJU", wide: true }, { key: "👎", label: "TIDAK", wide: true }]} />
           {p.followups?.length ? (
-            <ul className="ov-list">{p.followups.map((f) => <li key={f}>💬 {f}</li>)}</ul>
+            <ul className="ov-list">{p.followups.slice(0, 2).map((f) => <li key={f}>💬 {f}</li>)}</ul>
           ) : null}
         </div>
       );
@@ -299,7 +302,7 @@ function SpinStage({ p }: { p: SpinPayload }) {
   const flash = useFlash(p.addedAt, 3000);
   const winner = phase === "result" ? p.winnerIndex : undefined;
   const fresh = new Set(p.addedAt !== undefined && Date.now() - p.addedAt < 3500 ? p.added ?? [] : []);
-  const dense = n > 5;
+  const dense = n > 3;
   return (
     <div className={`ov-body ov-spin${dense ? " dense" : ""}${phase === "result" ? " res" : ""}`}>
       <div className="ov-spin-top">
@@ -324,7 +327,7 @@ function SpinStage({ p }: { p: SpinPayload }) {
       {phase === "spinning" && <span className="ov-muted">Memutar…</span>}
       {phase === "result" && p.question && (
         <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
-          <Quote text={p.question} />
+          <Quote text={p.question} max={1.5} />
         </div>
       )}
     </div>
@@ -363,7 +366,7 @@ function CardStage({ p }: { p: CardPayload }) {
       {(phase === "standby" || phase === "dealt") && <span className="ov-prompt">Pilih satu kartu!</span>}
       {phase === "revealed" && p.text && (
         <div key={p.text} className="ov-result animate-pop-in" style={{ animationDelay: "0.55s" }}>
-          <Quote text={p.text} />
+          <Quote text={p.text} max={1.45} />
         </div>
       )}
     </div>

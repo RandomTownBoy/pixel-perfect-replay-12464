@@ -277,6 +277,7 @@ export function LiveConsole() {
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.spin} onChange={(e) => void liveActions.setIntake("spin", e.target.checked)} />
                 </label>
                 {intake.spin && onAir?.id !== "spin" && <p className="text-xs text-pop">Input spin terbuka, tapi gimmick Spin belum tayang.</p>}
+                {intake.spin && onAir?.id === "spin" && <p className="text-xs text-muted-foreground">Komentar !spin yang bersih otomatis masuk ke roda yang sedang tayang.</p>}
                 <label className="flex items-center justify-between gap-2"><span>🔒 Komentar hanya dari <b>follower</b></span>
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.followersOnly} onChange={(e) => void liveActions.setIntake("followersOnly", e.target.checked)} />
                 </label>

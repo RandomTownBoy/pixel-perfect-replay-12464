@@ -28,7 +28,6 @@ function SettingsPage() {
   const bannedWords = useKyoka((x) => x.settings.bannedWords);
   const guidePosition = useKyoka((x) => x.settings.guidePosition);
   const vipTiers = useKyoka((x) => x.settings.vipTiers);
-  const fastTrackTier = useKyoka((x) => x.settings.fastTrackTier);
   const giftNotify = useKyoka((x) => x.settings.giftNotify);
   const publicUrl = useKyoka((x) => x.settings.publicUrl);
   const [newWord, setNewWord] = useState("");
@@ -128,7 +127,7 @@ function SettingsPage() {
 
         <Panel className="space-y-3 text-sm">
           <h3 className="font-display text-sm font-bold">VIP Gifter</h3>
-          <p className="text-muted-foreground">Total diamond gift per penonton (dalam sesi ini) menentukan tier. VIP kirimannya didahulukan di antrean, tampil dengan lencana di overlay, dan kenaikan tier diumumkan lewat banner.</p>
+          <p className="text-muted-foreground">Total diamond gift per penonton (dalam sesi ini) menentukan tier. Tier tampil sebagai lencana di feed dan Top Gifter, dan kenaikan tier diumumkan lewat banner.</p>
           <div className="grid grid-cols-3 gap-2">
             {(["⭐ Supporter", "💎 VIP", "👑 Sultan"] as const).map((label, i) => (
               <label key={label} className="text-xs">{label} ≥
@@ -137,15 +136,6 @@ function SettingsPage() {
             ))}
           </div>
           <p className="text-xs text-muted-foreground">Dalam diamond. Bawaan: 1 / 100 / 1000. Tombol Reset di panel Gift memulai hitungan dari nol.</p>
-          <label className="block text-xs">⚡ Fast track untuk tier mulai dari
-            <select value={fastTrackTier} onChange={(e) => actions.updateSettings({ fastTrackTier: Number(e.target.value) as 0 | 1 | 2 | 3 })} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-              <option value={0}>Mati (tanpa fast track)</option>
-              <option value={1}>⭐ Supporter ke atas (semua gifter)</option>
-              <option value={2}>💎 VIP ke atas</option>
-              <option value={3}>👑 Sultan saja</option>
-            </select>
-          </label>
-          <p className="text-xs text-muted-foreground">Fast track: kiriman gifter naik ke atas Inbox dan antrean overlay, tampil dengan tanda ⚡. Tetap melewati moderasi. Pay-to-win tanpa batas.</p>
           <label className="flex items-center justify-between gap-2"><span>Notifikasi tiap gift di overlay</span>
             <input type="checkbox" className="h-4 w-4" checked={giftNotify} onChange={(e) => actions.updateSettings({ giftNotify: e.target.checked })} />
           </label>

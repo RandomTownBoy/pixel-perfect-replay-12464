@@ -31,3 +31,19 @@ describe("Audience history per gimmick", () => {
     expect(timeAgo("2025-12-31T09:00:00Z", now)).toBe("1 hari lalu");
   });
 });
+
+describe("Auto-routing & queue durations", () => {
+  it("queues only gimmicks that play on screen; cards and spin never use the queue", async () => {
+    const { QUEUE_KINDS } = await import("@/lib/cloud");
+    expect([...QUEUE_KINDS].sort()).toEqual(["chaos", "confession", "hottake", "thisorthat"]);
+    expect(QUEUE_KINDS.has("spin")).toBe(false);
+    expect(QUEUE_KINDS.has("card")).toBe(false);
+  });
+  it("uses the agreed per-gimmick display time", async () => {
+    const { queueSecondsFor } = await import("@/lib/kyoka");
+    expect(queueSecondsFor("confession")).toBe(180);
+    expect(queueSecondsFor("hottake")).toBe(120);
+    expect(queueSecondsFor("chaos")).toBe(120);
+    expect(queueSecondsFor("thisorthat")).toBe(90);
+  });
+});

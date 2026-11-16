@@ -48,8 +48,8 @@ export type Settings = {
 };
 
 /** Jendela input penonton: mana yang sedang menerima kiriman. */
-export type Intake = { spin: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean; followersOnly: boolean };
-export const DEFAULT_INTAKE: Intake = { spin: false, confession: true, thisorthat: true, hottake: true, chaos: true, followersOnly: false };
+export type Intake = { spin: boolean; card: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean; followersOnly: boolean };
+export const DEFAULT_INTAKE: Intake = { spin: false, card: true, confession: true, thisorthat: true, hottake: true, chaos: true, followersOnly: false };
 
 /** Fase Spin the Question di overlay: roda siap (standby) → berputar → berhenti di pemenang (result). */
 export type SpinPhase = "standby" | "spinning" | "result";

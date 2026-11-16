@@ -10,6 +10,7 @@ import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Che
 import { toast } from "sonner";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
+import { liveActions, useLive } from "@/lib/cloud";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -249,6 +250,17 @@ export function ThisOrThatGimmick() {
 const SHUFFLE_MS = 1200;
 export function CardGimmick() {
   const all = useKyoka((s) => s.questions);
+  const intake = useLive((s) => s.intake.card);
+  const pending = useLive((s) => s.inbox).filter((s) => s.kind === "card");
+  const [saving, setSaving] = useState<string | null>(null);
+  const saveCard = async (s: (typeof pending)[number]) => {
+    setSaving(s.id);
+    try {
+      const result = await liveActions.saveToBank(s);
+      if (result.ok) { changePack(VIEWER_CATEGORY); toast.success(result.message); }
+      else toast.error(result.message);
+    } finally { setSaving(null); }
+  };
   snap = all;
   const packs = useMemo(() => [...new Set(all.filter((q) => q.gimmick === "card").map((q) => q.category))], [all]);
   const [pack, setPack] = useState<string>("all");
@@ -307,6 +319,7 @@ export function CardGimmick() {
         </select>
         <Button variant="secondary" onClick={deal}><Shuffle /> Kocok & Bagikan</Button>
         <Button variant="live" onClick={showCards}><Tv /> Tampilkan Kartu di Overlay</Button>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={intake} onChange={(e) => void liveActions.setIntake("card", e.target.checked)} />Terima kartu penonton</label>
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {cards.map((c, i) => (
@@ -323,6 +336,19 @@ export function CardGimmick() {
         <Input placeholder="Tambah kartu ke pack…" value={newCard} onChange={(e) => setNewCard(e.target.value)} />
         <Button onClick={() => { if (actions.addQuestions([{ text: newCard, gimmick: "card", category: pack === "all" ? "Random Thoughts" : pack }])) setNewCard(""); }}><Plus /></Button>
       </div>
+      <section className="space-y-3 border-t border-border pt-4">
+        <h3 className="text-sm font-bold">🃏 Kartu penonton ({pending.length})</h3>
+        {!pending.length && <p className="text-sm text-muted-foreground">Belum ada kiriman kartu.</p>}
+        <ul className="space-y-2">
+          {pending.map((s) => <li key={s.id} className="space-y-2 rounded-lg border border-border p-3">
+            <p className="break-words text-sm">{s.content}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" disabled={saving !== null} onClick={() => void saveCard(s)}><Plus />{saving === s.id ? "Menyimpan…" : "Masukkan ke pack penonton"}</Button>
+              <Button size="sm" variant="ghost" aria-label="Tolak kartu" onClick={() => void liveActions.setStatus(s.id, "rejected")}><Trash2 /></Button>
+            </div>
+          </li>)}
+        </ul>
+      </section>
     </Panel>
   );
 }

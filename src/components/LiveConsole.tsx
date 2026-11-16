@@ -82,7 +82,7 @@ export function LiveConsole() {
   const show = (s: Submission) => sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
   const KIND_LABEL: Record<string, string> = {
     confession: "🤫 Confession", thisorthat: "⚡ This or That", hottake: "🔥 Hot Take", chaos: "🌀 3 Kata", spin: "🎡 Spin (!spin)",
-    problem: "🌀 Masalah", question: "💬 Pertanyaan",
+    problem: "🌀 Masalah", question: "💬 Pertanyaan", card: "🃏 Pick a Card",
   };
   const kindLabel = (k: string) => KIND_LABEL[k] ?? k;
   const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
@@ -96,6 +96,7 @@ export function LiveConsole() {
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
   const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id;
   const primary = (s: Submission) => {
+    if (s.kind === "card") return null;
     if (QUEUE_KINDS.has(s.kind)) {
       const queued = isQueued(s);
       return <Button size="sm" variant="live" disabled={queued} onClick={() => liveActions.enqueue(s)}><Send /> {queued ? "Dalam antrean" : "Antrekan"}</Button>;
@@ -263,7 +264,7 @@ export function LiveConsole() {
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Kiriman lewat link di bio (anonim)</p>
-                {([["confession", "Confession"], ["thisorthat", "This or That (dua pilihan)"], ["hottake", "Hot Take"], ["chaos", "Random Chaos (3 kata)"]] as [keyof Intake, string][]).map(([k, label]) => (
+                {([["confession", "Confession"], ["card", "Pick a Card"], ["thisorthat", "This or That (dua pilihan)"], ["hottake", "Hot Take"], ["chaos", "Random Chaos (3 kata)"]] as [keyof Intake, string][]).map(([k, label]) => (
                   <label key={k} className="flex items-center justify-between gap-2"><span>{label}</span>
                     <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake[k]} onChange={(e) => void liveActions.setIntake(k, e.target.checked)} />
                   </label>
@@ -323,7 +324,7 @@ export function LiveConsole() {
               </div>
               <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
                 <option value="all">Semua jenis</option>
-                {["confession", "thisorthat", "hottake", "chaos", "spin"].map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
+                {["confession", "card", "thisorthat", "hottake", "chaos", "spin"].map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
               </select>
 
               {view === "pending" && !matches(inbox).length && <p className="py-6 text-center text-muted-foreground">Belum ada kiriman. Bagikan link di atas ke penonton.</p>}

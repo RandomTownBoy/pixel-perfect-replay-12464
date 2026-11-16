@@ -34,3 +34,4 @@ use the editor.
 - Public pages (`/overlay/$token`, `/live/$code`) only use security-definer RPCs (get_overlay_state, get_audience_state, submit_audience); never grant anon table access.
 - Dashboard pages live under `_authenticated/_studio.*` (sign-in gate + shell); overlay and audience routes stay outside so they render without chrome.
 - AI calls go through `src/lib/ai.functions.ts` (auth-required server fn) → `ai.server.ts` (Lovable AI Gateway, Responses API, Kyoka persona prompt); the client sends recent bank items so the AI avoids repeats.
+- Audience card submissions use the existing moderated inbox and save-to-bank path, never the automatic overlay queue, so unrevealed card contents stay hidden until the host chooses them.

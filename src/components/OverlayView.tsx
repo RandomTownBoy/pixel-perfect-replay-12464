@@ -26,6 +26,7 @@ function guideLines(p: OverlayPayload, intake?: Intake): string[] {
     case "hottake": return ["Komen SETUJU atau TIDAK untuk vote", ...fo, ...link(it.hottake, "Kirim hot take lewat link di bio")];
     case "spin": return it.spin ? ["Ketik !spin lalu pertanyaanmu", ...fo] : [];
     case "confession": return link(it.confession, "Confess anonim lewat link di bio");
+    case "card": return link(it.card, "Kirim isi kartu lewat link di bio");
     case "chaos": return link(it.chaos, "Kirim 3 kata lewat link di bio");
     case "audience":
       return p.kind === "confession" ? link(it.confession, "Confess anonim lewat link di bio") : p.kind === "spin" ? link(it.spin, "Ketik !spin lalu pertanyaanmu") : [];

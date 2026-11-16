@@ -63,12 +63,12 @@ function scheduleVotePush() {
 }
 /** Tujuan bawaan di bagian Gimmick untuk tiap jenis kiriman penonton. */
 export const KIND_TO_GIMMICK: Record<string, GimmickId> = {
-  confession: "confession", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
+  confession: "confession", card: "card", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
 };
 /** Jenis kiriman yang tampil sebagai gelembung antrean di overlay (bukan mengganti ronde). */
 export const QUEUE_KINDS = new Set(["confession", "spin"]);
 /** Jenis kiriman yang bisa disimpan ke Question Bank. */
-export const BANKABLE_KINDS = new Set(["confession", "hottake", "spin", "thisorthat", "problem", "question"]);
+export const BANKABLE_KINDS = new Set(["confession", "card", "hottake", "spin", "thisorthat", "problem", "question"]);
 
 /* ---------- VIP gifter ---------- */
 export const TIER_BADGE = ["", "⭐", "💎", "👑"];

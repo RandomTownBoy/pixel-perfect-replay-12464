@@ -10,15 +10,17 @@ export const Route = createFileRoute("/live/$code")({
   head: () => ({
     meta: [
       { title: "Kirim ke Kyoka LIVE" },
-      { name: "description", content: "Kirim confession, usulan This or That, hot take, atau 3 kata secara anonim ke Kyoka LIVE." },
+      { name: "description", content: "Kirim isi Pick a Card, confession, usulan This or That, hot take, atau 3 kata secara anonim ke Kyoka LIVE." },
       { property: "og:title", content: "Kirim ke Kyoka LIVE" },
       { property: "og:description", content: "Kirim confession dan usulan gimmick secara anonim saat Kyoka LIVE." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Audience,
 });
 
-type KindId = "confession" | "thisorthat" | "hottake" | "chaos";
+type KindId = "confession" | "card" | "thisorthat" | "hottake" | "chaos";
 type AState = {
   live?: boolean; round?: string; mode?: string; gimmick?: string; a?: string; b?: string; title?: string;
   intake?: Partial<Record<KindId | "spin" | "followersOnly", boolean>>;
@@ -26,6 +28,7 @@ type AState = {
 
 const KINDS: { id: KindId; emoji: string; name: string; hint: string }[] = [
   { id: "confession", emoji: "🤫", name: "Confession", hint: "Pengakuan anonim. Kyoka memilih mana yang dibacakan." },
+  { id: "card", emoji: "🃏", name: "Pick a Card", hint: "" },
   { id: "thisorthat", emoji: "⚡", name: "This or That", hint: "Usul dua pilihan untuk ronde This or That." },
   { id: "hottake", emoji: "🔥", name: "Hot Take", hint: "Opini panasmu. Penonton lain vote setuju atau tidak di komentar." },
   { id: "chaos", emoji: "🌀", name: "3 Kata", hint: "Tulis 3 kata random. Kyoka bikin cerita atau solusi dari situ." },
@@ -99,7 +102,8 @@ function Audience() {
 
   if (missing) return <Center>Link LIVE tidak ditemukan.</Center>;
   if (!st) return <Center>Memuat…</Center>;
-  const cur = KINDS.find((k) => k.id === kind)!;
+  const cur = KINDS.find((k) => k.id === kind) ?? KINDS[0];
+  if (!cur) return null;
   const isClosed = closed(kind);
   const voting = st.mode === "vote";
 
@@ -114,12 +118,12 @@ function Audience() {
           : <span className="flex items-center gap-1.5 rounded-full bg-pop/20 px-2.5 py-1 text-xs font-bold text-pop"><span className="h-2 w-2 animate-pulse rounded-full bg-pop" />LIVE</span>}
       </header>
 
-      <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted p-1">
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
         {KINDS.map((k) => (
-          <button key={k.id} onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
-            className={`rounded-lg px-1 py-2 text-xs font-semibold ${kind === k.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"} ${closed(k.id) ? "opacity-50" : ""}`}>
+          <Button key={k.id} variant="ghost" onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
+            className={`h-auto flex-col gap-0 rounded-lg px-1 py-2 text-xs font-semibold ${kind === k.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"} ${closed(k.id) ? "opacity-50" : ""}`}>
             <span className="block text-base">{k.emoji}</span>{k.name}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -127,9 +131,9 @@ function Audience() {
         <p className="text-sm font-semibold">{cur.emoji} {cur.name}</p>
         <p className="text-xs text-muted-foreground">{cur.hint}</p>
 
-        {(kind === "confession" || kind === "hottake") && (
+        {(kind === "confession" || kind === "hottake" || kind === "card") && (
           <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={kind === "confession" ? 500 : 200} rows={4} disabled={isClosed}
-            placeholder={kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : "Opini panasmu…"}
+            placeholder={kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : kind === "card" ? "Pertanyaan atau tantangan untuk kartu…" : "Opini panasmu…"}
             className="w-full rounded-xl border border-input bg-background p-3 text-sm" />
         )}
         {kind === "thisorthat" && (

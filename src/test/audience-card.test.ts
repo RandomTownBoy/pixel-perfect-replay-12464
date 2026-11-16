@@ -14,3 +14,20 @@ describe("Audience cards", () => {
     expect(QUEUE_KINDS.has("card")).toBe(false);
   });
 });
+
+describe("Audience history per gimmick", () => {
+  it("maps every gimmick to the submission kinds shown in its history", async () => {
+    const { GIMMICK_KINDS } = await import("@/lib/cloud");
+    const { GIMMICKS } = await import("@/lib/kyoka");
+    for (const g of GIMMICKS) expect(GIMMICK_KINDS[g.id].length).toBeGreaterThan(0);
+    expect(GIMMICK_KINDS.card).toEqual(["card"]);
+    expect(GIMMICK_KINDS.confession).toEqual(["confession"]);
+  });
+  it("formats relative time", async () => {
+    const { timeAgo } = await import("@/components/AudienceHistory");
+    const now = Date.parse("2026-01-01T12:00:00Z");
+    expect(timeAgo("2026-01-01T11:59:50Z", now)).toBe("baru saja");
+    expect(timeAgo("2026-01-01T11:30:00Z", now)).toBe("30 mnt lalu");
+    expect(timeAgo("2025-12-31T09:00:00Z", now)).toBe("1 hari lalu");
+  });
+});

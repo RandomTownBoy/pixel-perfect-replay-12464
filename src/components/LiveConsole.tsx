@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BANKABLE_KINDS, liveActions, isFast, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
-import { actions, getSettings, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
+import { getSettings, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
   if (typeof window === "undefined" || !code) return "";
@@ -56,9 +56,7 @@ export function LiveConsole() {
   const intake = useLive((l) => l.intake);
   const followStats = useLive((l) => l.followStats);
   const [testFollower, setTestFollowerUi] = useState(true);
-  const queueSeconds = useKyoka((st) => st.settings.queueSeconds);
-  const autoQueue = useKyoka((st) => st.settings.autoQueue);
-  const vipAutoQueue = useKyoka((st) => st.settings.vipAutoQueue);
+  const queuePaused = useLive((l) => l.queuePaused);
   const [view, setView] = useState<"pending" | "review" | "history">("pending");
   const [kindFilter, setKindFilter] = useState("all");
   const [testText, setTestText] = useState("");
@@ -100,9 +98,6 @@ export function LiveConsole() {
     if (QUEUE_KINDS.has(s.kind)) {
       const queued = isQueued(s);
       return <Button size="sm" variant="live" disabled={queued} onClick={() => liveActions.enqueue(s)}><Send /> {queued ? "Dalam antrean" : "Antrekan"}</Button>;
-    }
-    if (s.kind === "thisorthat" || s.kind === "hottake" || s.kind === "chaos") {
-      return <Button size="sm" variant="live" onClick={() => { if (!liveActions.startRound(s)) toast.error("Isi kiriman tidak valid untuk dijadikan ronde."); }}><Send /> {s.kind === "chaos" ? "Jadikan cerita" : "Jadikan ronde"}</Button>;
     }
     return <Button size="sm" variant="live" onClick={() => { show(s); void liveActions.setStatus(s.id, "shown"); }}><Send /> Tampilkan</Button>;
   };
@@ -201,7 +196,7 @@ export function LiveConsole() {
                   {liveActions.topGifters(5).map((g, i) => <li key={g.user_id} className="flex justify-between gap-2"><span className="truncate">{i + 1}. {TIER_BADGE[tierFor(g.diamonds)]} @{g.nickname}</span><span className="text-muted-foreground">{g.diamonds} 💎 · {TIER_NAME[tierFor(g.diamonds)]}</span></li>)}
                 </ol>
               </div>
-              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). VIP: kiriman mereka (komentar !spin, atau kiriman link yang diverifikasi lewat komentar !fast KODE) lewat jalur fast track: didahulukan dan tampil dengan lencana. Atur batas tier di Settings.</p>
+              <p className="text-xs text-muted-foreground">Tap saat gift masuk di TikTok (kalau konektor belum dipakai). Gift dicatat untuk Top Gifter dan lencana tier (atur batas tier di Settings).</p>
             </div>
           )}
 
@@ -277,11 +272,11 @@ export function LiveConsole() {
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.spin} onChange={(e) => void liveActions.setIntake("spin", e.target.checked)} />
                 </label>
                 {intake.spin && onAir?.id !== "spin" && <p className="text-xs text-pop">Input spin terbuka, tapi gimmick Spin belum tayang.</p>}
-                {intake.spin && onAir?.id === "spin" && <p className="text-xs text-muted-foreground">Komentar !spin yang bersih otomatis masuk ke roda yang sedang tayang.</p>}
+                {intake.spin && onAir?.id === "spin" && <p className="text-xs text-muted-foreground">Komentar !spin bersih otomatis masuk roda (maks. 10 irisan); kalau penuh, disimpan ke Question Bank.</p>}
                 <label className="flex items-center justify-between gap-2"><span>🔒 Komentar hanya dari <b>follower</b></span>
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.followersOnly} onChange={(e) => void liveActions.setIntake("followersOnly", e.target.checked)} />
                 </label>
-                {intake.followersOnly && <p className="text-xs text-muted-foreground">Berlaku untuk vote, !spin, dan !fast. Komentar non-follower tetap tampil di Feed, tapi tidak dihitung. Gift tidak difilter.</p>}
+                {intake.followersOnly && <p className="text-xs text-muted-foreground">Berlaku untuk vote dan !spin. Komentar non-follower tetap tampil di Feed, tapi tidak dihitung. Gift tidak difilter.</p>}
                 {intake.followersOnly && followStats.unknown >= 5 && followStats.known === 0 && (
                   <p className="rounded-lg bg-destructive/15 p-2 text-xs text-pop">⚠️ Status follower tidak terbaca dari TikTok, jadi semua komentar dianggap non-follower dan ditolak. Perbarui konektor ke v1.2 atau matikan opsi ini.</p>
                 )}
@@ -290,24 +285,15 @@ export function LiveConsole() {
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Antrean overlay</p>
-                <label className="block text-xs">Tiap item tampil {queueSeconds} detik
-                  <input type="range" min={3} max={30} value={queueSeconds} onChange={(e) => actions.updateSettings({ queueSeconds: Number(e.target.value) })} className="mt-1 w-full" />
-                </label>
-                <label className="flex items-center justify-between gap-2"><span>Otomatis antrekan yang cocok dengan gimmick tayang</span>
-                  <input type="checkbox" className="h-4 w-4" checked={autoQueue} onChange={(e) => actions.updateSettings({ autoQueue: e.target.checked })} />
-                </label>
-                <label className="flex items-center justify-between gap-2"><span>⚡ Fast track otomatis masuk antrean</span>
-                  <input type="checkbox" className="h-4 w-4" checked={vipAutoQueue} onChange={(e) => actions.updateSettings({ vipAutoQueue: e.target.checked })} />
-                </label>
-                {(autoQueue || vipAutoQueue) && <p className="text-xs text-muted-foreground">Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>}
-                {nowShowing && <p className="rounded-lg bg-card p-2 text-xs">Tampil: {body(nowShowing)}</p>}
+                <p className="text-xs text-muted-foreground">Kiriman bersih yang cocok dengan gimmick tayang masuk antrean otomatis; jenis lain langsung disimpan ke Question Bank. Lama tampil: Confession 3 mnt · Hot Take 2 mnt · Random Chaos 2 mnt · This or That 1,5 mnt. Antrean habis → layar tetap di kiriman terakhir. Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>
+                {nowShowing && <p className="rounded-lg bg-card p-2 text-xs">{queuePaused ? "⏸️ Ditahan" : "Tampil"}: {body(nowShowing)}</p>}
                 {queue.length > 0 && <ul className="max-h-24 space-y-1 overflow-auto text-xs text-muted-foreground">{queue.map((q, i) => <li key={q.id}>{i + 1}. {body(q)}</li>)}</ul>}
-                {(nowShowing || queue.length > 0) && (
-                  <div className="flex gap-1.5">
-                    <Button size="sm" variant="secondary" onClick={liveActions.skipQueue}>Lewati</Button>
-                    <Button size="sm" variant="ghost" onClick={liveActions.clearQueue}>Kosongkan</Button>
-                  </div>
-                )}
+                {!nowShowing && queue.length === 0 && <p className="text-xs text-muted-foreground">Antrean kosong.</p>}
+                <div className="flex flex-wrap gap-1.5">
+                  <Button size="sm" variant="secondary" disabled={!nowShowing} onClick={queuePaused ? liveActions.resumeQueue : liveActions.pauseQueue}>{queuePaused ? "▶️ Lanjutkan timer" : "⏸️ Tahan"}</Button>
+                  <Button size="sm" variant="secondary" disabled={!nowShowing && queue.length === 0} onClick={liveActions.skipQueue}>⏭️ Lanjut</Button>
+                  {queue.length > 0 && <Button size="sm" variant="ghost" onClick={liveActions.clearQueue}>Kosongkan antrean</Button>}
+                </div>
               </div>
             </div>
           )}

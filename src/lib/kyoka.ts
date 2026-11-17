@@ -104,6 +104,8 @@ export type OverlayState = {
   accent: Settings["accent"]; textScale: number; sound: boolean; showTitle: boolean; showBadge: boolean;
   intake?: Intake | undefined;
   guidePos?: Settings["guidePosition"] | undefined;
+  /** Hanya ada selama masih ada kiriman yang menunggu giliran: overlay menggambar garis loading kiri→kanan selama item ini tayang. */
+  queue?: { pending: number; ms: number; startedAt: number; pausedAt?: number | undefined } | undefined;
 };
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
@@ -401,6 +403,11 @@ function syncSpinWheel() {
 export function setOverlayVisible(visible: boolean) {
   pushOverlay({ ...readOverlay(), visible });
   actions.log(visible ? "Overlay ditampilkan" : "Overlay disembunyikan");
+}
+export function setOverlayQueue(queue: OverlayState["queue"]) {
+  const o = { ...readOverlay() };
+  if (queue) o.queue = queue; else delete o.queue;
+  pushOverlay(o);
 }
 export function showBanner(text: string) {
   pushOverlay({ ...readOverlay(), banner: { text, at: Date.now() } });

@@ -5,7 +5,7 @@ import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
+  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 
@@ -137,6 +137,19 @@ function pushBanner(text: string) {
 let queueTimer: TimerHandle | null = null;
 let queueDeadline = 0;
 let queueLeft = 0;
+let queueMs = 0;
+let queueStartedAt = 0;
+/**
+ * Kirim ke overlay info garis loading antrean. Aktif hanya kalau ada item tayang DAN masih ada yang menunggu;
+ * begitu antrean habis (item terakhir) info dihapus sehingga garis berhenti dan tidak mengulang.
+ */
+function syncQueueOverlay() {
+  if (!live.nowShowing || live.queue.length === 0 || !queueMs) {
+    if (readOverlay().queue) setOverlayQueue(undefined);
+    return;
+  }
+  setOverlayQueue({ pending: live.queue.length, ms: queueMs, startedAt: queueStartedAt, ...(live.queuePaused ? { pausedAt: Date.now() } : {}) });
+}
 /** payloadAt overlay milik item antrean yang sedang tayang. Kalau berubah, host mengganti gimmick sendiri. */
 let shownAt = 0;
 let presenting = false;
@@ -173,7 +186,7 @@ function present(s: Submission): boolean {
 function queueTick() {
   queueTimer = null;
   const next = live.queue[0];
-  if (!next) { setLive({ nowShowing: null, queuePaused: false }); return; }
+  if (!next) { setLive({ nowShowing: null, queuePaused: false }); syncQueueOverlay(); return; }
   setLive({ queue: live.queue.slice(1), nowShowing: next, queuePaused: false });
   presenting = true;
   let ok = false;
@@ -183,13 +196,16 @@ function queueTick() {
   void liveActions.setStatus(next.id, "shown");
   const ms = queueSecondsFor(next.kind) * 1000;
   queueDeadline = Date.now() + ms;
+  queueMs = ms; queueStartedAt = Date.now();
   queueTimer = startTimer(queueTick, ms);
+  syncQueueOverlay();
 }
 /** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, otomatis disimpan ke Question Bank. */
 function abandonQueue() {
   stopTimer(queueTimer); queueTimer = null;
   const rest = live.queue;
   setLive({ queue: [], nowShowing: null, queuePaused: false });
+  syncQueueOverlay();
   for (const s of rest) void liveActions.saveToBank(s);
   if (rest.length) toast(`${rest.length} kiriman yang antre disimpan ke Question Bank`);
 }
@@ -255,7 +271,7 @@ export const liveActions = {
     if (!QUEUE_KINDS.has(s.kind) || s.flagged || s.status === "review") return false;
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
     setLive({ queue: [...live.queue, s] });
-    if (!queueTimer && !live.nowShowing) queueTick();
+    if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
     return true;
   },
   /** ⏸️ Tahan: bekukan timer item yang sedang tampil. */
@@ -264,6 +280,7 @@ export const liveActions = {
     stopTimer(queueTimer); queueTimer = null;
     queueLeft = Math.max(1000, queueDeadline - Date.now());
     setLive({ queuePaused: true });
+    syncQueueOverlay();
   },
   /** ▶️ Lanjutkan timer yang ditahan. */
   resumeQueue() {
@@ -271,6 +288,8 @@ export const liveActions = {
     setLive({ queuePaused: false });
     queueDeadline = Date.now() + queueLeft;
     queueTimer = startTimer(queueTick, queueLeft);
+    queueStartedAt = Date.now() - (queueMs - queueLeft);
+    syncQueueOverlay();
   },
   /** Untuk uji: apakah penguji dianggap follower. */
   setTestFollower(v: boolean) { testFollower = v; },
@@ -290,7 +309,7 @@ export const liveActions = {
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
     setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
-    delete o.banner;
+    delete o.banner; delete o.queue;
     pushOverlay({ ...o, visible: false });
     actions.log("🚨 Panik: overlay disembunyikan dan antrean dikosongkan");
   },

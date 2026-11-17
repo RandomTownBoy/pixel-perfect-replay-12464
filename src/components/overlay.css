@@ -122,12 +122,14 @@
 .ov-root[data-wide] .ov-spin-side { flex: 1; }
 .ov-root[data-wide] .ov-spin .ov-wheelwrap { flex: none; width: 11em; }
 .ov-root[data-wide] .ov-spin.dense .ov-wheelwrap { width: 10.5em; }
-.ov-root[data-wide] .ov-spin.res .ov-wheelwrap, .ov-root[data-wide] .ov-spin.res.dense .ov-wheelwrap { width: 7.5em; }
+.ov-root[data-wide] .ov-spin.res .ov-wheelwrap, .ov-root[data-wide] .ov-spin.res.dense .ov-wheelwrap { width: 7em; }
 /* hasil: roda kecil di kiri, pertanyaan di kanan (bukan di bawah), jadi kartu tidak memanjang dan tidak perlu diperkecil */
 .ov-root[data-wide] .ov-spin.res .ov-items { display: none; }
 .ov-root[data-wide] .ov-spin.res .ov-spin-main { align-items: center; }
 .ov-root[data-wide] .ov-spin .ov-result { padding: 0.55em 0.7em; }
-.ov-root[data-wide] .ov-spin .ov-result .ov-quote { font-size: 1.05em !important; }
+.ov-root[data-wide] .ov-spin.res .ov-spin-side { display: flex; flex-direction: column; justify-content: center; }
+.ov-root[data-wide] .ov-spin.res .ov-result { padding: 0.7em 0.8em; }
+.ov-root[data-wide] .ov-spin.res .ov-result .ov-quote { font-size: 1.3em !important; line-height: 1.2; }
 .ov-root[data-wide] .ov-spin .ov-items, .ov-root[data-wide] .ov-spin .ov-items.two { grid-template-columns: 1fr; font-size: 0.8em; gap: 0.25em; }
 .ov-root[data-wide] .ov-spin .ov-items.many { grid-template-columns: 1fr 1fr; font-size: 0.62em; }
 .ov-root[data-wide] .ov-spin.res .ov-items.many { grid-template-columns: 1fr; font-size: 0.8em; }

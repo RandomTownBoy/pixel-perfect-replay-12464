@@ -379,14 +379,14 @@ function SpinStage({ p }: { p: SpinPayload }) {
               ))}
             </ol>
           )}
+          {phase === "result" && p.question && (
+            <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
+              <Quote text={p.question} max={1.5} />
+            </div>
+          )}
         </div>
       </div>
       {phase === "spinning" && <span className="ov-muted">Memutar…</span>}
-      {phase === "result" && p.question && (
-        <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
-          <Quote text={p.question} max={1.5} />
-        </div>
-      )}
     </div>
   );
 }

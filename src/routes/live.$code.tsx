@@ -20,13 +20,14 @@ export const Route = createFileRoute("/live/$code")({
   component: Audience,
 });
 
-type KindId = "confession" | "card" | "thisorthat" | "hottake" | "chaos";
+type KindId = "confession" | "card" | "thisorthat" | "hottake" | "chaos" | "question";
 type AState = {
   live?: boolean; round?: string; mode?: string; gimmick?: string; a?: string; b?: string; title?: string;
   intake?: Partial<Record<KindId | "spin" | "followersOnly", boolean>>;
 };
 
 const KINDS: { id: KindId; emoji: string; name: string; hint: string }[] = [
+  { id: "question", emoji: "🎡", name: "Spin Question", hint: "Kirim pertanyaan untuk masuk antrean roda Spin the Question." },
   { id: "confession", emoji: "🤫", name: "Confession", hint: "Pengakuan anonim. Kyoka memilih mana yang dibacakan." },
   { id: "card", emoji: "🃏", name: "Pick a Card", hint: "" },
   { id: "thisorthat", emoji: "⚡", name: "This or That", hint: "Usul dua pilihan untuk ronde This or That." },
@@ -64,7 +65,7 @@ function Audience() {
     return () => { supabase.removeChannel(ch); };
   }, [code]);
 
-  const closed = (k: KindId) => st?.intake?.[k] === false;
+  const closed = (k: KindId) => st?.intake?.[k === "question" ? "spin" : k] === false;
 
   const buildContent = (): string | null => {
     if (kind === "thisorthat") {
@@ -97,7 +98,7 @@ function Audience() {
     setText(""); setPa(""); setPb(""); setW(["", "", ""]);
     const vcode = typeof data === "string" ? data : "";
     setSent({ code: vcode, kind });
-    toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : "Terkirim ke Kyoka!");
+    toast.success(kind === "confession" ? "Terkirim, aman dan anonim 🤫" : kind === "question" ? "Pertanyaan terkirim ke antrean Spin! 🎡" : "Terkirim ke Kyoka!");
   };
 
   if (missing) return <Center>Link LIVE tidak ditemukan.</Center>;
@@ -131,9 +132,9 @@ function Audience() {
         <p className="text-sm font-semibold">{cur.emoji} {cur.name}</p>
         <p className="text-xs text-muted-foreground">{cur.hint}</p>
 
-        {(kind === "confession" || kind === "hottake" || kind === "card") && (
-          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={kind === "confession" ? 500 : 200} rows={4} disabled={isClosed}
-            placeholder={kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : kind === "card" ? "Pertanyaan atau tantangan untuk kartu…" : "Opini panasmu…"}
+        {(kind === "question" || kind === "confession" || kind === "hottake" || kind === "card") && (
+          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={kind === "confession" ? 500 : kind === "question" ? 280 : 200} rows={4} disabled={isClosed}
+            placeholder={kind === "question" ? "Tulis pertanyaan yang ingin kamu masukkan ke roda…" : kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : kind === "card" ? "Pertanyaan atau tantangan untuk kartu…" : "Opini panasmu…"}
             className="w-full rounded-xl border border-input bg-background p-3 text-sm" />
         )}
         {kind === "thisorthat" && (
@@ -165,7 +166,7 @@ function Audience() {
           {voting && st.gimmick !== "hottake" && <li>🗳️ Vote: komen <b className="text-foreground">A</b> ({st.a}) atau <b className="text-foreground">B</b> ({st.b})</li>}
           {!voting && <li>🗳️ Vote This or That dan Hot Take dibuka saat gimmick-nya tayang.</li>}
           {st.intake?.followersOnly && <li>🔒 Komentar hanya dihitung dari <b className="text-foreground">follower</b>. Follow dulu ya.</li>}
-          <li>🎡 Pertanyaan spin: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(dibuka saat Spin dimainkan)"}</li>
+          <li>🎡 Komentar TikTok: ketik <b className="text-foreground">!spin pertanyaanmu</b> {st.intake?.spin ? <b className="text-success">(sedang dibuka)</b> : "(sedang ditutup)"}</li>
         </ul>
       </div>
     </div>

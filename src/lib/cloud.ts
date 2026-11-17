@@ -5,7 +5,7 @@ import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
+  OUTRO_MS, queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayOutro, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 import { getLockedDecks, pickViewerDeck } from "@/lib/decks";
@@ -194,10 +194,26 @@ function present(s: Submission): boolean {
   return true;
 }
 /** Item berikutnya tampil dan bertahan sesuai durasi gimmick-nya. Antrean habis: layar tetap di item terakhir (tidak kembali ke gimmick sebelumnya). */
-function queueTick() {
+let outroing = false;
+function queueTick(skipOutro = false) {
   queueTimer = null;
+  outroing = false;
+  const cur = live.nowShowing;
+  const ov = readOverlay();
+  // Waktu tayang item habis (bukan dilewati manual): mainkan animasi penutup dulu, baru lanjut ke item berikutnya.
+  // Hanya kalau overlay memang masih menampilkan item ini (host belum menggantinya) dan overlay tidak disembunyikan.
+  if (!skipOutro && cur && ov.visible && ov.payloadAt === shownAt) {
+    outroing = true;
+    setOverlayOutro({ at: Date.now(), ms: OUTRO_MS, votes: totalVotes(live), fade: live.queue.length === 0 && cur.kind !== "thisorthat" });
+    queueTimer = startTimer(() => queueTick(true), OUTRO_MS);
+    syncQueueOverlay();
+    return;
+  }
   const next = live.queue[0];
-  if (!next) { setLive({ nowShowing: null, queuePaused: false }); syncQueueOverlay(); return; }
+  if (!next) {
+    if (ov.outro?.fade) setOverlayOutro(undefined);
+    setLive({ nowShowing: null, queuePaused: false }); syncQueueOverlay(); return;
+  }
   setLive({ queue: live.queue.slice(1), nowShowing: next, queuePaused: false });
   presenting = true;
   let ok = false;
@@ -208,7 +224,7 @@ function queueTick() {
   const ms = queueSecondsFor(next.kind) * 1000;
   queueDeadline = Date.now() + ms;
   queueMs = ms; queueStartedAt = Date.now();
-  queueTimer = startTimer(queueTick, ms);
+  queueTimer = startTimer(() => queueTick(), ms);
   syncQueueOverlay();
 }
 /** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, kembali menunggu di Inbox. */
@@ -384,7 +400,7 @@ export const liveActions = {
   },
   /** ⏸️ Tahan: bekukan timer item yang sedang tampil. */
   pauseQueue() {
-    if (!queueTimer) return;
+    if (!queueTimer || outroing) return;
     stopTimer(queueTimer); queueTimer = null;
     queueLeft = Math.max(1000, queueDeadline - Date.now());
     setLive({ queuePaused: true });
@@ -395,7 +411,7 @@ export const liveActions = {
     if (!live.queuePaused) return;
     setLive({ queuePaused: false });
     queueDeadline = Date.now() + queueLeft;
-    queueTimer = startTimer(queueTick, queueLeft);
+    queueTimer = startTimer(() => queueTick(), queueLeft);
     queueStartedAt = Date.now() - (queueMs - queueLeft);
     syncQueueOverlay();
   },
@@ -417,14 +433,14 @@ export const liveActions = {
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
     setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
-    delete o.banner; delete o.queue;
+    delete o.banner; delete o.queue; delete o.outro;
     pushOverlay({ ...o, visible: false });
     actions.log("🚨 Panik: overlay disembunyikan dan antrean dikosongkan");
   },
   unpanic() { setOverlayVisible(true); },
   /** ⏭️ Lanjut: langsung ke item berikutnya tanpa menunggu waktu habis. */
-  skipQueue() { stopTimer(queueTimer); queueTimer = null; queueTick(); },
-  clearQueue() { stopTimer(queueTimer); queueTimer = null; setLive({ queue: [] }); queueTick(); },
+  skipQueue() { stopTimer(queueTimer); queueTimer = null; queueTick(true); },
+  clearQueue() { stopTimer(queueTimer); queueTimer = null; setLive({ queue: [] }); queueTick(true); },
   /** Jadikan kiriman penonton sebagai ronde/cerita (This or That, Hot Take, Random Chaos). Mengganti tampilan overlay. */
   startRound(s: Submission): boolean {
     const text = (s.content ?? "").trim();

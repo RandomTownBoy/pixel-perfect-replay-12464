@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { clampInt, LIMITS } from "@/lib/limits";
 
 export type GimmickId = "spin" | "thisorthat" | "card" | "hottake" | "confession" | "chaos";
 
@@ -53,7 +54,10 @@ export type Settings = {
   spinSlices: number;
   /** Moderasi pertanyaan Spin: otomatis atau ditahan untuk persetujuan host. */
   spinModeration: "auto" | "manual";
+  /** Lama tiap kiriman penonton tampil di overlay (detik) per gimmick. Batas atas = QUEUE_SECONDS, batas bawah = LIMITS.queueMinSeconds. */
+  queueDurations: Record<QueueKind, number>;
 };
+export type QueueKind = "confession" | "hottake" | "chaos" | "thisorthat";
 
 /** Jendela input penonton: mana yang sedang menerima kiriman. */
 export type Intake = { spin: boolean; card: boolean; confession: boolean; thisorthat: boolean; hottake: boolean; chaos: boolean; followersOnly: boolean };
@@ -93,8 +97,15 @@ export type CardPayload = Extract<OverlayPayload, { gimmick: "card" }>;
 /** Jumlah item maksimal di roda, durasi & easing putaran (sama di dashboard dan overlay). */
 export const SPIN_WHEEL_MAX = 300;
 /** Lama tiap kiriman penonton tampil di overlay (detik), menurut jenis gimmick. Host bisa menahan atau melompat lewat tombol di Kontrol. */
-export const QUEUE_SECONDS: Record<string, number> = { confession: 180, hottake: 120, chaos: 120, thisorthat: 90 };
-export const queueSecondsFor = (kind: string) => QUEUE_SECONDS[kind] ?? 120;
+/** Durasi tayang maksimum (dan bawaan) tiap gimmick. Host boleh menguranginya di Settings, tidak boleh melebihinya. */
+export const QUEUE_SECONDS: Record<QueueKind, number> = { confession: 180, hottake: 120, chaos: 120, thisorthat: 90 };
+export const QUEUE_KIND_LIST: QueueKind[] = ["confession", "hottake", "chaos", "thisorthat"];
+/** Durasi tayang (detik) yang berlaku untuk satu jenis kiriman: pengaturan host, dijepit antara batas bawah dan QUEUE_SECONDS. */
+export const queueSecondsFor = (kind: string) => {
+  const max = (QUEUE_SECONDS as Record<string, number>)[kind] ?? 120;
+  const set = (getSettings().queueDurations as Partial<Record<string, number>> | undefined)?.[kind];
+  return clampInt(set, Math.min(LIMITS.queueMinSeconds, max), max, max);
+};
 export const SPIN_DURATION_MS = 3500;
 export const SPIN_EASING = "cubic-bezier(.15,.85,.2,1)";
 /** Isi roda untuk satu kategori: sumber tunggal dipakai dashboard, overlay, dan sinkronisasi otomatis. */
@@ -116,7 +127,21 @@ export type OverlayState = {
   guidePos?: Settings["guidePosition"] | undefined;
   /** Hanya ada selama masih ada kiriman yang menunggu giliran: overlay menggambar garis loading kiri→kanan selama item ini tayang. */
   queue?: { pending: number; ms: number; startedAt: number; pausedAt?: number | undefined } | undefined;
+  /**
+   * Animasi penutup: waktu tayang item antrean habis, overlay memainkan animasi sesuai gimmick (setuju/tidak, pemenang pilihan,
+   * segel rahasia, pusaran chaos) sebelum item berikutnya tampil. Dihapus otomatis saat payload baru dikirim.
+   */
+  outro?: Outro | undefined;
 };
+export type Outro = {
+  at: number; ms: number;
+  /** Suara yang dibekukan saat animasi mulai, supaya hasilnya tidak berubah-ubah selama animasi. */
+  votes?: { a: number; b: number } | undefined;
+  /** True kalau ini item terakhir: lapisan animasi memudar di akhir (kalau tidak, item berikutnya langsung menggantikan). */
+  fade?: boolean | undefined;
+};
+/** Lama animasi penutup di overlay (ms) sebelum lanjut ke item antrean berikutnya. */
+export const OUTRO_MS = 3600;
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
 
@@ -207,7 +232,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto",
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -218,6 +243,49 @@ const defaultState: State = {
   },
 };
 
+/**
+ * Jepit semua pengaturan numerik ke batas yang masuk akal (tidak minus, tidak melebihi kapasitas, urutan tier benar).
+ * Dipakai setiap kali pengaturan berubah atau dimuat (localStorage / database), jadi data lama yang rusak pun ikut dibetulkan.
+ * Mengembalikan objek yang sama kalau tidak ada yang berubah (supaya tidak memicu penyimpanan ulang).
+ */
+export function normalizeSettings(s: Settings): Settings {
+  const d = defaultState.settings;
+  const patch: Partial<Settings> = {};
+  const spinCapacity = clampInt(s.spinCapacity, LIMITS.spin.min, LIMITS.spin.max, d.spinCapacity);
+  // Irisan roda tidak boleh melebihi kapasitas.
+  const spinSlices = clampInt(s.spinSlices, LIMITS.spin.min, Math.min(LIMITS.spin.max, spinCapacity), Math.min(d.spinSlices, spinCapacity));
+  if (spinCapacity !== s.spinCapacity) patch.spinCapacity = spinCapacity;
+  if (spinSlices !== s.spinSlices) patch.spinSlices = spinSlices;
+  const countdown = clampInt(s.countdown, LIMITS.countdown.min, LIMITS.countdown.max, d.countdown);
+  if (countdown !== s.countdown) patch.countdown = countdown;
+  const ow = clampInt(s.overlayWidth, LIMITS.overlaySize.min, LIMITS.overlaySize.max, d.overlayWidth);
+  const oh = clampInt(s.overlayHeight, LIMITS.overlaySize.min, LIMITS.overlaySize.max, d.overlayHeight);
+  if (ow !== s.overlayWidth) patch.overlayWidth = ow;
+  if (oh !== s.overlayHeight) patch.overlayHeight = oh;
+  const ts = Number.isFinite(Number(s.textScale)) ? Math.round(Math.min(LIMITS.textScale.max, Math.max(LIMITS.textScale.min, Number(s.textScale))) * 10) / 10 : d.textScale;
+  if (ts !== s.textScale) patch.textScale = ts;
+  // Tier VIP harus naik: Supporter < VIP < Sultan.
+  const [a0, b0, c0] = Array.isArray(s.vipTiers) ? s.vipTiers : d.vipTiers;
+  const t1 = clampInt(a0, LIMITS.vipDiamonds.min, LIMITS.vipDiamonds.max, d.vipTiers[0]);
+  const t2 = clampInt(b0, t1 + 1, LIMITS.vipDiamonds.max + 1, Math.max(d.vipTiers[1], t1 + 1));
+  const t3 = clampInt(c0, t2 + 1, LIMITS.vipDiamonds.max + 2, Math.max(d.vipTiers[2], t2 + 1));
+  if (!Array.isArray(s.vipTiers) || s.vipTiers[0] !== t1 || s.vipTiers[1] !== t2 || s.vipTiers[2] !== t3) patch.vipTiers = [t1, t2, t3];
+  // Durasi antrean: min LIMITS.queueMinSeconds, maks QUEUE_SECONDS.
+  const qd = {} as Record<QueueKind, number>;
+  let qdChanged = !s.queueDurations;
+  for (const k of QUEUE_KIND_LIST) {
+    const max = QUEUE_SECONDS[k];
+    qd[k] = clampInt(s.queueDurations?.[k], Math.min(LIMITS.queueMinSeconds, max), max, max);
+    if (s.queueDurations?.[k] !== qd[k]) qdChanged = true;
+  }
+  if (qdChanged) patch.queueDurations = qd;
+  // Bobot gift (suara) minimal 1.
+  if (Array.isArray(s.giftRules) && s.giftRules.some((r) => clampInt(r.weight, LIMITS.giftWeight.min, LIMITS.giftWeight.max, 1) !== r.weight)) {
+    patch.giftRules = s.giftRules.map((r) => ({ ...r, weight: clampInt(r.weight, LIMITS.giftWeight.min, LIMITS.giftWeight.max, 1) }));
+  }
+  return Object.keys(patch).length ? { ...s, ...patch } : s;
+}
+
 let state: State = defaultState;
 let loaded = false;
 const listeners = new Set<() => void>();
@@ -227,7 +295,7 @@ function load() {
   loaded = true;
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) state = { ...defaultState, ...JSON.parse(raw), settings: { ...defaultState.settings, ...JSON.parse(raw).settings } };
+    if (raw) { const j = JSON.parse(raw); state = { ...defaultState, ...j, settings: normalizeSettings({ ...defaultState.settings, ...j.settings }) }; }
   } catch { /* ignore */ }
 }
 
@@ -237,6 +305,7 @@ function setState(fn: (s: State) => State) {
   load();
   const prev = state;
   state = fn(state);
+  if (state.settings !== prev.settings) { const n = normalizeSettings(state.settings); if (n !== state.settings) state = { ...state, settings: n }; }
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
   listeners.forEach((l) => l());
   if (prev.questions !== state.questions) syncSpinWheel();
@@ -395,7 +464,7 @@ export function pushOverlay(next: OverlayState) {
 const overlayListeners = new Set<() => void>();
 export function sendToOverlay(payload: OverlayPayload) {
   const o = readOverlay();
-  pushOverlay({ ...o, payload, visible: true, payloadAt: Date.now(), votes: undefined });
+  pushOverlay({ ...o, payload, visible: true, payloadAt: Date.now(), votes: undefined, outro: undefined });
   const g = GIMMICKS.find((x) => x.id === payload.gimmick);
   actions.log(`Overlay: ${g?.name ?? payload.gimmick} dikirim`);
 }
@@ -428,6 +497,11 @@ function syncSpinWheel() {
 export function setOverlayVisible(visible: boolean) {
   pushOverlay({ ...readOverlay(), visible });
   actions.log(visible ? "Overlay ditampilkan" : "Overlay disembunyikan");
+}
+export function setOverlayOutro(outro: Outro | undefined) {
+  const o = { ...readOverlay() };
+  if (outro) o.outro = outro; else delete o.outro;
+  pushOverlay(o);
 }
 export function setOverlayQueue(queue: OverlayState["queue"]) {
   const o = { ...readOverlay() };

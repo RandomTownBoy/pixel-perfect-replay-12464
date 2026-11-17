@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { clampInt, LIMITS } from "@/lib/limits";
 
 export type AiTask = "generate" | "improve" | "followup" | "remix" | "thisorthat" | "hottake" | "words" | "problem";
 type Input = { task: AiTask; gimmick: string; category: string; count: number; text: string; style: string; avoid: string[] };
@@ -14,7 +15,7 @@ const GIMMICK_HINT: Record<string, string> = {
 };
 
 function buildPrompt(d: Input) {
-  const n = Math.min(Math.max(d.count || 5, 1), 15);
+  const n = clampInt(d.count, LIMITS.aiCount.min, LIMITS.aiCount.max, 5);
   const avoid = d.avoid.slice(0, 60).map((a) => `- ${a}`).join("\n");
   const avoidBlock = avoid ? `\n\nJANGAN mengulang atau membuat yang mirip dengan ini:\n${avoid}` : "";
   switch (d.task) {

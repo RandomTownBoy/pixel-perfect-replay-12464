@@ -138,3 +138,26 @@
 .flip-inner.flipped { transform: rotateY(180deg); }
 .flip-face { backface-visibility: hidden; position: absolute; inset: 0; }
 .flip-back { transform: rotateY(180deg); }
+
+/* Scrollbar bertema: tipis, membulat, warna mengikuti tema (dipakai di panel Inbox dan daftar yang bisa digulir). */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 55%, transparent) transparent;
+}
+.scroll-slim::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-slim::-webkit-scrollbar-track { background: transparent; margin: 6px 0; }
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--primary) 45%, transparent);
+  border-radius: 999px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--primary) 75%, transparent); }
+.scroll-slim::-webkit-scrollbar-corner { background: transparent; }
+
+/* Baris chip yang bisa digeser tanpa scrollbar; tepi kanan memudar sebagai petunjuk masih ada isi. */
+.chip-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.chip-scroll::-webkit-scrollbar { display: none; }

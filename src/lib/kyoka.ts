@@ -47,6 +47,12 @@ export type Settings = {
   autoApproveCards: boolean;
   /** Alamat publik untuk link penonton (mis. https://situsmu.lovable.app). Kosong = pakai alamat halaman ini. */
   publicUrl: string;
+  /** Kapasitas pertanyaan penonton yang belum digunakan. */
+  spinCapacity: number;
+  /** Jumlah pertanyaan aktif yang ditampilkan sebagai irisan roda. */
+  spinSlices: number;
+  /** Moderasi pertanyaan Spin: otomatis atau ditahan untuk persetujuan host. */
+  spinModeration: "auto" | "manual";
 };
 
 /** Jendela input penonton: mana yang sedang menerima kiriman. */
@@ -85,15 +91,17 @@ export type SpinPayload = Extract<OverlayPayload, { gimmick: "spin" }>;
 export type CardPayload = Extract<OverlayPayload, { gimmick: "card" }>;
 
 /** Jumlah item maksimal di roda, durasi & easing putaran (sama di dashboard dan overlay). */
-export const SPIN_WHEEL_MAX = 10;
+export const SPIN_WHEEL_MAX = 300;
 /** Lama tiap kiriman penonton tampil di overlay (detik), menurut jenis gimmick. Host bisa menahan atau melompat lewat tombol di Kontrol. */
 export const QUEUE_SECONDS: Record<string, number> = { confession: 180, hottake: 120, chaos: 120, thisorthat: 90 };
 export const queueSecondsFor = (kind: string) => QUEUE_SECONDS[kind] ?? 120;
 export const SPIN_DURATION_MS = 3500;
 export const SPIN_EASING = "cubic-bezier(.15,.85,.2,1)";
 /** Isi roda untuk satu kategori: sumber tunggal dipakai dashboard, overlay, dan sinkronisasi otomatis. */
-export function spinPoolOf(qs: Question[], category: string): Question[] {
-  return qs.filter((q) => q.gimmick === "spin" && q.category === category && !q.used).slice(0, SPIN_WHEEL_MAX);
+export function spinPoolOf(qs: Question[], category: string, limit = SPIN_WHEEL_MAX): Question[] {
+  const available = qs.filter((q) => q.gimmick === "spin" && q.category === category && !q.used);
+  if (category === VIEWER_CATEGORY) available.sort((a, b) => a.createdAt - b.createdAt);
+  return available.slice(0, Math.max(1, Math.min(SPIN_WHEEL_MAX, limit)));
 }
 
 export type GiftRule = { id: string; name: string; emoji: string; effect: "vote" | "shoutout"; weight: number; reward: string };
@@ -199,7 +207,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "",
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto",
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -410,7 +418,7 @@ function syncSpinWheel() {
   const o = readOverlay();
   const p = o.payload;
   if (!p || p.gimmick !== "spin" || p.phase !== "standby" || !p.category) return;
-  const items = spinPoolOf(state.questions, p.category).map((x) => x.text);
+  const items = spinPoolOf(state.questions, p.category, state.settings.spinSlices).map((x) => x.text);
   const prev = p.items ?? [];
   if (items.length === prev.length && items.every((t, i) => t === prev[i])) return;
   const had = new Set(prev);

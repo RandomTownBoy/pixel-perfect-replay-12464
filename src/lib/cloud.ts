@@ -5,7 +5,7 @@ import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
+  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 import { getLockedDecks, pickViewerDeck } from "@/lib/decks";
@@ -232,12 +232,29 @@ async function saveRouted(r: Submission, target?: GimmickId, category?: string, 
   else if (toWheel) toast.success(`🎡 ${r.nickname ? `@${r.nickname}: ` : ""}pertanyaan masuk ke roda`);
 }
 function routeSubmission(r: Submission) {
-  if (r.flagged || r.status !== "pending") return;
+  if (r.status !== "pending") return;
   if (r.kind === "spin" || r.kind === "question") {
+    const cfg = getSettings();
+    const active = getQuestions().filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used).length;
+    const waiting = live.inbox.filter((x) => (x.kind === "spin" || x.kind === "question") && x.status === "pending").length;
+    if (active + waiting > cfg.spinCapacity) { void liveActions.setStatus(r.id, "rejected"); return; }
+    if (cfg.spinModeration === "manual") {
+      void liveActions.setStatus(r.id, "review");
+      setLive({ review: [r, ...live.review.filter((x) => x.id !== r.id)].slice(0, REVIEW_LIMIT) });
+      return;
+    }
+    if (r.flagged) {
+      setLive({ review: [r, ...live.review.filter((x) => x.id !== r.id)].slice(0, REVIEW_LIMIT) });
+      void liveActions.setStatus(r.id, "review");
+      return;
+    }
     const w = spinOnAir();
-    // Roda belum penuh (< 10 irisan) → masuk roda yang tayang; sudah penuh atau Spin tidak tayang → Bank.
-    if (w && spinPoolOf(getQuestions(), w.category ?? "").length < SPIN_WHEEL_MAX) void saveRouted(r, "spin", w.category || VIEWER_CATEGORY, true);
-    else void saveRouted(r, "spin");
+    void saveRouted(r, "spin", VIEWER_CATEGORY, !!w && spinPoolOf(getQuestions(), VIEWER_CATEGORY, cfg.spinSlices).length < cfg.spinSlices);
+    return;
+  }
+  if (r.flagged) {
+    setLive({ review: [r, ...live.review.filter((x) => x.id !== r.id)].slice(0, REVIEW_LIMIT) });
+    void liveActions.setStatus(r.id, "review");
     return;
   }
   if (QUEUE_KINDS.has(r.kind)) {
@@ -619,6 +636,7 @@ function voteOf(e: LiveEvent): "a" | "b" | null {
 }
 
 /** Proses satu event dari konektor TikTok (komentar, gift, follow, share, status koneksi). */
+const handledSpinEventIds = new Set<string>();
 function handleLiveEvent(e: LiveEvent) {
   if (e.type === "system") {
     const [kind = "", handle = ""] = (e.content ?? "").split(":");
@@ -630,6 +648,19 @@ function handleLiveEvent(e: LiveEvent) {
     // Hitung berapa komentar yang status follower-nya terbaca (untuk peringatan di opsi "hanya follower").
     const known = e.is_follower === true || e.is_follower === false;
     setLive({ followStats: { known: live.followStats.known + (known ? 1 : 0), unknown: live.followStats.unknown + (known ? 0 : 1) } });
+    const match = (e.content ?? "").trim().match(/^!spin\s+(.+)$/i);
+    if (match && live.intake.spin && (!live.intake.followersOnly || e.is_follower === true) && ownerId) {
+      if (handledSpinEventIds.has(e.id)) return;
+      handledSpinEventIds.add(e.id);
+      if (handledSpinEventIds.size > 5000) handledSpinEventIds.clear();
+      const question = match[1]!.trim().slice(0, 280);
+      if (question.length >= 3) {
+        void supabase.from("audience_submissions").insert({ owner_id: ownerId, kind: "question", content: question, nickname: e.nickname, source: "tiktok", fingerprint: e.user_id ? `tt:${e.user_id}` : null, status: "pending" } as never).then(({ error }) => {
+          if (error) { console.error("Kiriman !spin gagal disimpan", error); toast.error("Kiriman !spin gagal diproses. Periksa kapasitas atau koneksi database."); }
+        });
+      }
+      return;
+    }
   }
   // Vote dari komentar. Dipercaya dari tanda vote_choice database kalau ada; kalau tidak ada (atau round_id tidak cocok),
   // isi komentar dibaca di sini (A/B, setuju/tidak) selama gimmick vote sedang tayang. Satu penonton = satu suara per ronde.

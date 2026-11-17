@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CardPayload, Intake, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
@@ -134,6 +134,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
                   </div>
                 )}
                 <Body state={state} />
+                {state.queue && state.queue.pending > 0 && <QueueBar q={state.queue} />}
               </div>
               {!guideOnTop && guide}
             </>
@@ -146,6 +147,17 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Garis loading di tepi bawah kartu: bergerak kiri→kanan selama item tayang, hanya selama masih ada antrean (hilang saat habis). */
+function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
+  const paused = q.pausedAt !== undefined;
+  const elapsed = useMemo(() => Math.min(q.ms, Math.max(0, (q.pausedAt ?? Date.now()) - q.startedAt)), [q.ms, q.pausedAt, q.startedAt]);
+  return (
+    <div className="ov-queue" data-paused={paused ? "" : undefined} aria-hidden>
+      <i key={`${q.startedAt}-${paused ? "p" : "r"}`} style={{ animationDuration: `${q.ms}ms`, animationDelay: `-${elapsed}ms` }} />
     </div>
   );
 }

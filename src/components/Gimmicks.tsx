@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import { AudienceHistory } from "@/components/AudienceHistory";
 import { WaitingQueue } from "@/components/WaitingQueue";
 import { CardGimmick } from "@/components/CardDecks";
+import { useLive } from "@/lib/cloud";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -62,16 +63,26 @@ export function SpinGimmick() {
   const spinCapacity = useKyoka((s) => s.settings.spinCapacity);
   const spinSlices = useKyoka((s) => s.settings.spinSlices);
   const spinModeration = useKyoka((s) => s.settings.spinModeration);
+  const pendingInbox = useLive((s) => s.inbox);
+  const pendingReview = useLive((s) => s.review);
   snap = all;
   const [category, setCategory] = useState("Daily Life");
   const [count, setCount] = useState(5);
   const [manual, setManual] = useState("");
   const pool = useMemo(() => spinPoolOf(all, category, spinSlices), [all, category, spinSlices]);
-  const viewerQuestions = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used);
+  const categoryQuestions = spinPoolOf(all, category, 300);
+  const categoryWaitingQuestions = categoryQuestions.slice(spinSlices);
+  const viewerQuestions = spinPoolOf(all, VIEWER_CATEGORY, 300);
+  const wheelQuestions = viewerQuestions.slice(0, spinSlices);
   const viewerCount = viewerQuestions.length;
   const usedViewerCount = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && q.used).length;
-  const waitingCount = Math.max(0, viewerCount - spinSlices);
-  const capacityPercent = Math.min(100, (viewerCount / Math.max(1, spinCapacity)) * 100);
+  const pendingSubmissions = [...pendingInbox, ...pendingReview].filter((s, i, rows) =>
+    (s.kind === "spin" || s.kind === "question") && (s.status === "pending" || s.status === "review") && rows.findIndex((x) => x.id === s.id) === i
+  );
+  const pendingCount = pendingSubmissions.length;
+  const capacityUsed = viewerCount + pendingCount;
+  const waitingCount = Math.max(0, viewerQuestions.length - spinSlices);
+  const capacityPercent = Math.min(100, (capacityUsed / Math.max(1, spinCapacity)) * 100);
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -182,13 +193,15 @@ export function SpinGimmick() {
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Otomatis menggunakan penyaringan kiriman yang tersedia. Mode manual menandai alur persetujuan host sebelum pertanyaan dipakai.</p>
           </div>
           <div className="space-y-2 rounded-lg bg-primary/5 px-3 py-2.5">
-            <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Kapasitas pertanyaan penonton</span><b>{viewerCount}/{spinCapacity}</b></div>
+            <div className="flex items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">Kapasitas pertanyaan penonton</span><b className="tabular-nums">{capacityUsed}/{spinCapacity}</b></div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${capacityPercent}%` }} /></div>
-            <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-              <div><b className="block text-sm">{Math.min(viewerCount, spinSlices)}</b><span className="text-muted-foreground">Di roda</span></div>
+            <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+              <div><b className="block text-sm">{wheelQuestions.length}</b><span className="text-muted-foreground">Di roda</span></div>
               <div><b className="block text-sm">{waitingCount}</b><span className="text-muted-foreground">Menunggu</span></div>
+              <div><b className="block text-sm">{pendingCount}</b><span className="text-muted-foreground">Perlu dicek</span></div>
               <div><b className="block text-sm">{usedViewerCount}</b><span className="text-muted-foreground">Terpakai</span></div>
             </div>
+            {capacityUsed >= spinCapacity && <p className="text-[11px] font-medium text-destructive">Kapasitas penuh. Kiriman baru akan ditolak sementara.</p>}
           </div>
         </div>
         <div className="flex gap-2">
@@ -202,11 +215,22 @@ export function SpinGimmick() {
           <Input placeholder="Tulis pertanyaan sendiri…" value={manual} onChange={(e) => setManual(e.target.value)} />
           <Button size="icon" onClick={() => { if (actions.addQuestions([{ text: manual, gimmick: "spin", category }])) setManual(""); else toast("Pertanyaan kosong atau sudah ada"); }}><Plus /></Button>
         </div>
-        <ul className="max-h-72 space-y-1.5 overflow-auto text-sm">
-          {pool.map((q, i) => (
-            <EditableRow key={q.id} index={i + 1} text={q.text} onSave={(t) => actions.updateQuestion(q.id, { text: t })} onDelete={() => actions.deleteQuestion(q.id)} />
-          ))}
-        </ul>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2"><h4 className="text-xs font-bold">🎡 Sedang di roda</h4><span className="text-[11px] text-muted-foreground">{pool.length} / {spinSlices}</span></div>
+          {pool.length ? (
+            <ul className="max-h-56 space-y-1.5 overflow-auto text-sm">
+              {pool.map((q, i) => <EditableRow key={q.id} index={i + 1} text={q.text} stateLabel="Di roda" onSave={(t) => actions.updateQuestion(q.id, { text: t })} onDelete={() => actions.deleteQuestion(q.id)} />)}
+            </ul>
+          ) : <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">Belum ada pertanyaan di roda untuk kategori ini.</p>}
+        </div>
+        <div className="space-y-2 border-t border-border pt-3">
+          <div className="flex items-center justify-between gap-2"><h4 className="text-xs font-bold">⏳ {category === VIEWER_CATEGORY ? "Antrean berikutnya" : "Pertanyaan berikutnya"}</h4><span className="text-[11px] text-muted-foreground">{categoryWaitingQuestions.length} menunggu</span></div>
+          {categoryWaitingQuestions.length ? (
+            <ul className="max-h-56 space-y-1.5 overflow-auto text-sm">
+              {categoryWaitingQuestions.map((q, i) => <EditableRow key={q.id} index={i + spinSlices + 1} text={q.text} stateLabel="Menunggu" onSave={(t) => actions.updateQuestion(q.id, { text: t })} onDelete={() => actions.deleteQuestion(q.id)} />)}
+            </ul>
+          ) : <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">Belum ada pertanyaan tambahan. Konten berikutnya akan otomatis mengisi slot yang tersedia.</p>}
+        </div>
       </Panel>
     </div>
     <Panel><AudienceHistory gimmick="spin" /></Panel>
@@ -214,13 +238,14 @@ export function SpinGimmick() {
   );
 }
 
-function EditableRow({ text, index, onSave, onDelete }: { text: string; index: number; onSave: (t: string) => void; onDelete: () => void }) {
+function EditableRow({ text, index, stateLabel, onSave, onDelete }: { text: string; index: number; stateLabel?: string; onSave: (t: string) => void; onDelete: () => void }) {
   const [v, setV] = useState(text);
   const [edit, setEdit] = useState(false);
   return (
     <li className="flex items-center gap-2 rounded-lg bg-background/60 px-2 py-1.5">
       <span className="w-5 text-xs text-muted-foreground">{index}</span>
-      {edit ? <Input value={v} onChange={(e) => setV(e.target.value)} className="h-8" /> : <span className="flex-1 cursor-text" onClick={() => setEdit(true)}>{text}</span>}
+      {edit ? <Input value={v} onChange={(e) => setV(e.target.value)} className="h-8" /> : <span className="min-w-0 flex-1 cursor-text" onClick={() => setEdit(true)}>{text}</span>}
+      {stateLabel && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateLabel === "Di roda" ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>{stateLabel}</span>}
       {edit && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { onSave(v); setEdit(false); }}><Check /></Button>}
       <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={onDelete}><Trash2 /></Button>
     </li>

@@ -158,7 +158,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
                   className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-55 disabled:shadow-none"
                   onClick={() => void putBackOnSpin(s)}
                 >
-                  <ListPlus /> {savingId === s.id ? "Memasukkan…" : isOnSpinWheel(s) ? "Sudah di roda" : "Masukkan ke roda"}
+                  <ListPlus /> {savingId === s.id ? "Memasukkan…" : isOnSpinWheel(s) ? "Sudah masuk Spin" : "Masukkan ke roda"}
                 </Button>
               )}
               {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (

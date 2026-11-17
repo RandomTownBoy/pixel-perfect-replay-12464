@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/AppShell";
 import { DraftList, Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/NumberField";
+import { LIMITS } from "@/lib/limits";
 import { actions, GIMMICKS, useKyoka, type GimmickId } from "@/lib/kyoka";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
@@ -64,7 +66,7 @@ function AiPage() {
             </select>
           </div>
           {tool === "generate" ? (
-            <label className="flex items-center gap-3 text-sm">Jumlah <Input type="number" min={1} max={20} value={count} onChange={(e) => setCount(+e.target.value)} className="w-24" /></label>
+            <label className="flex items-center gap-3 text-sm">Jumlah <NumberField min={LIMITS.aiCount.min} max={LIMITS.aiCount.max} value={count} onChange={setCount} className="w-24" /></label>
           ) : (
             <Input placeholder="Tempel pertanyaan yang mau diolah…" value={input} onChange={(e) => setInput(e.target.value)} />
           )}

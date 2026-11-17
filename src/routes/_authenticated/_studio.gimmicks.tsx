@@ -2,6 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/AppShell";
 import { GIMMICK_COMPONENTS } from "@/components/Gimmicks";
 import { GIMMICKS, type GimmickId } from "@/lib/kyoka";
+import { usePersistedState } from "@/lib/ui-state";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/_authenticated/_studio/gimmicks")({
   validateSearch: (s: { g?: GimmickId | undefined }): { g?: GimmickId | undefined } => ({
@@ -19,7 +21,11 @@ export const Route = createFileRoute("/_authenticated/_studio/gimmicks")({
 });
 
 function GimmicksPage() {
-  const { g = "spin" } = Route.useSearch();
+  const search = Route.useSearch();
+  // Tanpa ?g= di URL (mis. klik menu Gimmicks dari halaman lain), buka gimmick yang terakhir dipakai, bukan selalu Spin the Question.
+  const [last, setLast] = usePersistedState<GimmickId>("gimmicks:last", "spin");
+  const g: GimmickId = search.g ?? (GIMMICKS.some((x) => x.id === last) ? last : "spin");
+  useEffect(() => { if (g !== last) setLast(g); }, [g, last, setLast]);
   const nav = useNavigate({ from: "/gimmicks" });
   const Comp = GIMMICK_COMPONENTS[g];
   return (

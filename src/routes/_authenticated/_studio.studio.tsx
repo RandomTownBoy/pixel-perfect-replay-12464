@@ -7,6 +7,8 @@ import { audienceUrl } from "@/components/LiveConsole";
 import { liveActions, useLive } from "@/lib/cloud";
 import { Panel } from "@/components/Gimmicks";
 import { OverlayView } from "@/components/OverlayView";
+import { NumberField } from "@/components/NumberField";
+import { LIMITS } from "@/lib/limits";
 import { Button } from "@/components/ui/button";
 import { actions, defaultOverlay, readOverlay, resetOverlay, setOverlayVisible, subscribeOverlay, useKyoka, type OverlayState, type Settings } from "@/lib/kyoka";
 
@@ -69,8 +71,8 @@ function Studio() {
               <label key={k} className="flex items-center justify-between">{l}<input type="checkbox" checked={s[k]} onChange={(e) => actions.updateSettings({ [k]: e.target.checked })} /></label>
             ))}
             <div className="flex items-center gap-2">Ukuran
-              <input type="number" value={s.overlayWidth} onChange={(e) => actions.updateSettings({ overlayWidth: +e.target.value || 1080 })} className="h-9 w-20 rounded-md border border-input bg-background px-2" />×
-              <input type="number" value={s.overlayHeight} onChange={(e) => actions.updateSettings({ overlayHeight: +e.target.value || 1920 })} className="h-9 w-20 rounded-md border border-input bg-background px-2" />
+              <NumberField min={LIMITS.overlaySize.min} max={LIMITS.overlaySize.max} value={s.overlayWidth} onChange={(n) => actions.updateSettings({ overlayWidth: n })} className="h-9 w-24 px-2" aria-label="Lebar overlay (px)" />×
+              <NumberField min={LIMITS.overlaySize.min} max={LIMITS.overlaySize.max} value={s.overlayHeight} onChange={(n) => actions.updateSettings({ overlayHeight: n })} className="h-9 w-24 px-2" aria-label="Tinggi overlay (px)" />
             </div>
           </Panel>
           <Panel className="text-xs text-muted-foreground">

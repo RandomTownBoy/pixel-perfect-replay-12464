@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { liveActions, useLive } from "@/lib/cloud";
-import { actions, useKyoka } from "@/lib/kyoka";
+import { NumberField } from "@/components/NumberField";
+import { LIMITS } from "@/lib/limits";
+import { actions, QUEUE_KIND_LIST, QUEUE_SECONDS, useKyoka } from "@/lib/kyoka";
+
+const QUEUE_LABEL = { confession: "🤫 Confession", hottake: "🔥 Hot Take", chaos: "🌀 Random Chaos", thisorthat: "⚡ This or That" } as const;
 
 export const Route = createFileRoute("/_authenticated/_studio/settings")({
   head: () => ({
@@ -55,7 +59,19 @@ function SettingsPage() {
         <Panel className="space-y-3">
           <h3 className="font-display text-sm font-bold">Default Gimmick</h3>
           <label className="block text-sm">Countdown This or That (detik)
-            <Input type="number" min={3} max={60} value={s.countdown} onChange={(e) => actions.updateSettings({ countdown: +e.target.value || 10 })} className="mt-1" /></label>
+            <NumberField min={LIMITS.countdown.min} max={LIMITS.countdown.max} value={s.countdown} onChange={(n) => actions.updateSettings({ countdown: n })} className="mt-1" /></label>
+          <div className="space-y-2 rounded-xl border border-border bg-background/40 p-3">
+            <p className="text-sm font-semibold">Durasi tayang antrean (detik)</p>
+            <p className="text-xs text-muted-foreground">Lama tiap kiriman penonton tampil di overlay sebelum animasi penutup dan lanjut ke antrean berikutnya. Boleh dipersingkat, tidak boleh melebihi batas maksimum tiap gimmick.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {QUEUE_KIND_LIST.map((k) => (
+                <label key={k} className="space-y-1 text-xs text-muted-foreground">{QUEUE_LABEL[k]} <span className="opacity-70">(maks. {QUEUE_SECONDS[k]})</span>
+                  <NumberField min={Math.min(LIMITS.queueMinSeconds, QUEUE_SECONDS[k])} max={QUEUE_SECONDS[k]} value={s.queueDurations[k]} onChange={(n) => actions.updateSettings({ queueDurations: { ...s.queueDurations, [k]: n } })} className="h-9 text-sm text-foreground" />
+                </label>
+              ))}
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => actions.updateSettings({ queueDurations: { ...QUEUE_SECONDS } })}>Kembalikan ke maksimum</Button>
+          </div>
           <label className="flex items-center justify-between text-sm">Efek suara overlay<input type="checkbox" checked={s.sound} onChange={(e) => actions.updateSettings({ sound: e.target.checked })} /></label>
         </Panel>
         <Panel className="space-y-2 text-sm">
@@ -74,7 +90,7 @@ function SettingsPage() {
                 <select value={r.effect} onChange={(e) => up({ effect: e.target.value as "vote" | "shoutout" })} className="h-9 rounded-md border border-input bg-background px-2">
                   <option value="vote">Suara</option><option value="shoutout">Shoutout</option>
                 </select>
-                {r.effect === "vote" && <Input type="number" min={1} value={r.weight} onChange={(e) => up({ weight: +e.target.value || 1, reward: `+${+e.target.value || 1} suara` })} className="w-20" />}
+                {r.effect === "vote" && <NumberField min={LIMITS.giftWeight.min} max={LIMITS.giftWeight.max} value={r.weight} onChange={(n) => up({ weight: n, reward: `+${n} suara` })} className="w-20" aria-label="Bobot suara" />}
                 <Input value={r.reward} onChange={(e) => up({ reward: e.target.value })} className="min-w-40 flex-1" placeholder="Hadiah" />
                 <Button size="icon" variant="ghost" onClick={() => actions.updateSettings({ giftRules: s.giftRules.filter((_, j) => j !== i) })}>✕</Button>
               </div>
@@ -131,7 +147,7 @@ function SettingsPage() {
           <div className="grid grid-cols-3 gap-2">
             {(["⭐ Supporter", "💎 VIP", "👑 Sultan"] as const).map((label, i) => (
               <label key={label} className="text-xs">{label} ≥
-                <Input type="number" min={1} value={vipTiers[i]} onChange={(e) => { const next = [...vipTiers] as [number, number, number]; next[i] = Math.max(1, Number(e.target.value) || 1); actions.updateSettings({ vipTiers: next }); }} />
+                <NumberField commit="blur" min={i === 0 ? LIMITS.vipDiamonds.min : vipTiers[i - 1]! + 1} max={LIMITS.vipDiamonds.max} value={vipTiers[i]!} onChange={(n) => { const next = [...vipTiers] as [number, number, number]; next[i] = n; actions.updateSettings({ vipTiers: next }); }} />
               </label>
             ))}
           </div>

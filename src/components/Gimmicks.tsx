@@ -255,6 +255,8 @@ export function ThisOrThatGimmick() {
 
 /* ---------------- PICK A CARD ---------------- */
 const SHUFFLE_MS = 1200;
+const AUTO_DEAL_MS = 6000;
+const AUTO_DEAL_KEY = "kyoka.card.autoDeal";
 export function CardGimmick() {
   const all = useKyoka((s) => s.questions);
   const intake = useLive((s) => s.intake.card);
@@ -272,7 +274,10 @@ export function CardGimmick() {
   const packs = useMemo(() => [...new Set(all.filter((q) => q.gimmick === "card").map((q) => q.category))], [all]);
   const [pack, setPack] = useState<string>("all");
   const [deck, setDeck] = useState<string[]>(() => []);
-  const [flipped, setFlipped] = useState<number | null>(null);
+  const [opened, setOpened] = useState<number[]>([]);
+  // Kocok otomatis setelah deck selesai: pilihan disimpan di browser ini saja (default mati).
+  const [autoDeal, setAutoDeal] = useState<boolean>(() => { try { return typeof window !== "undefined" && localStorage.getItem(AUTO_DEAL_KEY) === "1"; } catch { return false; } });
+  const toggleAuto = (v: boolean) => { setAutoDeal(v); try { localStorage.setItem(AUTO_DEAL_KEY, v ? "1" : "0"); } catch { /* abaikan */ } };
   const [newCard, setNewCard] = useState("");
   const source = all.filter((q) => q.gimmick === "card" && (pack === "all" || q.category === pack)).map((q) => q.text);
   const cards = deck.length ? deck : source.slice(0, 6);
@@ -283,11 +288,12 @@ export function CardGimmick() {
 
   const showCards = () => {
     if (!cards.length) { toast("Belum ada kartu di pack ini"); return; }
+    setOpened([]);
     sendToOverlay({ gimmick: "card", phase: "standby", count: cards.length });
   };
   const deal = () => {
     const next = sample(source, Math.min(6, source.length));
-    setDeck(next); setFlipped(null);
+    setDeck(next); setOpened([]);
     if (isCardLive()) {
       // kocok ±1,2 dtk lalu bagi satu per satu; semua in-place supaya kartu overlay tidak berkedip
       updateOverlayPayload({ gimmick: "card", phase: "shuffling", count: next.length });
@@ -300,17 +306,28 @@ export function CardGimmick() {
     }
   };
   const pick = (i: number, c: string) => {
-    setFlipped(i); markUsed(c);
-    if (isCardLive()) updateOverlayPayload({ gimmick: "card", phase: "revealed", count: cards.length, revealed: i, text: c });
-    else sendToOverlay({ gimmick: "card", count: cards.length, revealed: i, text: c });
+    const isNew = !opened.includes(i);
+    const nextOpened = isNew ? [...opened, i] : opened;
+    if (isNew) { setOpened(nextOpened); markUsed(c); }
+    // Kartu yang sudah dibuka tetap terbuka di overlay; klik ulang hanya memunculkan lagi teksnya.
+    const payload = { gimmick: "card" as const, phase: "revealed" as const, count: cards.length, revealed: i, opened: nextOpened, text: c };
+    if (isCardLive()) updateOverlayPayload(payload); else sendToOverlay(payload);
   };
   const changePack = (v: string) => {
-    setPack(v); setDeck([]); setFlipped(null);
+    setPack(v); setDeck([]); setOpened([]);
     if (isCardLive()) {
       const n = Math.min(6, all.filter((q) => q.gimmick === "card" && (v === "all" || q.category === v)).length);
       updateOverlayPayload({ gimmick: "card", phase: "standby", count: n });
     }
   };
+  // Semua kartu terbuka = deck selesai. Kocok otomatis (kalau dinyalakan) hanya jalan saat kartu memang tayang di overlay.
+  const finished = cards.length > 0 && opened.length >= cards.length;
+  useEffect(() => {
+    if (!finished || !autoDeal) return;
+    const t = setTimeout(() => { if (isCardLive()) deal(); }, AUTO_DEAL_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished, autoDeal]);
   // Kartu ditambah/dihapus sebelum dibagikan: jumlah kartu di overlay (saat standby) ikut diperbarui in-place.
   useEffect(() => {
     const c = readOverlay().payload;
@@ -327,18 +344,26 @@ export function CardGimmick() {
         <Button variant="secondary" onClick={deal}><Shuffle /> Kocok & Bagikan</Button>
         <Button variant="live" onClick={showCards}><Tv /> Tampilkan Kartu di Overlay</Button>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={intake} onChange={(e) => void liveActions.setIntake("card", e.target.checked)} />Terima kartu penonton</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={autoDeal} onChange={(e) => toggleAuto(e.target.checked)} />Kocok otomatis setelah deck selesai</label>
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {cards.map((c, i) => (
           <button key={c + i} className="flip-card aspect-[3/4]" onClick={() => pick(i, c)}>
-            <div className={`flip-inner h-full w-full ${flipped === i ? "flipped" : ""}`}>
+            <div className={`flip-inner h-full w-full ${opened.includes(i) ? "flipped" : ""}`}>
               <div className="flip-face flex items-center justify-center rounded-xl border border-primary/50 bg-party font-display text-2xl font-black shadow-glow">{i + 1}</div>
               <div className="flip-face flip-back flex items-center justify-center rounded-xl bg-card p-2 text-[11px] font-semibold leading-tight">{c}</div>
             </div>
           </button>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">Klik kartu untuk membuka — langsung tampil di overlay.</p>
+      {finished ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/40 bg-success/10 p-3">
+          <p className="text-sm font-semibold">✅ Deck selesai: semua kartu sudah terbuka.{autoDeal ? ` Dikocok ulang otomatis dalam ${AUTO_DEAL_MS / 1000} detik.` : ""}</p>
+          <Button variant="live" onClick={deal}><Shuffle /> Deck baru</Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Klik kartu untuk membuka. Kartu yang dibuka tetap terbuka di overlay sampai semua habis, lalu ganti deck baru.</p>
+      )}
       <div className="flex gap-2">
         <Input placeholder="Tambah kartu ke pack…" value={newCard} onChange={(e) => setNewCard(e.target.value)} />
         <Button onClick={() => { if (actions.addQuestions([{ text: newCard, gimmick: "card", category: pack === "all" ? "Random Thoughts" : pack }])) setNewCard(""); }}><Plus /></Button>

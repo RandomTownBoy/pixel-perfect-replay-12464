@@ -152,6 +152,7 @@
 .ov-face.front { color: #fff; background: linear-gradient(140deg, var(--primary), var(--pop)); border: 0.05em solid rgba(255,255,255,0.35); box-shadow: 0 0.3em 1em -0.2em color-mix(in oklab, var(--pop) 55%, transparent); }
 .ov-face.back { color: var(--zest); background: color-mix(in oklab, var(--background) 70%, var(--ov)); border: 0.06em solid var(--ov); }
 .ov-fc.dim { opacity: 0.28; transform: scale(0.92); filter: saturate(0.5); }
+.ov-fc.done { opacity: 0.6; filter: saturate(0.75); }
 .ov-fc.on { transform: scale(1.06); z-index: 1; filter: drop-shadow(0 0.4em 1em color-mix(in oklab, var(--pop) 55%, transparent)); }
 .ov-deck.shuffling .ov-fc { animation: ov-shuffle 1.2s ease-in-out both; animation-delay: calc(var(--i) * 0.03s); }
 .ov-deck.dealt .ov-fc { animation: ov-deal 0.5s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: calc(var(--i) * 0.14s); }

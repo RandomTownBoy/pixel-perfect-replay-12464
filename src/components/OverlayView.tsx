@@ -412,7 +412,9 @@ function CardStage({ p }: { p: CardPayload }) {
   const phase = p.phase ?? "standby";
   const n = Math.max(0, Math.min(6, p.count));
   const rows = Math.ceil(n / 3) || 1;
-  const revealed = phase === "revealed" ? p.revealed : undefined;
+  const showRevealed = phase === "revealed";
+  const opened = showRevealed ? p.opened ?? (p.revealed !== undefined ? [p.revealed] : []) : [];
+  const finished = n > 0 && opened.length >= n;
   return (
     <div className="ov-body">
       <div className={`ov-deck ${phase}`}>
@@ -421,12 +423,13 @@ function CardStage({ p }: { p: CardPayload }) {
           const inRow = Math.min(3, n - row * 3);
           const dx = -((i % 3) - (inRow - 1) / 2); // arah ke tengah tumpukan
           const dy = (rows - 1) / 2 - row;
-          const on = revealed === i;
-          const dim = revealed !== undefined && !on;
+          const isOpen = opened.includes(i);
+          const on = showRevealed && p.revealed === i; // kartu terbaru
+          const done = isOpen && !on; // sudah dibuka sebelumnya: tetap terbuka
           return (
-            <div key={i} className={`flip-card ov-fc${on ? " on" : ""}${dim ? " dim" : ""}`}
+            <div key={i} className={`flip-card ov-fc${on ? " on" : ""}${done ? " done" : ""}`}
               style={{ "--dx": dx, "--dy": dy, "--r": ((i * 7) % 9) - 4, "--i": i } as CSSProperties}>
-              <div className={`flip-inner${on ? " flipped" : ""}`}>
+              <div className={`flip-inner${isOpen ? " flipped" : ""}`}>
                 <div className="flip-face ov-face front">{i + 1}</div>
                 <div className="flip-face flip-back ov-face back">✦</div>
               </div>
@@ -441,6 +444,7 @@ function CardStage({ p }: { p: CardPayload }) {
           <Quote text={p.text} max={1.45} />
         </div>
       )}
+      {finished && <span className="ov-muted">✨ Semua kartu terbuka · deck selesai</span>}
     </div>
   );
 }

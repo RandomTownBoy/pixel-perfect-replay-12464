@@ -413,7 +413,7 @@ function CardStage({ p }: { p: CardPayload }) {
   const n = Math.max(0, Math.min(6, p.count));
   const rows = Math.ceil(n / 3) || 1;
   const showRevealed = phase === "revealed";
-  const opened = showRevealed ? p.opened ?? (p.revealed !== undefined ? [p.revealed] : []) : [];
+  const opened = p.opened ?? (showRevealed && p.revealed !== undefined ? [p.revealed] : []); // deck yang sebagian sudah terbuka tampil dengan kartu terbukanya sejak standby
   const finished = n > 0 && opened.length >= n;
   return (
     <div className="ov-body">

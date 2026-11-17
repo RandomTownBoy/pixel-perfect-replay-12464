@@ -147,49 +147,65 @@ export function CardGimmick() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.cards.length, ov]);
 
-  const firstOpenViewer = decks.find((d) => d.viewer && !d.locked)?.name;
-
   return (
-    <div className="min-w-0 space-y-5 break-words rounded-2xl border border-border bg-panel p-5">
-      <div className="flex items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-          {decks.map((d) => {
-            const isCur = d.name === cur?.name;
-            const isNext = d.name === nextDeck?.name;
-            const count = d.viewer && d.used === 0 ? `${d.total}/${DECK_SIZE}` : d.status === "done" ? "selesai" : d.status === "new" ? `${d.total} kartu` : `${d.used}/${d.total}`;
-            return (
-              <button key={d.name} onClick={() => select(d)} aria-pressed={isCur}
-                title={d.viewer ? (d.locked ? "Deck penonton terkunci" : "Deck penonton, masih menerima kartu baru") : undefined}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${isCur ? "border-primary bg-primary/15" : "border-border bg-background/50 hover:border-primary/50"} ${d.status === "done" && !isCur ? "opacity-45" : ""} ${isNext ? "animate-pulse ring-2 ring-primary" : ""}`}>
-                <span aria-hidden>{d.viewer ? "👥" : GLYPH[d.status]}</span>
-                <span>{d.name}</span>
-                <span className="text-xs font-normal text-muted-foreground">· {count}</span>
-                {d.viewer && d.name === firstOpenViewer && pending.length > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">⏳{pending.length}</span>}
-              </button>
-            );
-          })}
-          {!decks.length && <p className="py-1.5 text-sm text-muted-foreground">Belum ada deck. Buka Kelola untuk membuat deck pertama.</p>}
+    <div className="min-w-0 space-y-6 break-words rounded-2xl border border-border/80 bg-gradient-to-br from-panel via-panel to-primary/[0.06] p-4 shadow-xl shadow-black/10 sm:p-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Deck aktif</span>
+            {cur && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${cur.status === "done" ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}>{cur.status === "done" ? "Selesai" : cur.status === "partial" ? "Sedang dimainkan" : "Siap dimainkan"}</span>}
+            {pending.length > 0 && <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-400">{pending.length} menunggu persetujuan</span>}
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <select
+                value={cur?.name ?? ""}
+                onChange={(e) => { const d = decks.find((x) => x.name === e.target.value); if (d) select(d); }}
+                aria-label="Pilih deck aktif"
+                className="h-12 w-full appearance-none rounded-xl border border-primary/25 bg-background/80 py-2 pl-4 pr-11 text-sm font-semibold text-foreground shadow-inner outline-none transition hover:border-primary/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              >
+                {!decks.length && <option value="">Belum ada deck</option>}
+                {decks.map((d) => {
+                  const count = d.status === "done" ? "selesai" : `${d.used}/${d.total} dibuka`;
+                  return <option key={d.name} value={d.name}>{d.viewer ? "👥 " : `${GLYPH[d.status]} `}{d.name} · {count}</option>;
+                })}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+            <span className="text-xs text-muted-foreground">{decks.length} deck tersedia · pilih deck dari daftar</span>
+          </div>
+          {cur && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span><strong className="text-foreground">{cur.total}</strong> kartu</span>
+              <span><strong className="text-foreground">{cur.used}</strong> sudah dibuka</span>
+              <span><strong className="text-foreground">{Math.max(0, cur.total - cur.used)}</strong> tersisa</span>
+              {cur.viewer && <span>{cur.locked ? "Deck penonton terkunci" : "Menerima kartu penonton"}</span>}
+              {nextDeck && <span className="text-primary">Berikutnya: {nextDeck.name}</span>}
+            </div>
+          )}
         </div>
-        <Popover>
-          <PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label="Pengaturan kartu" title="Pengaturan kartu"><Settings2 /></Button></PopoverTrigger>
-          <PopoverContent align="end" className="w-72 space-y-3">
-            <SettingRow label="Terima kartu penonton" checked={intake} onChange={(v) => void liveActions.setIntake("card", v)} />
-            <SettingRow label="Setujui otomatis" hint="Kartu penonton lolos filter langsung masuk deck penonton. Mati = ditahan di Kelola sampai kamu setujui." checked={autoApprove}
-              onChange={(v) => { actions.updateSettings({ autoApproveCards: v }); if (v && pending.length) void approveAll(pending); }} />
-            <SettingRow label="Kocok & lanjut otomatis" hint="Setelah deck selesai, deck berikutnya dikocok dan tampil di overlay." checked={autoDeal} onChange={toggleAuto} />
-          </PopoverContent>
-        </Popover>
-        <Button variant="secondary" onClick={() => setManageOpen(true)} className="relative"><Layers /> Kelola{pending.length > 0 && <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">⏳{pending.length}</span>}</Button>
+        <div className="flex shrink-0 items-center gap-2 self-end xl:self-center">
+          <Popover>
+            <PopoverTrigger asChild><Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" aria-label="Pengaturan kartu" title="Pengaturan kartu"><Settings2 /></Button></PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-3">
+              <SettingRow label="Terima kartu penonton" checked={intake} onChange={(v) => void liveActions.setIntake("card", v)} />
+              <SettingRow label="Setujui otomatis" hint="Kartu penonton lolos filter langsung masuk deck penonton. Mati = ditahan di Kelola sampai kamu setujui." checked={autoApprove}
+                onChange={(v) => { actions.updateSettings({ autoApproveCards: v }); if (v && pending.length) void approveAll(pending); }} />
+              <SettingRow label="Kocok & lanjut otomatis" hint="Setelah deck selesai, deck berikutnya dikocok dan tampil di overlay." checked={autoDeal} onChange={toggleAuto} />
+            </PopoverContent>
+          </Popover>
+          <Button variant="secondary" onClick={() => setManageOpen(true)} className="relative h-10 rounded-xl px-4"><Layers /> Kelola deck{pending.length > 0 && <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{pending.length}</span>}</Button>
+        </div>
       </div>
-
+      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
       {cur ? (
         <>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
             {cur.cards.map((c, i) => (
-              <button key={c.id} className="flip-card aspect-[3/4] disabled:cursor-not-allowed" disabled={cur.status === "done"} onClick={() => pick(cur, i)} aria-label={`Kartu ${i + 1}${c.used ? " (sudah dibuka)" : ""}`}>
+              <button key={c.id} className="flip-card group aspect-[3/4] min-w-0 rounded-2xl transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:hover:translate-y-0" disabled={cur.status === "done"} onClick={() => pick(cur, i)} aria-label={`Kartu ${i + 1}${c.used ? " (sudah dibuka)" : ""}`}>
                 <div className={`flip-inner h-full w-full ${c.used ? "flipped" : ""}`}>
-                  <div className="flip-face flex items-center justify-center rounded-xl border border-primary/50 bg-party font-display text-2xl font-black shadow-glow">{i + 1}</div>
-                  <div className={`flip-face flip-back flex items-center justify-center rounded-xl bg-card p-2 text-[11px] font-semibold leading-tight ${cur.status === "done" ? "opacity-60" : ""}`}>{c.text}</div>
+                  <div className="flip-face flex items-center justify-center rounded-2xl border border-primary/40 bg-gradient-to-br from-primary via-pop to-electric font-display text-2xl font-black text-white shadow-lg shadow-primary/20 transition group-hover:brightness-110">{i + 1}</div>
+                  <div className={`flip-face flip-back flex items-center justify-center rounded-2xl border border-border/70 bg-card p-3 text-xs font-semibold leading-tight shadow-inner ${cur.status === "done" ? "opacity-60" : ""}`}>{c.text}</div>
                 </div>
               </button>
             ))}

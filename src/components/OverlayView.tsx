@@ -42,6 +42,7 @@ const COLORS = ["var(--primary)", "var(--pop)", "var(--electric)"];
 
 /** Lebar tumpukan overlay (px) pada skala 1 (≈ 26em). Tinggi mengikuti isi; skala akhir dihitung supaya pas di area aman. */
 const DESIGN_W = 420;
+const SPIN_WIDE_W = 540; // Spin the Question di sumber lebar: tumpukan lebih lebar supaya kartu mengisi kiri-kanan
 const MAX_SCALE = 4;
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -50,12 +51,12 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
  * berapa pun ukuran/rasio sumber overlay (OBS, TikTok LIVE Studio, pratinjau). Menggantikan max-height + overflow: hidden
  * yang dulu memotong kartu Hot Take, Spin, Pick a Card, This or That dan Random Chaos.
  */
-function useFit() {
+function useFit(gimmick?: string) {
   const rootRef = useRef<HTMLDivElement>(null);
   const safeRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [fit, setFit] = useState({ scale: 1, ready: false });
+  const [fit, setFit] = useState({ scale: 1, ready: false, dw: DESIGN_W });
   useIsoLayoutEffect(() => {
     const measure = () => {
       const r = rootRef.current, sf = safeRef.current, st = stageRef.current;
@@ -64,8 +65,9 @@ function useFit() {
       setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
       const aw = sf.clientWidth, ah = sf.clientHeight, nh = st.offsetHeight; // offsetHeight tidak terpengaruh transform
       if (!aw || !ah || !nh) return;
-      const scale = Math.max(0.05, Math.min(aw / DESIGN_W, ah / nh, MAX_SCALE));
-      setFit((f) => (f.ready && Math.abs(f.scale - scale) < 0.002 ? f : { scale, ready: true }));
+      const dw = w / h >= 1 && gimmick === "spin" ? SPIN_WIDE_W : DESIGN_W;
+      const scale = Math.max(0.05, Math.min(aw / dw, ah / nh, MAX_SCALE));
+      setFit((f) => (f.ready && f.dw === dw && Math.abs(f.scale - scale) < 0.002 ? f : { scale, ready: true, dw }));
     };
     measure();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
@@ -73,7 +75,7 @@ function useFit() {
     window.addEventListener("resize", measure);
     void document.fonts?.ready.then(measure);
     return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
-  }, []);
+  }, [gimmick]);
   return { rootRef, safeRef, stageRef, box, ...fit };
 }
 
@@ -82,7 +84,7 @@ export type SafeMode = "auto" | "tiktok" | "off";
 
 export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayState; preview?: boolean; safe?: SafeMode }) {
   const p = state.payload;
-  const { rootRef, safeRef, stageRef, box, scale, ready } = useFit();
+  const { rootRef, safeRef, stageRef, box, scale, ready, dw } = useFit(p?.gimmick);
   const last = useRef(state.payloadAt);
   useEffect(() => {
     if (!preview && state.sound && state.payloadAt !== last.current && p) beep();
@@ -103,7 +105,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   const portraitFull = box.w > 0 && box.h > 0 && box.w / box.h <= 0.66;
   const tiktokSafe = safe === "tiktok" || (safe === "auto" && portraitFull);
   const inset = tiktokSafe ? "11% 5% 36% 5%" : "3% 4% 3% 4%";
-  const stageStyle = { width: DESIGN_W, marginLeft: -DESIGN_W / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 } as CSSProperties;
+  const stageStyle = { width: dw, marginLeft: -dw / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 } as CSSProperties;
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
   const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
   const pos = state.guidePos ?? "tr";
@@ -139,7 +141,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
         </div>
         {/* Banner gift di luar tumpukan: muncul tanpa mengubah ukuran kartu (kalau tidak, kartu ikut mengecil tiap ada gift). */}
         {state.visible && bannerOn && state.banner && (
-          <div className="ov-banner-wrap" style={{ width: DESIGN_W, marginLeft: -DESIGN_W / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 }}>
+          <div className="ov-banner-wrap" style={{ width: dw, marginLeft: -dw / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 }}>
             <div key={state.banner.at} className="ov-banner">{state.banner.text}</div>
           </div>
         )}
@@ -379,14 +381,14 @@ function SpinStage({ p }: { p: SpinPayload }) {
               ))}
             </ol>
           )}
-          {phase === "result" && p.question && (
-            <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
-              <Quote text={p.question} max={1.5} />
-            </div>
-          )}
         </div>
       </div>
       {phase === "spinning" && <span className="ov-muted">Memutar…</span>}
+      {phase === "result" && p.question && (
+        <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>
+          <Quote text={p.question} max={1.5} />
+        </div>
+      )}
     </div>
   );
 }

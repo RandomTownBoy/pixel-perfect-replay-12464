@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { CardPayload, Intake, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
@@ -40,8 +40,49 @@ const fit = (t: string | undefined | null) => {
 };
 const COLORS = ["var(--primary)", "var(--pop)", "var(--electric)"];
 
-export function OverlayView({ state, preview }: { state: OverlayState; preview?: boolean }) {
+/** Lebar tumpukan overlay (px) pada skala 1 (≈ 26em). Tinggi mengikuti isi; skala akhir dihitung supaya pas di area aman. */
+const DESIGN_W = 420;
+const MAX_SCALE = 4;
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/**
+ * Mengukur area aman (.ov-safe) dan tinggi asli isi (.ov-stage), lalu mengembalikan skala supaya isi selalu muat utuh,
+ * berapa pun ukuran/rasio sumber overlay (OBS, TikTok LIVE Studio, pratinjau). Menggantikan max-height + overflow: hidden
+ * yang dulu memotong kartu Hot Take, Spin, Pick a Card, This or That dan Random Chaos.
+ */
+function useFit() {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const safeRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [fit, setFit] = useState({ scale: 1, ready: false });
+  useIsoLayoutEffect(() => {
+    const measure = () => {
+      const r = rootRef.current, sf = safeRef.current, st = stageRef.current;
+      if (!r || !sf || !st) return;
+      const w = r.clientWidth, h = r.clientHeight;
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+      const aw = sf.clientWidth, ah = sf.clientHeight, nh = st.offsetHeight; // offsetHeight tidak terpengaruh transform
+      if (!aw || !ah || !nh) return;
+      const scale = Math.max(0.05, Math.min(aw / DESIGN_W, ah / nh, MAX_SCALE));
+      setFit((f) => (f.ready && Math.abs(f.scale - scale) < 0.002 ? f : { scale, ready: true }));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    [rootRef.current, safeRef.current, stageRef.current].forEach((el) => el && ro?.observe(el));
+    window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+  return { rootRef, safeRef, stageRef, box, ...fit };
+}
+
+/** auto = zona aman TikTok hanya kalau sumbernya portrait penuh (≈ 9:16); tiktok = selalu; off = hampir seluruh area dipakai. */
+export type SafeMode = "auto" | "tiktok" | "off";
+
+export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayState; preview?: boolean; safe?: SafeMode }) {
   const p = state.payload;
+  const { rootRef, safeRef, stageRef, box, scale, ready } = useFit();
   const last = useRef(state.payloadAt);
   useEffect(() => {
     if (!preview && state.sound && state.payloadAt !== last.current && p) beep();
@@ -57,7 +98,12 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.banner?.at]);
 
-  const style = { "--ov": ACCENT[state.accent] ?? "var(--primary)", fontSize: `${state.textScale}em` } as CSSProperties;
+  const style = { "--ov": ACCENT[state.accent] ?? "var(--primary)", fontSize: `${16 * (state.textScale || 1)}px` } as CSSProperties;
+  // Portrait penuh (9:16): sisakan atas (profil/penonton) & bawah (komentar/gift) TikTok. Sumber kotak/landscape: pakai hampir seluruh area.
+  const portraitFull = box.w > 0 && box.h > 0 && box.w / box.h <= 0.66;
+  const tiktokSafe = safe === "tiktok" || (safe === "auto" && portraitFull);
+  const inset = tiktokSafe ? "11% 5% 36% 5%" : "3% 4% 3% 4%";
+  const stageStyle = { width: DESIGN_W, marginLeft: -DESIGN_W / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 } as CSSProperties;
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
   const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
   const pos = state.guidePos ?? "tr";
@@ -70,26 +116,33 @@ export function OverlayView({ state, preview }: { state: OverlayState; preview?:
   const guideOnTop = pos === "tl" || pos === "tr";
 
   return (
-    <div style={style} className="ov-root">
-      <div className="ov-safe">
-        {!state.visible ? null : !p ? (
-          preview ? <p className="ov-idle">Overlay kosong. Kirim gimmick dari dashboard.</p> : null
-        ) : (
-          <>
-            {guideOnTop && guide}
-            <div key={state.payloadAt} className="ov-card" data-g={p.gimmick === "chaos" ? `chaos-${p.mode}` : p.gimmick} data-phase={"phase" in p ? p.phase : undefined}>
-              {(state.showTitle || state.showBadge) && (
-                <div className="ov-head">
-                  {state.showTitle && g ? <span className="ov-chip">{g.emoji} {g.name}</span> : <span />}
-                  {state.showBadge && <span className="ov-brand">KYOKA LIVE</span>}
-                </div>
-              )}
-              <Body state={state} />
-            </div>
-            {!guideOnTop && guide}
-          </>
+    <div ref={rootRef} style={style} className="ov-root">
+      <div ref={safeRef} className="ov-safe" style={{ inset }}>
+        <div ref={stageRef} className="ov-stage" style={stageStyle}>
+          {!state.visible ? null : !p ? (
+            preview ? <p className="ov-idle">Overlay kosong. Kirim gimmick dari dashboard.</p> : null
+          ) : (
+            <>
+              {guideOnTop && guide}
+              <div key={state.payloadAt} className="ov-card" data-g={p.gimmick === "chaos" ? `chaos-${p.mode}` : p.gimmick} data-phase={"phase" in p ? p.phase : undefined}>
+                {(state.showTitle || state.showBadge) && (
+                  <div className="ov-head">
+                    {state.showTitle && g ? <span className="ov-chip">{g.emoji} {g.name}</span> : <span />}
+                    {state.showBadge && <span className="ov-brand">KYOKA LIVE</span>}
+                  </div>
+                )}
+                <Body state={state} />
+              </div>
+              {!guideOnTop && guide}
+            </>
+          )}
+        </div>
+        {/* Banner gift di luar tumpukan: muncul tanpa mengubah ukuran kartu (kalau tidak, kartu ikut mengecil tiap ada gift). */}
+        {state.visible && bannerOn && state.banner && (
+          <div className="ov-banner-wrap" style={{ width: DESIGN_W, marginLeft: -DESIGN_W / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 }}>
+            <div key={state.banner.at} className="ov-banner">{state.banner.text}</div>
+          </div>
         )}
-        {state.visible && bannerOn && state.banner && <div key={state.banner.at} className="ov-banner">{state.banner.text}</div>}
       </div>
     </div>
   );

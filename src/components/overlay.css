@@ -1,17 +1,21 @@
-/* Overlay Kyoka LIVE — tata letak untuk layar portrait TikTok (9:16).
-   Semua ukuran memakai em, jadi ikut skala font dari route overlay / pratinjau.
+/* Overlay Kyoka LIVE — tata letak untuk layar portrait TikTok (9:16) maupun sumber berukuran bebas.
+   Semua ukuran memakai em; font dasar dipasang OverlayView (16px × skala teks), lalu seluruh tumpukan di-scale agar pas di wadahnya.
    Zona aman: bagian atas (profil & jumlah penonton) dan bawah (komentar, gift) TikTok dibiarkan kosong. */
 /* relative + 100% (bukan absolute): overlay harus terkurung di wadahnya (pratinjau/halaman overlay),
    kalau tidak ia menutupi seluruh halaman dan memblokir tombol. pointer-events: none = tidak pernah menangkap klik. */
 .ov-root { position: relative; width: 100%; height: 100%; color: var(--foreground); font-family: var(--font-sans, system-ui, sans-serif); overflow: hidden; pointer-events: none; }
-/* inset (bukan padding): persentase atas/bawah mengikuti TINGGI layar, bukan lebar */
-.ov-safe { position: absolute; inset: 11% 5% 36% 5%; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.7em; }
+/* .ov-safe = area yang tersedia untuk overlay (inset diatur dari OverlayView: zona aman TikTok kalau layarnya portrait penuh,
+   hampir penuh kalau sumbernya kotak/landscape). Isinya TIDAK dipotong: .ov-stage diukur lalu diperkecil otomatis (transform: scale)
+   sampai pas di area ini, jadi kartu apa pun (Hot Take, Spin, Pick a Card, This or That, Chaos) selalu tampil utuh. */
+.ov-safe { position: absolute; inset: 3% 4%; }
+.ov-stage { position: absolute; top: 0; left: 50%; display: flex; flex-direction: column; gap: 0.7em; transform-origin: top center; will-change: transform; }
+.ov-banner-wrap { position: absolute; left: 50%; bottom: 0; z-index: 3; transform-origin: bottom center; }
 .ov-idle { margin: auto; font-size: 0.9em; color: var(--muted-foreground); text-align: center; }
 
 /* kartu utama */
-/* Ukuran bawaan tiap gimmick (tinggi minimum, lebar selalu penuh) supaya tampil rapi dan konsisten. Isi dipusatkan di dalam kartu;
-   batas atas = zona aman dikurangi slot panduan, jadi kartu tidak pernah turun ke area komentar TikTok. */
-.ov-card { --h: 15em; min-height: var(--h); max-height: calc(100% - 3em); overflow: hidden; justify-content: center;
+/* Ukuran bawaan tiap gimmick (tinggi minimum, lebar penuh). Tidak ada max-height/overflow: hidden lagi,
+   kalau isinya lebih tinggi dari area aman, seluruh tumpukan diperkecil (lihat .ov-stage), bukan dipotong. */
+.ov-card { --h: 15em; min-height: var(--h); justify-content: center;
   position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.1em;
   border-radius: 1.4em; border: 0.1em solid color-mix(in oklab, var(--ov) 70%, transparent);
   background: color-mix(in oklab, var(--background) 84%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);

@@ -8,6 +8,7 @@ import {
   queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
+import { getLockedDecks, pickViewerDeck } from "@/lib/decks";
 
 /* ---------- auth ---------- */
 export function useAuthUser() {
@@ -245,10 +246,40 @@ function routeSubmission(r: Submission) {
     if (live.nowShowing?.kind === r.kind && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) liveActions.enqueue(r);
     return;
   }
-  // Kartu penonton: otomatis masuk pack "Dari Penonton" (bawaan), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
+  // Kartu penonton: otomatis masuk deck penonton ("Penonton #1", "Penonton #2", ...), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
   // Isi kartu tersembunyi sampai dibuka, jadi mode tahan berguna kalau host mau menyaring dulu sebelum tayang di stream.
   if (r.kind === "card" && !getSettings().autoApproveCards) return;
   if (BANKABLE_KINDS.has(r.kind)) void saveRouted(r);
+}
+
+let cardSaveChain: Promise<void> = Promise.resolve();
+async function saveToBankNow(s: Submission, dest: GimmickId, categoryIn: string): Promise<{ ok: boolean; message: string }> {
+  let text = (s.content ?? "").trim();
+  if (!text) return { ok: false, message: "Isi kosong, tidak bisa disimpan." };
+  if (!BANKABLE_KINDS.has(s.kind)) return { ok: false, message: "Jenis kiriman ini tidak disimpan ke Question Bank." };
+  if (!ownerId || !hasRemote()) return { ok: false, message: "Belum tersambung ke database. Tunggu sebentar lalu coba lagi." };
+  const destName = GIMMICKS.find((g) => g.id === dest)?.name ?? dest;
+  if (dest === "thisorthat") text = text.replace(" | ", " || "); // format Question Bank untuk This or That
+  const isViewerCard = dest === "card" && categoryIn === VIEWER_CATEGORY;
+  const duplicate = isDuplicate(text);
+  let category = categoryIn;
+  if (!duplicate) {
+    if (isViewerCard) category = pickViewerDeck(getQuestions(), getLockedDecks());
+    const { error } = await supabase.from("questions").insert({
+      id: crypto.randomUUID(), text, gimmick: dest,
+      category, favorite: false, used: false, demo: false,
+    });
+    if (error) {
+      console.error("saveToBank gagal", error);
+      return { ok: false, message: `Gagal menyimpan ke Question Bank: ${error.message}` };
+    }
+    if (dest !== "card") actions.addCategory(category);
+    await resyncQuestions();
+  }
+  const marked = await liveActions.setStatus(s.id, "approved");
+  if (!marked) return { ok: false, message: "Sudah masuk Question Bank, tapi status inbox gagal diperbarui. Coba tekan lagi." };
+  if (isViewerCard) return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : `Kartu masuk deck ${category} ✅` };
+  return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : `Tersimpan di Question Bank → ${destName} ✅` };
 }
 
 export const liveActions = {
@@ -413,29 +444,15 @@ export const liveActions = {
   },
   /** Simpan isi kiriman penonton ke Question Bank, lalu tandai sebagai "approved". */
   async saveToBank(s: Submission, target?: GimmickId, category: string = VIEWER_CATEGORY): Promise<{ ok: boolean; message: string }> {
-    let text = (s.content ?? "").trim();
-    if (!text) return { ok: false, message: "Isi kosong, tidak bisa disimpan." };
-    if (!BANKABLE_KINDS.has(s.kind)) return { ok: false, message: "Jenis kiriman ini tidak disimpan ke Question Bank." };
-    if (!ownerId || !hasRemote()) return { ok: false, message: "Belum tersambung ke database. Tunggu sebentar lalu coba lagi." };
     const dest: GimmickId = target ?? KIND_TO_GIMMICK[s.kind] ?? "spin";
-    const destName = GIMMICKS.find((g) => g.id === dest)?.name ?? dest;
-    if (dest === "thisorthat") text = text.replace(" | ", " || "); // format Question Bank untuk This or That
-    const duplicate = isDuplicate(text);
-    if (!duplicate) {
-      const { error } = await supabase.from("questions").insert({
-        id: crypto.randomUUID(), text, gimmick: dest,
-        category, favorite: false, used: false, demo: false,
-      });
-      if (error) {
-        console.error("saveToBank gagal", error);
-        return { ok: false, message: `Gagal menyimpan ke Question Bank: ${error.message}` };
-      }
-      actions.addCategory(category);
-      await resyncQuestions();
+    // Kartu penonton memilih deck sendiri. Penyimpanan kartu diantrekan satu per satu supaya dua kiriman yang masuk bersamaan
+    // tidak sama-sama mengisi deck yang tinggal satu slot.
+    if (dest === "card" && category === VIEWER_CATEGORY) {
+      const run = cardSaveChain.then(() => saveToBankNow(s, dest, category));
+      cardSaveChain = run.then(() => undefined, () => undefined);
+      return run;
     }
-    const marked = await liveActions.setStatus(s.id, "approved");
-    if (!marked) return { ok: false, message: "Sudah masuk Question Bank, tapi status inbox gagal diperbarui. Coba tekan lagi." };
-    return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : `Tersimpan di Question Bank → ${destName} ✅` };
+    return saveToBankNow(s, dest, category);
   },
   async rotateIngestKey() {
     const { data, error } = await supabase.rpc("rotate_ingest_key");

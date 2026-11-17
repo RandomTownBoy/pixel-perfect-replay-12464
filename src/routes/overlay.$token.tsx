@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { OverlayView } from "@/components/OverlayView";
+import { OverlayView, type SafeMode } from "@/components/OverlayView";
 import { supabase } from "@/integrations/supabase/client";
 import { defaultOverlay, type OverlayState } from "@/lib/kyoka";
 
@@ -36,10 +36,14 @@ function Overlay() {
     return () => { supabase.removeChannel(ch); };
   }, [token]);
 
+  // ?safe=tiktok (paksa zona aman 9:16) | ?safe=off (pakai seluruh area) | tanpa param = otomatis menurut rasio sumber.
+  const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("safe") : null;
+  const safe: SafeMode = q === "tiktok" || q === "off" ? q : "auto";
+
   if (invalid) return <div className="p-6 text-sm text-muted-foreground">Link overlay tidak valid atau sudah diganti.</div>;
   return (
-    <div className="h-screen w-screen overflow-hidden overlay-transparent" style={{ fontSize: "clamp(14px, 3.4vw, 40px)" }}>
-      <OverlayView state={state ?? defaultOverlay()} />
+    <div className="h-screen w-screen overflow-hidden overlay-transparent">
+      <OverlayView state={state ?? defaultOverlay()} safe={safe} />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   BANKABLE_KINDS, GIMMICK_KINDS, QUEUE_KINDS, isFast, liveActions, TIER_BADGE, useLive, vipOf, type Submission,
 } from "@/lib/cloud";
-import { actions, getQuestions, normalize, sendToOverlay, type GimmickId } from "@/lib/kyoka";
+import { actions, getQuestions, normalize, sendToOverlay, useKyoka, VIEWER_CATEGORY, type GimmickId } from "@/lib/kyoka";
 
 const STATUS_LABEL: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
 const FILTERS = [["all", "Semua"], ["shown", "Ditampilkan"], ["approved", "Di Bank"], ["rejected", "Ditolak"]] as const;
@@ -56,6 +56,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   const queue = useLive((l) => l.queue);
   const nowShowing = useLive((l) => l.nowShowing);
   const gifters = useLive((l) => l.gifters);
+  const questions = useKyoka((s) => s.questions);
   const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>("all");
   const [limit, setLimit] = useState(PAGE);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -73,6 +74,12 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   };
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
   const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id;
+  const isSpinSubmission = (s: Submission) => s.kind === "spin" || s.kind === "question";
+  // Sinkron dengan Question Bank: kedua tombol berubah menjadi nonaktif setelah pertanyaan
+  // benar-benar masuk ke antrean/roda, termasuk ketika ditambahkan dari tempat lain.
+  const isOnSpinWheel = (s: Submission) => isSpinSubmission(s) && questions.some((q) =>
+    q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used && normalize(q.text) === normalize(s.content ?? "")
+  );
 
   const save = async (s: Submission) => {
     setSavingId(s.id);
@@ -93,10 +100,17 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   };
   const requeue = (s: Submission) => { if (!liveActions.enqueue(s)) toast.error("Kiriman ini tidak bisa diantrekan (sudah dalam antrean atau perlu dicek)."); };
   const putBackOnSpin = async (s: Submission) => {
+    if (isOnSpinWheel(s)) return;
     const text = (s.content ?? "").trim();
     const existing = getQuestions().find((q) => q.gimmick === "spin" && normalize(q.text) === normalize(text));
-    if (existing) { actions.updateQuestion(existing.id, { used: false, category: "Dari Penonton" }); toast.success("Pertanyaan dimasukkan kembali ke antrean Spin 🎡"); return; }
+    if (existing) {
+      actions.updateQuestion(existing.id, { used: false, category: VIEWER_CATEGORY });
+      toast.success("Pertanyaan masuk ke antrean Spin 🎡");
+      return;
+    }
+    setSavingId(s.id);
     const result = await liveActions.saveToBank(s, "spin");
+    setSavingId(null);
     if (result.ok) toast.success(result.message); else toast.error(result.message);
   };
   const replayLabel = (s: Submission) =>
@@ -126,10 +140,26 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
             <p className="break-words text-sm">{body(s)}</p>
             <div className="flex flex-wrap gap-1.5">
               {s.status !== "rejected" && s.kind !== "card" && (
-                <Button size="sm" variant="live" disabled={QUEUE_KINDS.has(s.kind) && isQueued(s)} onClick={() => replay(s)}><Send /> {replayLabel(s)}</Button>
+                <Button
+                  size="sm"
+                  variant="live"
+                  disabled={(QUEUE_KINDS.has(s.kind) && isQueued(s)) || isOnSpinWheel(s)}
+                  className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-55 disabled:shadow-none disabled:hover:brightness-100"
+                  onClick={() => replay(s)}
+                >
+                  <Send /> {replayLabel(s)}
+                </Button>
               )}
-              {s.status !== "rejected" && (s.kind === "spin" || s.kind === "question") && (
-                <Button size="sm" variant="secondary" onClick={() => void putBackOnSpin(s)}><ListPlus /> Masukkan ke roda</Button>
+              {s.status !== "rejected" && isSpinSubmission(s) && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isOnSpinWheel(s) || savingId === s.id}
+                  className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-55 disabled:shadow-none"
+                  onClick={() => void putBackOnSpin(s)}
+                >
+                  <ListPlus /> {savingId === s.id ? "Memasukkan…" : isOnSpinWheel(s) ? "Sudah di roda" : "Masukkan ke roda"}
+                </Button>
               )}
               {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (
                 <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>

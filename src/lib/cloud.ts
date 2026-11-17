@@ -73,8 +73,18 @@ export const GIMMICK_KINDS: Record<GimmickId, string[]> = {
 };
 /** Jumlah maksimal riwayat kiriman yang dimuat (semua jenis digabung). */
 export const HISTORY_LIMIT = 300;
+/** Batas Inbox (kiriman menunggu) dan daftar "perlu dicek" yang dimuat; dinaikkan supaya antrean panjang saat live ramai tidak terpotong. */
+export const INBOX_LIMIT = 500;
+export const REVIEW_LIMIT = 200;
 /** Jenis kiriman yang masuk antrean tayang di overlay saat gimmick-nya sedang tayang. Spin → roda, Card → bank (isi kartu tetap tersembunyi). */
 export const QUEUE_KINDS = new Set(["confession", "hottake", "chaos", "thisorthat"]);
+/** Kiriman yang ditahan di Inbox menunggu giliran: bersih, belum antre/tayang, jenis tertentu (Confession, Hot Take, This or That). */
+export function waitingOf(l: { inbox: Submission[]; queue: Submission[]; nowShowing: Submission | null }, kind: string): Submission[] {
+  return l.inbox.filter((s) => s.kind === kind && s.status === "pending" && !s.flagged && s.id !== l.nowShowing?.id && !l.queue.some((q) => q.id === s.id));
+}
+/** Urutan putar antrean: VIP (fast track) dulu, sisanya yang paling lama menunggu dulu. */
+export const waitingOrder = (list: Submission[]): Submission[] =>
+  [...list].sort((a, b) => fastRank(b) - fastRank(a) || Date.parse(a.created_at) - Date.parse(b.created_at));
 /** Jenis kiriman yang bisa disimpan ke Question Bank. */
 export const BANKABLE_KINDS = new Set(["confession", "card", "hottake", "spin", "thisorthat", "problem", "question"]);
 
@@ -200,21 +210,21 @@ function queueTick() {
   queueTimer = startTimer(queueTick, ms);
   syncQueueOverlay();
 }
-/** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, otomatis disimpan ke Question Bank. */
+/** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, kembali menunggu di Inbox. */
 function abandonQueue() {
   stopTimer(queueTimer); queueTimer = null;
   const rest = live.queue;
   setLive({ queue: [], nowShowing: null, queuePaused: false });
   syncQueueOverlay();
-  for (const s of rest) void liveActions.saveToBank(s);
-  if (rest.length) toast(`${rest.length} kiriman yang antre disimpan ke Question Bank`);
+  // Item antre belum berstatus "shown", jadi masih ada di Inbox: cukup dilepas dari antrean, tidak dibuang ke Bank.
+  if (rest.length) toast(`${rest.length} kiriman kembali ke daftar tunggu di Inbox`);
 }
 function watchHostSwitch(o: OverlayState) {
   if (presenting || !live.nowShowing) return;
   if (o.payloadAt !== shownAt) abandonQueue();
 }
 
-/** Penyaluran otomatis kiriman bersih: cocok dengan gimmick tayang → antre tayang; selain itu → Question Bank ("Dari Penonton"). */
+/** Penyaluran otomatis kiriman bersih: Confession/Hot Take/This or That ditahan di Inbox (ikut antrean hanya kalau sudah berjalan); Spin → roda; sisanya → Question Bank ("Dari Penonton"). */
 async function saveRouted(r: Submission, target?: GimmickId, category?: string, toWheel = false) {
   const res = await liveActions.saveToBank(r, target, category);
   if (!res.ok) toast.error(res.message);
@@ -229,7 +239,12 @@ function routeSubmission(r: Submission) {
     else void saveRouted(r, "spin");
     return;
   }
-  if (QUEUE_KINDS.has(r.kind) && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) { liveActions.enqueue(r); return; }
+  if (QUEUE_KINDS.has(r.kind)) {
+    // Ikut antrean hanya kalau antrean jenis ini SUDAH berjalan (host menekan "Tampilkan antrean"). Selain itu kiriman ditahan di Inbox,
+    // tidak tampil sendiri dan tidak dibuang ke Bank, sampai host menekan tombol atau menyimpan/menolaknya.
+    if (live.nowShowing?.kind === r.kind && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) liveActions.enqueue(r);
+    return;
+  }
   if (BANKABLE_KINDS.has(r.kind)) void saveRouted(r);
 }
 
@@ -252,8 +267,8 @@ export const liveActions = {
       const byNewest = (x: Submission, y: Submission) => Date.parse(y.created_at) - Date.parse(x.created_at);
       const without = (l: Submission[]) => l.filter((x) => x.id !== id);
       setLive({
-        inbox: status === "pending" ? [moved, ...without(live.inbox)].sort(byNewest).slice(0, 100) : without(live.inbox),
-        review: status === "review" ? [moved, ...without(live.review)].sort(byNewest).slice(0, 100) : without(live.review),
+        inbox: status === "pending" ? [moved, ...without(live.inbox)].sort(byNewest).slice(0, INBOX_LIMIT) : without(live.inbox),
+        review: status === "review" ? [moved, ...without(live.review)].sort(byNewest).slice(0, REVIEW_LIMIT) : without(live.review),
         history: status !== "pending" && status !== "review" ? [moved, ...without(live.history)].sort(byNewest).slice(0, HISTORY_LIMIT) : without(live.history),
       });
     }
@@ -272,6 +287,27 @@ export const liveActions = {
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
     setLive({ queue: [...live.queue, s] });
     if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
+    return true;
+  },
+  /** ▶ Putar semua kiriman yang menunggu untuk satu jenis (VIP dulu, lalu yang paling lama menunggu). Antrean jenis lain yang sedang jalan dihentikan. */
+  playWaiting(kind: string): number {
+    if (!QUEUE_KINDS.has(kind)) return 0;
+    const list = waitingOrder(waitingOf(live, kind));
+    if (!list.length) { toast("Tidak ada kiriman yang menunggu."); return 0; }
+    if (live.nowShowing && live.nowShowing.kind !== kind) {
+      stopTimer(queueTimer); queueTimer = null;
+      setLive({ queue: [], nowShowing: null, queuePaused: false });
+    }
+    setLive({ queue: [...live.queue, ...list] });
+    if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
+    toast.success(`▶ ${list.length} kiriman diputar berurutan`);
+    return list.length;
+  },
+  /** Tampilkan satu kiriman sekarang juga, terpisah dari antrean (kalau antrean sedang jalan, antrean berhenti dan sisanya kembali menunggu). */
+  showNow(s: Submission): boolean {
+    if (!QUEUE_KINDS.has(s.kind)) return false;
+    if (!present(s)) { toast.error("Isi kiriman tidak valid untuk ditampilkan."); return false; }
+    void liveActions.setStatus(s.id, "shown");
     return true;
   },
   /** ⏸️ Tahan: bekukan timer item yang sedang tampil. */
@@ -622,8 +658,8 @@ export function useCloudSync(userId: string | undefined) {
       const ik = await supabase.from("studio_sessions").select("ingest_key").eq("owner_id", userId).maybeSingle();
       const ingestKey = ik.error ? null : ((ik.data as unknown as { ingest_key?: string } | null)?.ingest_key ?? null);
       const { data: qs } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
-      const { data: inbox } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(100);
-      const { data: rev } = await supabase.from("audience_submissions").select("*").eq("status", "review").order("created_at", { ascending: false }).limit(100);
+      const { data: inbox } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(INBOX_LIMIT);
+      const { data: rev } = await supabase.from("audience_submissions").select("*").eq("status", "review").order("created_at", { ascending: false }).limit(REVIEW_LIMIT);
       // Pengaturan + jendela input (kolom baru paket 1); dilewati kalau migrasinya belum jalan.
       const cfg = await supabase.from("studio_sessions").select("settings, intake").eq("owner_id", userId).maybeSingle();
       const cfgRow = cfg.error ? null : (cfg.data as unknown as { settings?: Record<string, unknown> | null; intake?: Partial<Intake> | null } | null);
@@ -698,10 +734,10 @@ export function useCloudSync(userId: string | undefined) {
             setLive({ web: { ...live.web, [r.choice]: live.web[r.choice] + 1 } }); scheduleVotePush();
           }
         } else if (r.status === "pending") {
-          setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, 100) });
+          setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, INBOX_LIMIT) });
           // Penyaluran otomatis: cocok dengan gimmick tayang → antre; selain itu → Question Bank. Yang kena moderasi (review) tidak pernah lewat sini.
           routeSubmission(r);
-        } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, 100) });
+        } else if (r.status === "review") setLive({ review: [r, ...live.review].slice(0, REVIEW_LIMIT) });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
         const r = e.new as Submission;

@@ -151,13 +151,14 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   );
 }
 
+const HOT_MS = 8000; // sisa waktu ini: garis mulai berdenyut
 /** Garis loading di tepi bawah kartu: bergerak kiri→kanan selama item tayang, hanya selama masih ada antrean (hilang saat habis). */
 function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   const paused = q.pausedAt !== undefined;
   const elapsed = useMemo(() => Math.min(q.ms, Math.max(0, (q.pausedAt ?? Date.now()) - q.startedAt)), [q.ms, q.pausedAt, q.startedAt]);
   return (
     <div className="ov-queue" data-paused={paused ? "" : undefined} aria-hidden>
-      <i key={`${q.startedAt}-${paused ? "p" : "r"}`} style={{ animationDuration: `${q.ms}ms`, animationDelay: `-${elapsed}ms` }} />
+      <i key={`${q.startedAt}-${paused ? "p" : "r"}`} style={{ animationDuration: `${q.ms}ms, 1s`, animationDelay: `${-elapsed}ms, ${q.ms - HOT_MS - elapsed}ms` }} />
     </div>
   );
 }

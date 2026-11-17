@@ -161,13 +161,21 @@
 .ov-word.roll { animation: none; filter: saturate(0.85); }
 
 /* garis loading antrean: tepi bawah kartu (cermin garis gradasi di tepi atas), tidak memakan ruang sehingga tidak mengubah ukuran kartu */
-.ov-queue { position: absolute; left: 1.4em; right: 1.4em; bottom: -0.1em; height: 0.3em; border-radius: 0.4em 0.4em 0 0; overflow: hidden; pointer-events: none;
+.ov-queue { position: absolute; left: 1.4em; right: 1.4em; bottom: -0.1em; height: 0.32em; border-radius: 0.4em 0.4em 0 0; overflow: hidden; pointer-events: none;
   background: color-mix(in oklab, var(--ov) 16%, transparent); }
-.ov-queue i { position: relative; display: block; height: 100%; width: 0; animation: ov-queue-fill linear both;
-  background: linear-gradient(90deg, var(--ov), var(--pop), var(--electric)); box-shadow: 0 0 0.7em var(--ov); }
-.ov-queue i::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 2.4em; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9)); }
-.ov-queue[data-paused] i { animation-play-state: paused; opacity: 0.5; }
-@keyframes ov-queue-fill { from { width: 0; } to { width: 100%; } }
+/* Isi digeser dengan transform (dikerjakan GPU, mulus walau gerakannya cuma beberapa px per detik) — bukan animasi width yang terlihat tersendat.
+   Selain progres lambat, ada kilau yang terus menyapu kiri→kanan supaya selalu terasa bergerak; 8 detik terakhir berdenyut makin terang. */
+.ov-queue i { position: relative; display: block; width: 100%; height: 100%; transform: translate3d(-100%, 0, 0); will-change: transform;
+  background: linear-gradient(90deg, var(--ov), var(--pop), var(--electric)); box-shadow: 0 0 0.7em var(--ov);
+  animation-name: ov-queue-fill, ov-queue-hot; animation-timing-function: linear, ease-in-out; animation-iteration-count: 1, infinite; animation-fill-mode: both, backwards; }
+.ov-queue i::before { content: ""; position: absolute; inset: 0; transform: translate3d(-100%, 0, 0); will-change: transform;
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,0.6) 50%, transparent 70%); animation: ov-queue-sheen 1.7s ease-in-out infinite; }
+.ov-queue i::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 2.4em; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95)); }
+.ov-queue[data-paused] i, .ov-queue[data-paused] i::before { animation-play-state: paused; }
+.ov-queue[data-paused] i { opacity: 0.5; }
+@keyframes ov-queue-fill { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes ov-queue-sheen { 0% { transform: translate3d(-100%, 0, 0); } 70%, 100% { transform: translate3d(100%, 0, 0); } }
+@keyframes ov-queue-hot { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.8) saturate(1.3); } }
 @keyframes ov-item-in { 0% { opacity: 0; transform: translateX(-1.2em) scale(0.9); } 100% { opacity: 1; transform: none; } }
 @keyframes ov-item-glow { 0%, 35% { background: color-mix(in oklab, var(--zest) 70%, transparent); box-shadow: 0 0 1em color-mix(in oklab, var(--zest) 80%, transparent); } 100% { box-shadow: none; } }
 @keyframes ov-shuffle {

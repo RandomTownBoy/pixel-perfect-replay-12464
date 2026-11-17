@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { BookmarkPlus, RotateCcw, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookmarkPlus, ListPlus, RotateCcw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,32 @@ export function timeAgo(iso: string, nowMs = Date.now()): string {
   if (s < 3600) return `${Math.floor(s / 60)} mnt lalu`;
   if (s < 86400) return `${Math.floor(s / 3600)} jam lalu`;
   return `${Math.floor(s / 86400)} hari lalu`;
+}
+
+/** Tombol hapus dua langkah: ketuk sekali untuk meminta konfirmasi, ketuk lagi untuk menghapus. Otomatis batal kalau tidak dikonfirmasi. */
+export function ConfirmDelete({ label, confirmLabel = "Yakin hapus?", onConfirm, className = "", compact = false }: {
+  label: string; confirmLabel?: string; onConfirm: () => void | Promise<unknown>; className?: string; compact?: boolean;
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  if (compact) {
+    return (
+      <Button size="sm" variant={armed ? "destructive" : "ghost"} className={className} aria-label={armed ? confirmLabel : label} title={armed ? confirmLabel : label}
+        onClick={() => { if (armed) { setArmed(false); void onConfirm(); } else setArmed(true); }}>
+        <Trash2 />{armed && <span>{confirmLabel}</span>}
+      </Button>
+    );
+  }
+  return (
+    <Button size="sm" variant={armed ? "destructive" : "ghost"} className={className}
+      onClick={() => { if (armed) { setArmed(false); void onConfirm(); } else setArmed(true); }}>
+      <Trash2 /> {armed ? confirmLabel : label}
+    </Button>
+  );
 }
 
 /**
@@ -65,6 +91,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
     void liveActions.setStatus(s.id, "shown");
   };
+  const requeue = (s: Submission) => { if (!liveActions.enqueue(s)) toast.error("Kiriman ini tidak bisa diantrekan (sudah dalam antrean atau perlu dicek)."); };
   const replayLabel = (s: Submission) =>
     QUEUE_KINDS.has(s.kind) ? (isQueued(s) ? "Sedang tayang" : "Tampilkan lagi")
       : s.kind === "chaos" ? "Jadikan cerita" : s.kind === "thisorthat" || s.kind === "hottake" ? "Jadikan ronde" : "Tampilkan lagi";
@@ -74,11 +101,12 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-bold">🕘 Riwayat dari penonton ({all.length})</h3>
         {all.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {FILTERS.map(([k, l]) => (
               <button key={k} onClick={() => { setFilter(k); setLimit(PAGE); }}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${filter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{l}</button>
             ))}
+            {list.length > 0 && <ConfirmDelete label={`Hapus ${filter === "all" ? "semua" : "yang tampil"} (${list.length})`} confirmLabel={`Yakin hapus ${list.length}?`} onConfirm={() => liveActions.deleteHistory(list.map((x) => x.id))} className="h-7 px-2 text-[11px]" />}
           </div>
         )}
       </div>
@@ -93,10 +121,14 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
               {s.status !== "rejected" && s.kind !== "card" && (
                 <Button size="sm" variant="live" disabled={QUEUE_KINDS.has(s.kind) && isQueued(s)} onClick={() => replay(s)}><Send /> {replayLabel(s)}</Button>
               )}
+              {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (
+                <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>
+              )}
               {s.status !== "approved" && BANKABLE_KINDS.has(s.kind) && (
                 <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>
               )}
               <Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "pending")}><RotateCcw /> Kembalikan ke Inbox</Button>
+              <ConfirmDelete compact label="Hapus dari riwayat" confirmLabel="Hapus?" className="ml-auto" onConfirm={() => liveActions.deleteHistory([s.id])} />
             </div>
           </li>
         ))}

@@ -6,12 +6,12 @@ import {
   updateOverlayPayload, useKyoka, VIEWER_CATEGORY, type GimmickId, type OverlayPayload,
 } from "@/lib/kyoka";
 import { SpinWheelSvg } from "@/components/SpinWheel";
-import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check, Tv } from "lucide-react";
+import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check, Tv, RotateCcw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 import { liveActions, useLive } from "@/lib/cloud";
-import { AudienceHistory } from "@/components/AudienceHistory";
+import { AudienceHistory, ConfirmDelete } from "@/components/AudienceHistory";
 import { WaitingQueue } from "@/components/WaitingQueue";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -257,17 +257,28 @@ export function ThisOrThatGimmick() {
 const SHUFFLE_MS = 1200;
 const AUTO_DEAL_MS = 6000;
 const AUTO_DEAL_KEY = "kyoka.card.autoDeal";
+const SESSION_KEY = "kyoka.card.session";
+const SESSION_MAX_AGE_MS = 12 * 3600_000;
 export function CardGimmick() {
   const all = useKyoka((s) => s.questions);
   const intake = useLive((s) => s.intake.card);
   const pending = useLive((s) => s.inbox).filter((s) => s.kind === "card");
   const [saving, setSaving] = useState<string | null>(null);
+  const autoApprove = useKyoka((st) => st.settings.autoApproveCards);
+  // Menyetujui kartu penonton tidak lagi mengganti pack/deck yang sedang dimainkan; kartunya masuk pack "Dari Penonton" dan ikut deck berikutnya.
   const saveCard = async (s: (typeof pending)[number]) => {
     setSaving(s.id);
     try {
       const result = await liveActions.saveToBank(s);
-      if (result.ok) { changePack(VIEWER_CATEGORY); toast.success(result.message); }
-      else toast.error(result.message);
+      if (result.ok) toast.success(result.message); else toast.error(result.message);
+    } finally { setSaving(null); }
+  };
+  const approveAll = async () => {
+    setSaving("all");
+    let ok = 0;
+    try {
+      for (const s of pending) { if ((await liveActions.saveToBank(s)).ok) ok++; }
+      toast.success(`${ok} kartu penonton disetujui`);
     } finally { setSaving(null); }
   };
   snap = all;
@@ -279,8 +290,42 @@ export function CardGimmick() {
   const [autoDeal, setAutoDeal] = useState<boolean>(() => { try { return typeof window !== "undefined" && localStorage.getItem(AUTO_DEAL_KEY) === "1"; } catch { return false; } });
   const toggleAuto = (v: boolean) => { setAutoDeal(v); try { localStorage.setItem(AUTO_DEAL_KEY, v ? "1" : "0"); } catch { /* abaikan */ } };
   const [newCard, setNewCard] = useState("");
-  const source = all.filter((q) => q.gimmick === "card" && (pack === "all" || q.category === pack)).map((q) => q.text);
+  const [includeViewer, setIncludeViewer] = useState(true);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  /** Nyalakan/matikan persetujuan otomatis. Saat dinyalakan, kartu yang sudah menunggu langsung disetujui. */
+  const toggleAutoApprove = (v: boolean) => {
+    actions.updateSettings({ autoApproveCards: v });
+    if (v && pending.length) void approveAll();
+  };
+  // Hanya kartu yang belum terpakai yang boleh dibagikan; kartu yang sudah dibuka tidak muncul lagi kecuali direset.
+  // Kartu penonton yang sudah disetujui (pack "Dari Penonton") ikut dibagikan walau pack lain yang dipilih, kecuali dimatikan.
+  const inScope = (q: (typeof all)[number], p: string) => q.gimmick === "card" && (p === "all" || q.category === p || (includeViewer && q.category === VIEWER_CATEGORY));
+  const packCards = all.filter((q) => inScope(q, pack));
+  const viewerUnused = all.filter((q) => q.gimmick === "card" && q.category === VIEWER_CATEGORY && !q.used).length;
+  const source = packCards.filter((q) => !q.used).map((q) => q.text);
+  const usedCount = packCards.length - source.length;
+  // Deck yang sedang di meja dibekukan di state supaya kartu tidak bergeser/berganti saat kartu ditandai terpakai.
   const cards = deck.length ? deck : source.slice(0, 6);
+
+  // Deck, kartu yang sudah dibuka, dan pack disimpan di browser supaya refresh di tengah live tidak memutus dashboard dari overlay.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") as { pack?: unknown; deck?: unknown; opened?: unknown; at?: unknown } | null;
+      if (v && typeof v.at === "number" && Date.now() - v.at < SESSION_MAX_AGE_MS && Array.isArray(v.deck) && Array.isArray(v.opened)) {
+        const d = v.deck.filter((x): x is string => typeof x === "string");
+        setPack(typeof v.pack === "string" ? v.pack : "all");
+        setDeck(d);
+        setOpened(v.opened.filter((x): x is number => Number.isInteger(x) && x >= 0 && x < d.length));
+      }
+    } catch { /* abaikan */ }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify({ pack, deck, opened, at: Date.now() })); } catch { /* abaikan */ }
+  }, [restored, pack, deck, opened]);
 
   // Kartu "tayang di overlay" = payload card yang memakai fase. Payload lama (tanpa phase) tidak dihitung.
   const ov = useOverlayPayload();
@@ -288,11 +333,21 @@ export function CardGimmick() {
 
   const showCards = () => {
     if (!cards.length) { toast("Belum ada kartu di pack ini"); return; }
+    if (!deck.length) setDeck(cards);
     setOpened([]);
     sendToOverlay({ gimmick: "card", phase: "standby", count: cards.length });
   };
   const deal = () => {
-    const next = sample(source, Math.min(6, source.length));
+    if (!source.length) {
+      setDeck([]); setOpened([]);
+      toast("Semua kartu di pack ini sudah terpakai. Tambah kartu baru atau reset kartu terpakai.");
+      if (isCardLive()) updateOverlayPayload({ gimmick: "card", phase: "standby", count: 0 });
+      return;
+    }
+    dealWith(sample(source, Math.min(6, source.length)));
+  };
+  /** Bagikan deck dari daftar kartu tertentu (acak maupun pilihan manual). */
+  const dealWith = (next: string[]) => {
     setDeck(next); setOpened([]);
     if (isCardLive()) {
       // kocok ±1,2 dtk lalu bagi satu per satu; semua in-place supaya kartu overlay tidak berkedip
@@ -302,13 +357,45 @@ export function CardGimmick() {
         if (cur?.gimmick === "card" && cur.phase === "shuffling") updateOverlayPayload({ gimmick: "card", phase: "dealt", count: next.length });
       }, SHUFFLE_MS);
     } else {
-      sendToOverlay({ gimmick: "card", count: Math.min(6, source.length) });
+      sendToOverlay({ gimmick: "card", count: next.length });
     }
+  };
+  /** Kembalikan semua kartu terpakai di pack ini ke deck (hanya kalau diminta). */
+  const resetUsed = () => {
+    const used = packCards.filter((q) => q.used);
+    used.forEach((q) => actions.updateQuestion(q.id, { used: false }));
+    toast.success(`${used.length} kartu dikembalikan ke deck`);
+  };
+  // Kelola kartu: pilih kartu tertentu untuk dibagikan, dikembalikan, atau dihapus.
+  const managed = [...packCards].sort((a, b) => Number(a.used) - Number(b.used));
+  const chosen = managed.filter((q) => selected.includes(q.id));
+  const toggleSel = (id: string) => setSelected((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
+  const dealChosen = () => {
+    if (!chosen.length) return;
+    if (chosen.length > 6) { toast("Maksimal 6 kartu per deck. Kurangi pilihanmu."); return; }
+    dealWith(chosen.map((q) => q.text));
+    toast.success(`${chosen.length} kartu pilihan dibagikan`);
+  };
+  const restoreChosen = () => {
+    chosen.filter((q) => q.used).forEach((q) => actions.updateQuestion(q.id, { used: false }));
+    toast.success("Kartu pilihan bisa dipakai lagi");
+    setSelected([]);
+  };
+  const deleteChosen = () => {
+    chosen.forEach((q) => actions.deleteQuestion(q.id));
+    toast.success(`${chosen.length} kartu dihapus`);
+    setSelected([]);
   };
   const pick = (i: number, c: string) => {
     const isNew = !opened.includes(i);
+    if (!deck.length) setDeck(cards); // bekukan deck awal sebelum kartu ditandai terpakai
     const nextOpened = isNew ? [...opened, i] : opened;
-    if (isNew) { setOpened(nextOpened); markUsed(c); }
+    if (isNew) {
+      setOpened(nextOpened);
+      // Cocokkan ke kartu di Pick a Card saja (bukan pertanyaan gimmick lain yang kebetulan teksnya sama).
+      const q = all.find((x) => x.gimmick === "card" && !x.used && x.text === c);
+      if (q) actions.updateQuestion(q.id, { used: true });
+    }
     // Kartu yang sudah dibuka tetap terbuka di overlay; klik ulang hanya memunculkan lagi teksnya.
     const payload = { gimmick: "card" as const, phase: "revealed" as const, count: cards.length, revealed: i, opened: nextOpened, text: c };
     if (isCardLive()) updateOverlayPayload(payload); else sendToOverlay(payload);
@@ -316,7 +403,7 @@ export function CardGimmick() {
   const changePack = (v: string) => {
     setPack(v); setDeck([]); setOpened([]);
     if (isCardLive()) {
-      const n = Math.min(6, all.filter((q) => q.gimmick === "card" && (v === "all" || q.category === v)).length);
+      const n = Math.min(6, all.filter((q) => !q.used && inScope(q, v)).length);
       updateOverlayPayload({ gimmick: "card", phase: "standby", count: n });
     }
   };
@@ -344,7 +431,11 @@ export function CardGimmick() {
         <Button variant="secondary" onClick={deal}><Shuffle /> Kocok & Bagikan</Button>
         <Button variant="live" onClick={showCards}><Tv /> Tampilkan Kartu di Overlay</Button>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={intake} onChange={(e) => void liveActions.setIntake("card", e.target.checked)} />Terima kartu penonton</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={autoApprove} onChange={(e) => toggleAutoApprove(e.target.checked)} />Setujui kartu penonton otomatis</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={autoDeal} onChange={(e) => toggleAuto(e.target.checked)} />Kocok otomatis setelah deck selesai</label>
+        {pack !== "all" && pack !== VIEWER_CATEGORY && (
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeViewer} onChange={(e) => setIncludeViewer(e.target.checked)} />Sertakan kartu penonton ({viewerUnused})</label>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {cards.map((c, i) => (
@@ -356,10 +447,15 @@ export function CardGimmick() {
           </button>
         ))}
       </div>
+      {!cards.length && (
+        <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground">
+          {usedCount > 0 ? `Semua ${usedCount} kartu di pack ini sudah terpakai.` : "Belum ada kartu di pack ini."} Tambah kartu baru{usedCount > 0 ? " atau kembalikan kartu terpakai" : ""} untuk lanjut.
+        </p>
+      )}
       {finished ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/40 bg-success/10 p-3">
           <p className="text-sm font-semibold">✅ Deck selesai: semua kartu sudah terbuka.{autoDeal ? ` Dikocok ulang otomatis dalam ${AUTO_DEAL_MS / 1000} detik.` : ""}</p>
-          <Button variant="live" onClick={deal}><Shuffle /> Deck baru</Button>
+          <Button variant="live" onClick={deal}><Shuffle /> {source.length ? "Deck baru" : "Kartu habis"}</Button>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Klik kartu untuk membuka. Kartu yang dibuka tetap terbuka di overlay sampai semua habis, lalu ganti deck baru.</p>
@@ -368,14 +464,54 @@ export function CardGimmick() {
         <Input placeholder="Tambah kartu ke pack…" value={newCard} onChange={(e) => setNewCard(e.target.value)} />
         <Button onClick={() => { if (actions.addQuestions([{ text: newCard, gimmick: "card", category: pack === "all" ? "Random Thoughts" : pack }])) setNewCard(""); }}><Plus /></Button>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>🃏 {source.length} kartu tersisa · {usedCount} sudah terpakai (tidak dibagikan lagi)</span>
+        {usedCount > 0 && <Button size="sm" variant="ghost" onClick={resetUsed}><RotateCw /> Kembalikan semua kartu terpakai</Button>}
+      </div>
+      <div className="rounded-xl border border-border/60 bg-background/40">
+        <button onClick={() => setManageOpen(!manageOpen)} aria-expanded={manageOpen} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-semibold">
+          <span>🗂️ Kelola kartu di pack ini ({packCards.length})</span>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${manageOpen ? "rotate-180" : ""}`} />
+        </button>
+        {manageOpen && (
+          <div className="space-y-2 border-t border-border/60 p-3">
+            {!managed.length && <p className="text-sm text-muted-foreground">Belum ada kartu di pack ini.</p>}
+            {managed.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button size="sm" variant="live" disabled={!chosen.length} onClick={dealChosen}><Shuffle /> Bagikan yang dipilih ({chosen.length}/6)</Button>
+                <Button size="sm" variant="secondary" disabled={!chosen.some((q) => q.used)} onClick={restoreChosen}><RotateCcw /> Pakai lagi</Button>
+                {chosen.length > 0 && <ConfirmDelete label="Hapus" confirmLabel={`Yakin hapus ${chosen.length}?`} onConfirm={deleteChosen} />}
+                <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(selected.length ? [] : managed.map((q) => q.id))}>{selected.length ? "Batal pilih" : "Pilih semua"}</Button>
+              </div>
+            )}
+            <ul className="scroll-slim max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              {managed.map((q) => (
+                <li key={q.id} className={`flex items-start gap-2 rounded-lg border border-border/60 bg-card/60 p-2.5 text-sm ${q.used ? "opacity-60" : ""}`}>
+                  <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" checked={selected.includes(q.id)} onChange={() => toggleSel(q.id)} aria-label="Pilih kartu" />
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words">{q.text}</p>
+                    <p className="text-[11px] text-muted-foreground">{q.category} · {q.used ? "sudah terpakai" : "belum dipakai"}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 px-0" title={q.used ? "Pakai lagi" : "Tandai terpakai"} aria-label={q.used ? "Pakai lagi" : "Tandai terpakai"} onClick={() => actions.updateQuestion(q.id, { used: !q.used })}>{q.used ? <RotateCcw /> : <Check />}</Button>
+                  <ConfirmDelete compact label="Hapus kartu" confirmLabel="Hapus?" className="h-8 shrink-0 px-2" onConfirm={() => { actions.deleteQuestion(q.id); setSelected((l) => l.filter((x) => x !== q.id)); }} />
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-muted-foreground">Kartu yang dipilih bisa dibagikan sebagai deck (maks. 6), termasuk yang sudah terpakai. Menghapus kartu di sini juga menghapusnya dari Question Bank.</p>
+          </div>
+        )}
+      </div>
       <section className="space-y-3 border-t border-border pt-4">
-        <h3 className="text-sm font-bold">🃏 Kartu penonton ({pending.length})</h3>
-        {!pending.length && <p className="text-sm text-muted-foreground">Belum ada kiriman kartu.</p>}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold">🃏 Kartu penonton menunggu persetujuan ({pending.length})</h3>
+          {pending.length > 1 && <Button size="sm" variant="secondary" disabled={saving !== null} onClick={() => void approveAll()}><Check /> {saving === "all" ? "Menyetujui…" : `Setujui semua (${pending.length})`}</Button>}
+        </div>
+        {!pending.length && <p className="text-sm text-muted-foreground">{autoApprove ? "Belum ada kartu menunggu. Kartu dari penonton otomatis masuk pack “Dari Penonton” dan ikut deck berikutnya." : "Belum ada kiriman kartu. Kartu dari penonton ditahan di sini sampai kamu setujui, jadi isinya tidak masuk deck dan tayang tanpa kamu lihat dulu."}</p>}
         <ul className="space-y-2">
           {pending.map((s) => <li key={s.id} className="space-y-2 rounded-lg border border-border p-3">
             <p className="break-words text-sm">{s.content}</p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={saving !== null} onClick={() => void saveCard(s)}><Plus />{saving === s.id ? "Menyimpan…" : "Masukkan ke pack penonton"}</Button>
+              <Button size="sm" disabled={saving !== null} onClick={() => void saveCard(s)}><Plus />{saving === s.id ? "Menyimpan…" : "Setujui → pack penonton"}</Button>
               <Button size="sm" variant="ghost" aria-label="Tolak kartu" onClick={() => void liveActions.setStatus(s.id, "rejected")}><Trash2 /></Button>
             </div>
           </li>)}

@@ -72,7 +72,7 @@ export type OverlayPayload =
     added?: string[] | undefined; addedAt?: number | undefined;
   }
   | { gimmick: "thisorthat"; a?: string | undefined; b?: string | undefined; countdownEnd?: number | undefined }
-  | { gimmick: "card"; count: number; revealed?: number | undefined; text?: string | undefined; phase?: CardPhase | undefined }
+  | { gimmick: "card"; count: number; revealed?: number | undefined; /** Urutan indeks kartu yang sudah dibuka di deck ini; tetap terbuka sampai deck diganti. */ opened?: number[] | undefined; text?: string | undefined; phase?: CardPhase | undefined }
   | { gimmick: "hottake"; topic?: string | undefined; followups?: string[] | undefined }
   | { gimmick: "confession"; prompt?: string | undefined; category?: string | undefined }
   | { gimmick: "chaos"; mode: "story"; words: string[]; /** Kata sedang diacak (animasi gulir) di overlay. */ rolling?: boolean | undefined }

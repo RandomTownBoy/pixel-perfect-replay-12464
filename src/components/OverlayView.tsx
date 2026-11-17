@@ -116,7 +116,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   const guideOnTop = pos === "tl" || pos === "tr";
 
   return (
-    <div ref={rootRef} style={style} className="ov-root">
+    <div ref={rootRef} style={style} className="ov-root" data-wide={box.w > 0 && box.w / box.h >= 1 ? "" : undefined}>
       <div ref={safeRef} className="ov-safe" style={{ inset }}>
         <div ref={stageRef} className="ov-stage" style={stageStyle}>
           {!state.visible ? null : !p ? (
@@ -362,21 +362,25 @@ function SpinStage({ p }: { p: SpinPayload }) {
         {p.category && <span className="ov-chip soft">{p.category}</span>}
         {flash && <span className="ov-chip add">➕ Ditambahkan ke roda</span>}
       </div>
-      <div className="ov-wheelwrap">
-        <span className="ov-pointer" />
-        <SpinWheelSvg count={n} winner={winner} className="ov-wheel" style={{ transform: `rotate(${angle}deg)` }} />
+      <div className="ov-spin-main">
+        <div className="ov-wheelwrap">
+          <span className="ov-pointer" />
+          <SpinWheelSvg count={n} winner={winner} className="ov-wheel" style={{ transform: `rotate(${angle}deg)` }} />
+        </div>
+        <div className="ov-spin-side">
+          {n === 0 ? (
+            <p className="ov-empty">Roda masih kosong, ketik !spin lalu pertanyaanmu</p>
+          ) : (
+            <ol className={`ov-items${dense ? " two" : ""}${n > 6 ? " many" : ""}`}>
+              {items.map((t, i) => (
+                <li key={t} title={t} className={`ov-item${winner === undefined ? "" : i === winner ? " win" : " dim"}${fresh.has(t) ? " fresh" : ""}`}>
+                  <b style={{ background: wheelColor(i) }}>{i + 1}</b><span>{t}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
-      {n === 0 ? (
-        <p className="ov-empty">Roda masih kosong, ketik !spin lalu pertanyaanmu</p>
-      ) : (
-        <ol className={`ov-items${dense ? " two" : ""}`}>
-          {items.map((t, i) => (
-            <li key={t} title={t} className={`ov-item${winner === undefined ? "" : i === winner ? " win" : " dim"}${fresh.has(t) ? " fresh" : ""}`}>
-              <b style={{ background: wheelColor(i) }}>{i + 1}</b><span>{t}</span>
-            </li>
-          ))}
-        </ol>
-      )}
       {phase === "spinning" && <span className="ov-muted">Memutar…</span>}
       {phase === "result" && p.question && (
         <div key={p.question} className="ov-result animate-pop-in" style={{ animationDelay: "0.35s" }}>

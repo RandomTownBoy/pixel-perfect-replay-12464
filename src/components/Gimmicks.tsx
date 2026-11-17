@@ -12,6 +12,7 @@ import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 import { liveActions, useLive } from "@/lib/cloud";
 import { AudienceHistory } from "@/components/AudienceHistory";
+import { WaitingQueue } from "@/components/WaitingQueue";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -246,6 +247,7 @@ export function ThisOrThatGimmick() {
         <Input placeholder="Pilihan B" value={b} onChange={(e) => setB(e.target.value)} className="flex-1" />
         <Button variant="secondary" onClick={() => { if (a && b) { setPair([a, b]); setK(k + 1); setA(""); setB(""); } }}>Pakai</Button>
       </div>
+      <WaitingQueue kind="thisorthat" />
       <AudienceHistory gimmick="thisorthat" />
     </Panel>
   );
@@ -383,6 +385,7 @@ export function HotTakeGimmick() {
         <Button size="lg" variant="ghost" disabled={ai.loading} onClick={more}>+ Hot take AI</Button>
         <Button size="lg" variant="ghost" onClick={() => { actions.updateQuestion(cur.id, { used: true }); setFu([]); }}><Check /> Tandai dipakai</Button>
       </div>
+      <WaitingQueue kind="hottake" />
       <AudienceHistory gimmick="hottake" />
     </Panel>
   );
@@ -436,6 +439,7 @@ export function ConfessionGimmick() {
         </ul>
       </div>
       <p className="text-xs text-muted-foreground">Tip: jangan minta penonton membagikan info pribadi yang sensitif.</p>
+      <WaitingQueue kind="confession" />
       <AudienceHistory gimmick="confession" />
     </Panel>
   );

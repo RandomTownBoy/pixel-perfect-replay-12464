@@ -57,7 +57,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
 
   /** Tampilkan ulang di overlay dengan cara yang sama seperti di Inbox. */
   const replay = (s: Submission) => {
-    if (QUEUE_KINDS.has(s.kind)) { liveActions.enqueue(s); return; }
+    if (QUEUE_KINDS.has(s.kind)) { liveActions.showNow(s); return; }
     if (s.kind === "thisorthat" || s.kind === "hottake" || s.kind === "chaos") {
       if (!liveActions.startRound(s)) toast.error("Isi kiriman tidak valid untuk dijadikan ronde.");
       return;
@@ -66,7 +66,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     void liveActions.setStatus(s.id, "shown");
   };
   const replayLabel = (s: Submission) =>
-    QUEUE_KINDS.has(s.kind) ? (isQueued(s) ? "Dalam antrean" : "Antrekan lagi")
+    QUEUE_KINDS.has(s.kind) ? (isQueued(s) ? "Sedang tayang" : "Tampilkan lagi")
       : s.kind === "chaos" ? "Jadikan cerita" : s.kind === "thisorthat" || s.kind === "hottake" ? "Jadikan ronde" : "Tampilkan lagi";
 
   return (

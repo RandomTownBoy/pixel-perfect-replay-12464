@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BookmarkPlus, Copy, Gift, Inbox, LayoutGrid, MessageCircle, Radio, RotateCcw, ShieldAlert, SlidersHorizontal, X, Send } from "lucide-react";
 import { toast } from "sonner";
+import { WaitingQueue } from "@/components/WaitingQueue";
+import { timeAgo } from "@/components/AudienceHistory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BANKABLE_KINDS, liveActions, isFast, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
+import { BANKABLE_KINDS, INBOX_LIMIT, liveActions, waitingOf, waitingOrder, isFast, onAirGimmick, QUEUE_KINDS, sortVip, tierFor, TIER_BADGE, TIER_NAME, totalVotes, useLive, vipOf, type LiveEvent, type Submission } from "@/lib/cloud";
 import { getSettings, GIMMICKS, readOverlay, sendToOverlay, showBanner, subscribeOverlay, useKyoka, type Intake } from "@/lib/kyoka";
 
 export function audienceUrl(code: string | null) {
@@ -17,6 +19,20 @@ export function audienceUrl(code: string | null) {
 const EXPANDED_KEY = "kyoka:console:expanded";
 
 /** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. Terlipat jadi satu tombol secara default. */
+const PAGE = 15;
+const KIND_ORDER = ["confession", "thisorthat", "hottake", "chaos", "problem", "question", "spin", "card"];
+const QUEUE_PLAY = ["confession", "hottake", "thisorthat"] as const;
+
+/** Teks kiriman dipotong 3 baris supaya Inbox tetap ringkas; ketuk untuk membuka/menutup. */
+function Clamped({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 140;
+  return (
+    <p className={`my-1 break-words text-sm ${long ? "cursor-pointer" : ""}`} onClick={() => long && setOpen(!open)} title={long ? "Ketuk untuk buka/tutup" : undefined}
+      style={!open && long ? { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" } : undefined}>{text}</p>
+  );
+}
+
 export function LiveConsole() {
   const [open, setOpen] = useState<"votes" | "gift" | "inbox" | "feed" | "control" | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -59,6 +75,7 @@ export function LiveConsole() {
   const queuePaused = useLive((l) => l.queuePaused);
   const [view, setView] = useState<"pending" | "review" | "history">("pending");
   const [kindFilter, setKindFilter] = useState("all");
+  const [limit, setLimit] = useState(PAGE);
   const [testText, setTestText] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const code = useLive((l) => l.audienceCode);
@@ -97,7 +114,12 @@ export function LiveConsole() {
     if (s.kind === "card") return null;
     if (QUEUE_KINDS.has(s.kind)) {
       const queued = isQueued(s);
-      return <Button size="sm" variant="live" disabled={queued} onClick={() => liveActions.enqueue(s)}><Send /> {queued ? "Dalam antrean" : "Antrekan"}</Button>;
+      return (
+        <>
+          <Button size="sm" variant="live" onClick={() => liveActions.showNow(s)}><Send /> Tampilkan</Button>
+          <Button size="sm" variant="secondary" disabled={queued} onClick={() => liveActions.enqueue(s)}>{queued ? "Dalam antrean" : "Antrekan"}</Button>
+        </>
+      );
     }
     return <Button size="sm" variant="live" onClick={() => { show(s); void liveActions.setStatus(s.id, "shown"); }}><Send /> Tampilkan</Button>;
   };
@@ -106,6 +128,30 @@ export function LiveConsole() {
   );
   const matches = (l: Submission[]) => sortVip(kindFilter === "all" ? l : l.filter((x) => x.kind === kindFilter));
   const onAir = GIMMICKS.find((g) => g.id === onAirGimmick());
+
+  // Inbox: daftar sesuai tab/jenis; untuk jenis antrean, urutan = urutan putar (nomor #) supaya yang terlihat = yang akan tampil.
+  const list = view === "pending" ? inbox : view === "review" ? review : history;
+  const chips: [string, string][] = [["all", `Semua (${list.length})`], ...KIND_ORDER.filter((k) => k === kindFilter || list.some((x) => x.kind === k)).map((k): [string, string] => [k, `${kindLabel(k)} (${list.filter((x) => x.kind === k).length})`])];
+  const posMap = new Map<string, number>();
+  let rows = matches(list);
+  if (view === "pending" && (QUEUE_PLAY as readonly string[]).includes(kindFilter)) {
+    const w = waitingOrder(waitingOf(live, kindFilter));
+    w.forEach((x, i) => posMap.set(x.id, i + 1));
+    rows = [...rows.filter((x) => !posMap.has(x.id)), ...w];
+  }
+  const visibleRows = rows.slice(0, limit);
+  const waitingTotal = QUEUE_PLAY.reduce((n, k) => n + waitingOf(live, k).length, 0);
+  const queueActive = !!nowShowing && (QUEUE_PLAY as readonly string[]).includes(nowShowing.kind);
+  const row = (s: Submission, lead: ReactNode, actions: ReactNode, cls = "") => (
+    <li key={s.id} className={`rounded-xl bg-background/60 p-2.5 ${cls}`}>
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="min-w-0 truncate font-semibold text-pop">{lead}{kindLabel(s.kind)} · {who(s)}</span>
+        <span className="shrink-0 text-muted-foreground">{timeAgo(s.created_at)}</span>
+      </div>
+      <Clamped text={body(s) ?? ""} />
+      <div className="flex flex-wrap items-center gap-1.5">{actions}</div>
+    </li>
+  );
 
   const showComment = (e: LiveEvent) => sendToOverlay({ gimmick: "audience", kind: "question", content: e.content ?? "", nickname: e.nickname ?? undefined });
   const feedLine = (e: LiveEvent) => {
@@ -285,7 +331,7 @@ export function LiveConsole() {
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Antrean overlay</p>
-                <p className="text-xs text-muted-foreground">Kiriman bersih yang cocok dengan gimmick tayang masuk antrean otomatis; jenis lain langsung disimpan ke Question Bank. Lama tampil: Confession 3 mnt · Hot Take 2 mnt · Random Chaos 2 mnt · This or That 1,5 mnt. Antrean habis → layar tetap di kiriman terakhir. Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>
+                <p className="text-xs text-muted-foreground">Confession, Hot Take, dan This or That dari penonton ditahan di Inbox dan tidak tampil sendiri. Tekan “Tampilkan antrean” di Inbox atau di halaman gimmick-nya untuk memutar semuanya berurutan; “Tampilkan” di tiap kiriman menampilkannya langsung. Lama tampil: Confession 3 mnt · Hot Take 2 mnt · Random Chaos 2 mnt · This or That 1,5 mnt. Antrean habis → layar tetap di kiriman terakhir. Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>
                 {nowShowing && <p className="rounded-lg bg-card p-2 text-xs">{queuePaused ? "⏸️ Ditahan" : "Tampil"}: {body(nowShowing)}</p>}
                 {queue.length > 0 && <ul className="max-h-24 space-y-1 overflow-auto text-xs text-muted-foreground">{queue.map((q, i) => <li key={q.id}>{i + 1}. {body(q)}</li>)}</ul>}
                 {!nowShowing && queue.length === 0 && <p className="text-xs text-muted-foreground">Antrean kosong.</p>}
@@ -306,51 +352,38 @@ export function LiveConsole() {
               </div>
               <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
                 {([["pending", `Masuk (${inbox.length})`], ["review", `Cek (${review.length})`], ["history", `Riwayat (${history.length})`]] as const).map(([k, l]) => (
-                  <button key={k} onClick={() => setView(k)} className={`rounded-md py-1.5 text-xs font-semibold ${view === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
+                  <button key={k} onClick={() => { setView(k); setLimit(PAGE); }} className={`rounded-md py-1.5 text-xs font-semibold ${view === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
                 ))}
               </div>
-              <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
-                <option value="all">Semua jenis</option>
-                {["confession", "card", "thisorthat", "hottake", "chaos", "spin"].map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
-              </select>
+              <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+                {chips.map(([k, l]) => (
+                  <button key={k} onClick={() => { setKindFilter(k); setLimit(PAGE); }}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${kindFilter === k ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{l}</button>
+                ))}
+              </div>
 
-              {view === "pending" && !matches(inbox).length && <p className="py-6 text-center text-muted-foreground">Belum ada kiriman. Bagikan link di atas ke penonton.</p>}
-              {view === "review" && !matches(review).length && <p className="py-6 text-center text-muted-foreground">Tidak ada yang perlu dicek. Kiriman dengan kata tidak pantas, tautan, atau nomor telepon muncul di sini.</p>}
-              {view === "history" && !matches(history).length && <p className="py-6 text-center text-muted-foreground">Belum ada riwayat.</p>}
+              {view === "pending" && (waitingTotal > 0 || queueActive) && (
+                <div className="space-y-1.5 rounded-xl border border-border bg-background/60 p-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">⏳ Antrean menunggu</p>
+                  {QUEUE_PLAY.map((k) => <WaitingQueue key={k} kind={k} compact />)}
+                </div>
+              )}
+              {view === "pending" && inbox.length >= INBOX_LIMIT && <p className="text-[11px] text-pop">Menampilkan {INBOX_LIMIT} kiriman terbaru. Selesaikan atau tolak sebagian supaya yang lebih lama ikut terlihat.</p>}
+              {view === "pending" && !rows.length && <p className="py-6 text-center text-muted-foreground">Belum ada kiriman. Bagikan link di atas ke penonton.</p>}
+              {view === "review" && !rows.length && <p className="py-6 text-center text-muted-foreground">Tidak ada yang perlu dicek. Kiriman dengan kata tidak pantas, tautan, atau nomor telepon muncul di sini.</p>}
+              {view === "history" && !rows.length && <p className="py-6 text-center text-muted-foreground">Belum ada riwayat.</p>}
 
-              <ul className="space-y-2">
-                {view === "pending" && matches(inbox).map((s) => (
-                  <li key={s.id} className="rounded-xl bg-background/60 p-3">
-                    <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {who(s)}</p>
-                    <p className="my-1.5 break-words">{body(s)}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {primary(s)}{bankBtn(s)}
-                      <Button size="sm" variant="ghost" aria-label="Tolak" onClick={() => void liveActions.setStatus(s.id, "rejected")}><X /></Button>
-                    </div>
-                  </li>
-                ))}
-                {view === "review" && matches(review).map((s) => (
-                  <li key={s.id} className="rounded-xl border border-pop/40 bg-background/60 p-3">
-                    <p className="text-xs font-semibold text-pop">⚠️ Perlu dicek ({s.flag_reason ?? "terdeteksi"}) · {kindLabel(s.kind)} · {who(s)}</p>
-                    <p className="my-1.5 break-words">{body(s)}</p>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" variant="secondary" onClick={() => void liveActions.setStatus(s.id, "pending")}>Loloskan</Button>
-                      <Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "rejected")}><X /> Tolak</Button>
-                    </div>
-                  </li>
-                ))}
-                {view === "history" && matches(history).map((s) => (
-                  <li key={s.id} className="rounded-xl bg-background/60 p-3">
-                    <p className="text-xs font-semibold text-pop">{kindLabel(s.kind)} · {who(s)} · <span className="text-muted-foreground">{statusLabel[s.status] ?? s.status}</span></p>
-                    <p className="my-1.5 break-words">{body(s)}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {s.status !== "approved" && bankBtn(s)}
-                      {s.status !== "rejected" && primary(s)}
-                      <Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "pending")}><RotateCcw /> Kembalikan</Button>
-                    </div>
-                  </li>
-                ))}
+              <ul className="space-y-1.5">
+                {view === "pending" && visibleRows.map((s) => row(s,
+                  posMap.has(s.id) ? <b className="mr-1 rounded bg-primary/20 px-1 text-primary">#{posMap.get(s.id)}</b> : null,
+                  <>{primary(s)}{bankBtn(s)}<Button size="sm" variant="ghost" aria-label="Tolak" onClick={() => void liveActions.setStatus(s.id, "rejected")}><X /></Button></>))}
+                {view === "review" && visibleRows.map((s) => row(s, `⚠️ ${s.flag_reason ?? "terdeteksi"} · `,
+                  <><Button size="sm" variant="secondary" onClick={() => void liveActions.setStatus(s.id, "pending")}>Loloskan</Button><Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "rejected")}><X /> Tolak</Button></>,
+                  "border border-pop/40"))}
+                {view === "history" && visibleRows.map((s) => row(s, `${statusLabel[s.status] ?? s.status} · `,
+                  <>{s.status !== "approved" && bankBtn(s)}{s.status !== "rejected" && primary(s)}<Button size="sm" variant="ghost" onClick={() => void liveActions.setStatus(s.id, "pending")}><RotateCcw /> Kembalikan</Button></>))}
               </ul>
+              {rows.length > limit && <Button size="sm" variant="ghost" className="w-full" onClick={() => setLimit(limit + PAGE)}>Tampilkan lebih banyak ({rows.length - limit})</Button>}
             </div>
           )}
         </div>

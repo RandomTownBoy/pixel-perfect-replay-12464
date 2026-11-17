@@ -59,12 +59,19 @@ function useKyokaSnapshotFind(text: string) { return snap.find((x) => x.text ===
 /* ---------------- SPIN ---------------- */
 export function SpinGimmick() {
   const all = useKyoka((s) => s.questions);
+  const spinCapacity = useKyoka((s) => s.settings.spinCapacity);
+  const spinSlices = useKyoka((s) => s.settings.spinSlices);
+  const spinModeration = useKyoka((s) => s.settings.spinModeration);
   snap = all;
   const [category, setCategory] = useState("Daily Life");
   const [count, setCount] = useState(5);
   const [manual, setManual] = useState("");
-  const pool = useMemo(() => spinPoolOf(all, category), [all, category]);
-  const viewerCount = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used).length;
+  const pool = useMemo(() => spinPoolOf(all, category, spinSlices), [all, category, spinSlices]);
+  const viewerQuestions = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used);
+  const viewerCount = viewerQuestions.length;
+  const usedViewerCount = all.filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && q.used).length;
+  const waitingCount = Math.max(0, viewerCount - spinSlices);
+  const capacityPercent = Math.min(100, (viewerCount / Math.max(1, spinCapacity)) * 100);
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -76,7 +83,7 @@ export function SpinGimmick() {
   const wheelLive = ov?.gimmick === "spin" && ov.phase !== undefined;
   const resultShown = ov?.gimmick === "spin" && ov.phase === "result";
   const isWheelLive = () => { const c = readOverlay().payload; return c?.gimmick === "spin" && c.phase !== undefined; };
-  const poolTexts = (c: string) => spinPoolOf(getQuestions(), c).map((q) => q.text);
+  const poolTexts = (c: string) => spinPoolOf(getQuestions(), c, spinSlices).map((q) => q.text);
 
   const showWheel = () => {
     sendToOverlay({ gimmick: "spin", phase: "standby", items: pool.map((q) => q.text), category, rotation: rot });
@@ -97,17 +104,18 @@ export function SpinGimmick() {
   };
 
   const spin = () => {
-    if (!pool.length) { toast("Belum ada pertanyaan di kategori ini"); return; }
-    const idx = Math.floor(Math.random() * pool.length);
-    const seg = 360 / pool.length;
+    const activePool = spinPoolOf(getQuestions(), category, spinSlices);
+    if (!activePool.length) { toast("Belum ada pertanyaan di kategori ini"); return; }
+    const idx = Math.floor(Math.random() * activePool.length);
+    const seg = 360 / activePool.length;
     const target = rot + 360 * 5 + (360 - (rot % 360)) - (idx * seg + seg / 2);
-    const winner = pool[idx]?.text ?? null;
+    const winner = activePool[idx]?.text ?? null;
     const live = isWheelLive();
     const startedAt = Date.now();
     setSpinning(true); setPicked(null); setRot(target);
     if (live) {
       updateOverlayPayload({
-        gimmick: "spin", phase: "spinning", items: pool.map((q) => q.text), category, rotation: target, fromRotation: rot,
+        gimmick: "spin", phase: "spinning", items: activePool.map((q) => q.text), category, rotation: target, fromRotation: rot,
         winnerIndex: idx, durationMs: SPIN_DURATION_MS, startedAt,
       });
     } else {
@@ -150,7 +158,7 @@ export function SpinGimmick() {
                   : <SendBtn onClick={() => sendToOverlay({ gimmick: "spin", question: picked, category })} />}
                 <Button variant="secondary" onClick={() => {
                   markUsed(picked); setPicked(null);
-                  if (wheelLive) backToStandby(); else spin();
+                  if (wheelLive) backToStandby();
                 }}><SkipForward /> Next</Button>
                 <Button variant="ghost" onClick={() => { setPicked(null); if (wheelLive) backToStandby(); }}>Skip</Button>
               </div>
@@ -159,9 +167,32 @@ export function SpinGimmick() {
         </div>
       </Panel>
       <Panel className="space-y-4">
-        <h3 className="font-display text-sm font-bold">Isi roda ({pool.length})</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2"><h3 className="font-display text-sm font-bold">Isi roda</h3><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{pool.length}/{spinSlices} irisan</span></div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1 text-xs text-muted-foreground">Kapasitas antrean<Input type="number" min={1} max={300} value={spinCapacity} onChange={(e) => actions.updateSettings({ spinCapacity: Math.max(1, Math.min(300, Number(e.target.value) || 1)) })} className="h-9 text-sm text-foreground" /></label>
+            <label className="space-y-1 text-xs text-muted-foreground">Jumlah irisan<Input type="number" min={1} max={300} value={spinSlices} onChange={(e) => actions.updateSettings({ spinSlices: Math.max(1, Math.min(300, Number(e.target.value) || 1)) })} className="h-9 text-sm text-foreground" /></label>
+          </div>
+          <div className="rounded-xl border border-border bg-background/60 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs font-semibold">Moderasi pertanyaan</span><span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold text-success">{spinModeration === "auto" ? "Otomatis" : "Manual"}</span></div>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              <button type="button" onClick={() => actions.updateSettings({ spinModeration: "auto" })} className={`rounded-md px-2 py-1.5 text-xs font-semibold ${spinModeration === "auto" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>Otomatis</button>
+              <button type="button" onClick={() => actions.updateSettings({ spinModeration: "manual" })} className={`rounded-md px-2 py-1.5 text-xs font-semibold ${spinModeration === "manual" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>Periksa manual</button>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Otomatis menggunakan penyaringan kiriman yang tersedia. Mode manual menandai alur persetujuan host sebelum pertanyaan dipakai.</p>
+          </div>
+          <div className="space-y-2 rounded-lg bg-primary/5 px-3 py-2.5">
+            <div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">Kapasitas pertanyaan penonton</span><b>{viewerCount}/{spinCapacity}</b></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${capacityPercent}%` }} /></div>
+            <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+              <div><b className="block text-sm">{Math.min(viewerCount, spinSlices)}</b><span className="text-muted-foreground">Di roda</span></div>
+              <div><b className="block text-sm">{waitingCount}</b><span className="text-muted-foreground">Menunggu</span></div>
+              <div><b className="block text-sm">{usedViewerCount}</b><span className="text-muted-foreground">Terpakai</span></div>
+            </div>
+          </div>
+        </div>
         <div className="flex gap-2">
-          <Input type="number" min={1} max={10} value={count} onChange={(e) => setCount(+e.target.value)} className="w-20" />
+          <Input type="number" min={1} max={100} value={count} onChange={(e) => setCount(+e.target.value)} className="w-20" />
           <Button variant="secondary" className="flex-1" disabled={ai.loading} onClick={async () => { const l = await ai.run({ task: "generate", gimmick: "spin", category, count }); if (l) setDrafts(l); }}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate AI</Button>
         </div>
         {drafts.length > 0 && (

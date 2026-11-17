@@ -11,6 +11,8 @@ export const wheelColor = (i: number) => WHEEL_COLORS[i % WHEEL_COLORS.length]!;
 export function SpinWheelSvg({ count, className, style, winner }: { count: number; className?: string; style?: CSSProperties; winner?: number | undefined }) {
   const empty = count <= 0;
   const n = empty ? 1 : count;
+  const labelSize = n > 120 ? 3 : n > 60 ? 5 : n > 30 ? 8 : 14;
+  const dividerWidth = n > 60 ? 0.35 : n > 30 ? 0.7 : 1.5;
   return (
     <svg viewBox="-100 -100 200 200" className={className} style={style}>
       {Array.from({ length: n }).map((_, i) => {
@@ -20,8 +22,8 @@ export function SpinWheelSvg({ count, className, style, winner }: { count: numbe
         const cls = winner === undefined ? undefined : i === winner ? "ov-win" : "ov-dim";
         return (
           <g key={i} className={cls}>
-            <path d={d} style={{ fill: empty ? "var(--muted)" : wheelColor(i) }} stroke="var(--background)" strokeWidth="1.5" />
-            <text x={60 * Math.cos(a0 + seg / 2)} y={60 * Math.sin(a0 + seg / 2)} textAnchor="middle" dominantBaseline="middle" fontSize="14" fontWeight="800" style={{ fill: "var(--background)" }}>{empty ? "?" : i + 1}</text>
+            <path d={d} style={{ fill: empty ? "var(--muted)" : wheelColor(i) }} stroke="var(--background)" strokeWidth={dividerWidth} />
+            <text x={60 * Math.cos(a0 + seg / 2)} y={60 * Math.sin(a0 + seg / 2)} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize} fontWeight="800" style={{ fill: "var(--background)" }}>{empty ? "?" : i + 1}</text>
           </g>
         );
       })}

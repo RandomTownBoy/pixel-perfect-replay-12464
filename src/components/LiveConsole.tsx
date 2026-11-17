@@ -312,7 +312,7 @@ export function LiveConsole() {
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Kiriman lewat link di bio (anonim)</p>
-                {([["confession", "Confession"], ["card", "Pick a Card"], ["thisorthat", "This or That (dua pilihan)"], ["hottake", "Hot Take"], ["chaos", "Random Chaos (3 kata)"]] as [keyof Intake, string][]).map(([k, label]) => (
+                {([["spin", "Spin the Question (Bio Link + !spin)"], ["confession", "Confession"], ["card", "Pick a Card"], ["thisorthat", "This or That (dua pilihan)"], ["hottake", "Hot Take"], ["chaos", "Random Chaos (3 kata)"]] as [keyof Intake, string][]).map(([k, label]) => (
                   <label key={k} className="flex items-center justify-between gap-2"><span>{label}</span>
                     <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake[k]} onChange={(e) => void liveActions.setIntake(k, e.target.checked)} />
                   </label>
@@ -320,12 +320,10 @@ export function LiveConsole() {
               </div>
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Lewat komentar (hanya saat dimainkan)</p>
-                <label className="flex items-center justify-between gap-2"><span>Terima <b>!spin pertanyaan</b></span>
-                  <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.spin} onChange={(e) => void liveActions.setIntake("spin", e.target.checked)} />
-                </label>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Lewat komentar TikTok</p>
+                <p className="text-xs text-muted-foreground">Status <b className={intake.spin ? "text-success" : "text-pop"}>{intake.spin ? "Terbuka" : "Ditutup"}</b> — pengaturan Spin di bagian link bio juga mengatur komentar <b>!spin</b>. Kiriman tetap diterima saat gimmick lain sedang tayang.</p>
                 {intake.spin && onAir?.id !== "spin" && <p className="text-xs text-pop">Input spin terbuka, tapi gimmick Spin belum tayang.</p>}
-                {intake.spin && onAir?.id === "spin" && <p className="text-xs text-muted-foreground">Komentar !spin bersih otomatis masuk roda (maks. 10 irisan); kalau penuh, disimpan ke Question Bank.</p>}
+                {intake.spin && onAir?.id === "spin" && <p className="text-xs text-muted-foreground">Komentar !spin masuk ke antrean Spin sesuai kapasitas dan jumlah irisan yang kamu atur.</p>}
                 <label className="flex items-center justify-between gap-2"><span>🔒 Komentar hanya dari <b>follower</b></span>
                   <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={intake.followersOnly} onChange={(e) => void liveActions.setIntake("followersOnly", e.target.checked)} />
                 </label>

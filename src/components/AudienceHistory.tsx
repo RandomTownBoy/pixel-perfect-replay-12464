@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   BANKABLE_KINDS, GIMMICK_KINDS, QUEUE_KINDS, isFast, liveActions, TIER_BADGE, useLive, vipOf, type Submission,
 } from "@/lib/cloud";
-import { sendToOverlay, type GimmickId } from "@/lib/kyoka";
+import { actions, getQuestions, normalize, sendToOverlay, type GimmickId } from "@/lib/kyoka";
 
 const STATUS_LABEL: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };
 const FILTERS = [["all", "Semua"], ["shown", "Ditampilkan"], ["approved", "Di Bank"], ["rejected", "Ditolak"]] as const;
@@ -92,6 +92,13 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     void liveActions.setStatus(s.id, "shown");
   };
   const requeue = (s: Submission) => { if (!liveActions.enqueue(s)) toast.error("Kiriman ini tidak bisa diantrekan (sudah dalam antrean atau perlu dicek)."); };
+  const putBackOnSpin = async (s: Submission) => {
+    const text = (s.content ?? "").trim();
+    const existing = getQuestions().find((q) => q.gimmick === "spin" && normalize(q.text) === normalize(text));
+    if (existing) { actions.updateQuestion(existing.id, { used: false, category: "Dari Penonton" }); toast.success("Pertanyaan dimasukkan kembali ke antrean Spin 🎡"); return; }
+    const result = await liveActions.saveToBank(s, "spin");
+    if (result.ok) toast.success(result.message); else toast.error(result.message);
+  };
   const replayLabel = (s: Submission) =>
     QUEUE_KINDS.has(s.kind) ? (isQueued(s) ? "Sedang tayang" : "Tampilkan lagi")
       : s.kind === "chaos" ? "Jadikan cerita" : s.kind === "thisorthat" || s.kind === "hottake" ? "Jadikan ronde" : "Tampilkan lagi";
@@ -120,6 +127,9 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
             <div className="flex flex-wrap gap-1.5">
               {s.status !== "rejected" && s.kind !== "card" && (
                 <Button size="sm" variant="live" disabled={QUEUE_KINDS.has(s.kind) && isQueued(s)} onClick={() => replay(s)}><Send /> {replayLabel(s)}</Button>
+              )}
+              {s.status !== "rejected" && (s.kind === "spin" || s.kind === "question") && (
+                <Button size="sm" variant="secondary" onClick={() => void putBackOnSpin(s)}><ListPlus /> Masukkan ke roda</Button>
               )}
               {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (
                 <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>

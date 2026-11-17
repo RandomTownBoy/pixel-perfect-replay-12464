@@ -24,12 +24,12 @@ function guideLines(p: OverlayPayload, intake?: Intake): string[] {
   switch (p.gimmick) {
     case "thisorthat": return ["Komen A atau B untuk vote", ...fo, ...link(it.thisorthat, "Usul pilihan lewat link di bio")];
     case "hottake": return ["Komen SETUJU atau TIDAK untuk vote", ...fo, ...link(it.hottake, "Kirim hot take lewat link di bio")];
-    case "spin": return it.spin ? ["Ketik !spin lalu pertanyaanmu", ...fo] : [];
+    case "spin": return it.spin ? ["Kirim lewat link bio atau ketik !spin + pertanyaan", ...fo] : [];
     case "confession": return link(it.confession, "Confess anonim lewat link di bio");
     case "card": return link(it.card, "Kirim isi kartu lewat link di bio");
     case "chaos": return link(it.chaos, "Kirim 3 kata lewat link di bio");
     case "audience":
-      return p.kind === "confession" ? link(it.confession, "Confess anonim lewat link di bio") : p.kind === "spin" ? link(it.spin, "Ketik !spin lalu pertanyaanmu") : [];
+      return p.kind === "confession" ? link(it.confession, "Confess anonim lewat link di bio") : p.kind === "spin" || p.kind === "question" ? link(it.spin, "Kirim lewat link bio atau ketik !spin") : [];
     default: return [];
   }
 }

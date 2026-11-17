@@ -193,4 +193,92 @@
 @keyframes ov-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.2em); } }
 @keyframes ov-wiggle { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
 @keyframes ov-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-@media (prefers-reduced-motion: reduce) { .ov-card, .ov-banner, .ov-guide, .ov-word, .ov-emoji, .ov-vs, .ov-item, .ov-fc, .ov-chip.add, .ov-result { animation: none !important; } .ov-wheelwrap, .ov-item, .ov-fc, .ov-wheel g { transition: none !important; } }
+/* ---------- Animasi penutup: waktu tayang habis, sebelum item antrean berikutnya ---------- */
+.ov-card[data-outro]:not([data-g="thisorthat"]) > .ov-body { filter: blur(0.12em) saturate(0.6) brightness(0.8); transform: scale(0.97); transition: filter 0.4s, transform 0.4s; }
+.ov-outro { --oms: 3600ms; position: absolute; inset: 0; z-index: 3; border-radius: inherit; overflow: hidden; display: grid; place-items: center; text-align: center; padding: 1em;
+  background: radial-gradient(120% 90% at 50% 40%, color-mix(in oklab, var(--ov) 30%, var(--background)) 0%, color-mix(in oklab, var(--background) 92%, transparent) 75%);
+  animation: ov-outro-in 0.35s ease-out both; }
+.ov-outro.fade { animation: ov-outro-in 0.35s ease-out both, ov-outro-out 0.5s ease-in calc(var(--oms) - 0.5s) both; }
+.ov-outro-sub { font-size: 0.72em; font-weight: 700; color: var(--muted-foreground); animation: ov-fade-up 0.5s 1.1s both; }
+.ov-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 5; pointer-events: none; }
+.ov-burst i { position: absolute; left: 0; top: 0; font-style: normal; font-size: 1.35em; opacity: 0; animation: ov-burst 1.7s cubic-bezier(.15,.8,.3,1) var(--bd, 0s) both; }
+.ov-body.resolved { position: relative; }
+
+/* This or That: pemenang naik, yang kalah meredup */
+.ov-opt.champ { transform: scale(1.06); z-index: 1; box-shadow: 0 0 1.8em color-mix(in oklab, var(--c) 85%, transparent), 0 0 0 0.12em #fff; animation: ov-champ 0.9s cubic-bezier(.2,.9,.3,1.3) both; }
+.ov-opt.lose { opacity: 0.38; filter: grayscale(0.85); transform: scale(0.94); animation: ov-lose 0.7s ease-out both; }
+.ov-opt.tied { animation: ov-tie 0.8s ease-in-out both; }
+.ov-crown { display: inline-block; font-size: 1.15em; animation: ov-crown 0.8s 0.25s cubic-bezier(.2,.9,.3,1.5) both; }
+.ov-vs.done { background: linear-gradient(140deg, var(--zest), #ffb347); animation: ov-pulse 0.9s 0.2s ease-in-out 2 both; font-size: 1.1em; }
+.ov-verdict { animation: ov-fade-up 0.5s 0.5s both; }
+
+/* Hot Take: meteran + cap hasil */
+.ov-hot { display: flex; flex-direction: column; align-items: center; gap: 0.5em; width: 100%; }
+.ov-meter { display: flex; flex-direction: column; gap: 0.35em; width: 100%; }
+.ov-meter-row { display: grid; grid-template-columns: 5.2em 1fr 2.6em; align-items: center; gap: 0.5em; font-size: 0.8em; font-weight: 800; text-align: left; }
+.ov-meter-row b { text-align: right; font-family: var(--font-display, system-ui); }
+.ov-meter-bar { height: 0.8em; border-radius: 999px; overflow: hidden; background: color-mix(in oklab, var(--foreground) 14%, transparent); }
+.ov-meter-bar i { display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; transform-origin: left; animation: ov-fill 1.1s 0.2s cubic-bezier(.2,.8,.2,1) both; }
+.ov-meter-row.agree .ov-meter-bar i { background: linear-gradient(90deg, var(--primary), var(--pop)); }
+.ov-meter-row.disagree .ov-meter-bar i { background: linear-gradient(90deg, var(--electric), #5eead4); }
+.ov-hot.agree .ov-meter-row.disagree, .ov-hot.disagree .ov-meter-row.agree { opacity: 0.5; }
+.ov-stamp { display: flex; align-items: center; gap: 0.4em; padding: 0.25em 0.8em; border: 0.14em solid var(--stamp, var(--ov)); border-radius: 0.6em; color: var(--stamp, var(--ov)); background: color-mix(in oklab, var(--background) 80%, transparent);
+  font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.35em; letter-spacing: 0.04em; transform: rotate(-5deg); box-shadow: 0 0 1.2em color-mix(in oklab, var(--stamp, var(--ov)) 50%, transparent);
+  animation: ov-stamp 0.55s 0.9s cubic-bezier(.2,.9,.3,1.1) both; }
+.ov-stamp-icon { font-size: 1.15em; }
+.ov-hot.agree { --stamp: var(--primary); }
+.ov-hot.disagree { --stamp: var(--pop); }
+.ov-hot.tie, .ov-hot.none { --stamp: var(--zest); }
+.ov-hot.disagree .ov-stamp { animation: ov-stamp 0.55s 0.9s cubic-bezier(.2,.9,.3,1.1) both, ov-shake 0.5s 1.45s ease-in-out both; }
+
+/* Confession: segel kunci + riak + emoji naik */
+.ov-conf-out { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.35em; width: 100%; }
+.ov-seal-wrap { position: relative; width: 5em; height: 5em; display: grid; place-items: center; }
+.ov-seal { width: 4em; height: 4em; border-radius: 50%; display: grid; place-items: center; font-size: 1.1em;
+  background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--pop) 70%, #fff), var(--ov) 70%); box-shadow: 0 0.3em 1em color-mix(in oklab, var(--ov) 70%, transparent), inset 0 -0.2em 0.5em rgba(0,0,0,0.3);
+  animation: ov-seal 0.7s 0.2s cubic-bezier(.2,.9,.3,1.1) both; }
+.ov-seal span { font-size: 1.7em; }
+.ov-ripple { position: absolute; inset: 0.5em; border-radius: 50%; border: 0.1em solid var(--ov); opacity: 0; animation: ov-ripple 1.6s 0.75s ease-out infinite; }
+.ov-ripple.r2 { animation-delay: 1.15s; }
+.ov-ripple.r3 { animation-delay: 1.55s; }
+.ov-conf-title { margin: 0; font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.2em; animation: ov-fade-up 0.5s 0.8s both; }
+.ov-dots::after { content: "..."; display: inline-block; width: 1.2em; text-align: left; overflow: hidden; vertical-align: bottom; animation: ov-dots 1.2s steps(4) infinite; }
+.ov-rise { position: absolute; left: 50%; bottom: -0.5em; width: 0; height: 0; pointer-events: none; }
+.ov-rise i { position: absolute; left: var(--rx); bottom: 0; font-style: normal; font-size: 1.1em; opacity: 0; animation: ov-rise 2.2s var(--rd) ease-out infinite; }
+
+/* Random Chaos: pusaran + teks glitch, melebar jadi transisi layar */
+.ov-chaos-out { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
+.ov-chaos-out > * { grid-area: 1 / 1; }
+.ov-outro.chaos { background: transparent; }
+.ov-vortex { position: relative; width: 7em; height: 7em; border-radius: 50%; animation: ov-vortex var(--oms) cubic-bezier(.5,0,.4,1) both; }
+.ov-vortex i { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, var(--primary), var(--pop), var(--electric), var(--zest), var(--primary));
+  -webkit-mask: radial-gradient(circle, transparent 30%, #000 32%, #000 62%, transparent 66%); mask: radial-gradient(circle, transparent 30%, #000 32%, #000 62%, transparent 66%); animation: ov-spin 0.9s linear infinite; }
+.ov-vortex i:nth-child(2) { inset: 12%; animation-duration: 0.6s; animation-direction: reverse; opacity: 0.85; }
+.ov-vortex i:nth-child(3) { inset: 26%; animation-duration: 0.4s; opacity: 0.7; }
+.ov-vortex-eye { font-size: 2.6em; line-height: 1; z-index: 1; animation: ov-spin 0.7s linear infinite, ov-eye var(--oms) ease-in both; }
+.ov-glitch { position: relative; z-index: 2; align-self: end; margin: 0 0 0.6em; font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.15em; letter-spacing: 0.06em; color: #fff; text-shadow: 0 0.06em 0.4em rgba(0,0,0,0.6);
+  animation: ov-fade-up 0.4s 0.7s both, ov-glitch 0.9s 1.1s steps(2) infinite; }
+.ov-glitch::before, .ov-glitch::after { content: attr(data-t); position: absolute; left: 0; right: 0; top: 0; opacity: 0.8; }
+.ov-glitch::before { color: var(--pop); transform: translate(-0.05em, 0.02em); mix-blend-mode: screen; clip-path: inset(0 0 55% 0); }
+.ov-glitch::after { color: var(--electric); transform: translate(0.05em, -0.02em); mix-blend-mode: screen; clip-path: inset(50% 0 0 0); }
+
+@keyframes ov-outro-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ov-outro-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ov-fade-up { from { opacity: 0; transform: translateY(0.5em); } to { opacity: 1; transform: none; } }
+@keyframes ov-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ov-stamp { 0% { opacity: 0; transform: rotate(-18deg) scale(3); } 60% { opacity: 1; transform: rotate(-4deg) scale(0.92); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
+@keyframes ov-shake { 0%, 100% { translate: 0 0; } 20% { translate: -0.25em 0; } 40% { translate: 0.25em 0; } 60% { translate: -0.18em 0; } 80% { translate: 0.18em 0; } }
+@keyframes ov-burst { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); } 100% { opacity: 0; transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) rotate(var(--br)) scale(0.8); } }
+@keyframes ov-champ { 0% { transform: scale(1); } 55% { transform: scale(1.12); } 100% { transform: scale(1.06); } }
+@keyframes ov-lose { from { opacity: 1; filter: none; transform: none; } to { opacity: 0.38; filter: grayscale(0.85); transform: scale(0.94); } }
+@keyframes ov-tie { 0%, 100% { transform: none; } 30% { transform: scale(1.04) rotate(-0.6deg); } 60% { transform: scale(1.04) rotate(0.6deg); } }
+@keyframes ov-crown { 0% { opacity: 0; transform: translateY(-1.6em) rotate(-30deg) scale(0.4); } 100% { opacity: 1; transform: none; } }
+@keyframes ov-seal { 0% { opacity: 0; transform: translateY(-2.4em) scale(2.2) rotate(-25deg); } 60% { opacity: 1; transform: scale(0.9) rotate(4deg); } 100% { opacity: 1; transform: none; } }
+@keyframes ov-ripple { 0% { opacity: 0.8; transform: scale(0.6); } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes ov-rise { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6em) scale(1.1); } }
+@keyframes ov-dots { from { width: 0; } to { width: 1.2em; } }
+@keyframes ov-spin { to { transform: rotate(360deg); } }
+@keyframes ov-vortex { 0% { opacity: 0; transform: scale(0) rotate(0deg); } 14% { opacity: 1; transform: scale(1) rotate(160deg); } 72% { transform: scale(1.15) rotate(700deg); } 100% { opacity: 1; transform: scale(4.2) rotate(1000deg); } }
+@keyframes ov-eye { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ov-glitch { 0% { transform: translate(0); } 25% { transform: translate(-0.04em, 0.02em) skewX(-4deg); } 50% { transform: translate(0.04em, -0.02em); } 75% { transform: translate(-0.02em, 0) skewX(3deg); } 100% { transform: translate(0); } }
+@media (prefers-reduced-motion: reduce) { .ov-card, .ov-banner, .ov-guide, .ov-word, .ov-emoji, .ov-vs, .ov-item, .ov-fc, .ov-chip.add, .ov-result, .ov-burst i, .ov-vortex, .ov-vortex i, .ov-vortex-eye, .ov-glitch, .ov-ripple, .ov-rise i, .ov-seal, .ov-stamp, .ov-opt.champ, .ov-opt.lose, .ov-crown { animation: none !important; } .ov-outro { animation: none !important; } .ov-burst, .ov-rise { display: none; } .ov-wheelwrap, .ov-item, .ov-fc, .ov-wheel g { transition: none !important; } }

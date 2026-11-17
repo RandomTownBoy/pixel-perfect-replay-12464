@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +14,9 @@ import { AudienceHistory } from "@/components/AudienceHistory";
 import { WaitingQueue } from "@/components/WaitingQueue";
 import { CardGimmick } from "@/components/CardDecks";
 import { useLive } from "@/lib/cloud";
+import { usePersistedState } from "@/lib/ui-state";
+import { NumberField } from "@/components/NumberField";
+import { LIMITS } from "@/lib/limits";
 
 export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`min-w-0 break-words rounded-2xl border border-border bg-panel p-5 ${className}`}>{children}</div>;
@@ -66,7 +69,7 @@ export function SpinGimmick() {
   const pendingInbox = useLive((s) => s.inbox);
   const pendingReview = useLive((s) => s.review);
   snap = all;
-  const [category, setCategory] = useState("Daily Life");
+  const [category, setCategory] = usePersistedState("spin:category", "Daily Life");
   const [count, setCount] = useState(5);
   const [manual, setManual] = useState("");
   const pool = useMemo(() => spinPoolOf(all, category, spinSlices), [all, category, spinSlices]);
@@ -83,9 +86,10 @@ export function SpinGimmick() {
   const capacityUsed = viewerCount + pendingCount;
   const waitingCount = Math.max(0, viewerQuestions.length - spinSlices);
   const capacityPercent = Math.min(100, (capacityUsed / Math.max(1, spinCapacity)) * 100);
-  const [rot, setRot] = useState(0);
-  const [spinning, setSpinning] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+  // Disimpan di luar komponen: kalau host pindah ke halaman lain lalu kembali, kategori, sudut roda, dan hasil terakhir tetap ada.
+  const [rot, setRot] = usePersistedState("spin:rot", 0);
+  const [spinning, setSpinning] = usePersistedState("spin:spinning", false, { volatile: true });
+  const [picked, setPicked] = usePersistedState<string | null>("spin:picked", null);
   const [drafts, setDrafts] = useState<string[]>([]);
   const ai = useAi();
 
@@ -107,6 +111,14 @@ export function SpinGimmick() {
       added: markAdded && items.length ? items : undefined, addedAt: markAdded && items.length ? Date.now() : undefined,
     });
   };
+  // Jumlah irisan diubah saat roda standby di overlay: isi roda di overlay ikut menyesuaikan (sebelumnya baru berubah kalau ada pertanyaan baru).
+  const firstSlices = useRef(true);
+  useEffect(() => {
+    if (firstSlices.current) { firstSlices.current = false; return; }
+    const c = readOverlay().payload;
+    if (c?.gimmick === "spin" && c.phase === "standby" && c.category === category) backToStandby(category);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spinSlices]);
   const chooseCategory = (c: string) => {
     if (spinning) return;
     setCategory(c); setPicked(null);
@@ -181,8 +193,8 @@ export function SpinGimmick() {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2"><h3 className="font-display text-sm font-bold">Isi roda</h3><span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{pool.length}/{spinSlices} irisan</span></div>
           <div className="grid grid-cols-2 gap-2">
-            <label className="space-y-1 text-xs text-muted-foreground">Kapasitas antrean<Input type="number" min={1} max={300} value={spinCapacity} onChange={(e) => actions.updateSettings({ spinCapacity: Math.max(1, Math.min(300, Number(e.target.value) || 1)) })} className="h-9 text-sm text-foreground" /></label>
-            <label className="space-y-1 text-xs text-muted-foreground">Jumlah irisan<Input type="number" min={1} max={300} value={spinSlices} onChange={(e) => actions.updateSettings({ spinSlices: Math.max(1, Math.min(300, Number(e.target.value) || 1)) })} className="h-9 text-sm text-foreground" /></label>
+            <label className="space-y-1 text-xs text-muted-foreground">Kapasitas antrean (1–300)<NumberField min={LIMITS.spin.min} max={LIMITS.spin.max} value={spinCapacity} onChange={(n) => actions.updateSettings({ spinCapacity: n })} className="h-9 text-sm text-foreground" /></label>
+            <label className="space-y-1 text-xs text-muted-foreground">Jumlah irisan (maks. {Math.min(LIMITS.spin.max, spinCapacity)})<NumberField min={LIMITS.spin.min} max={Math.min(LIMITS.spin.max, spinCapacity)} value={spinSlices} onChange={(n) => actions.updateSettings({ spinSlices: n })} className="h-9 text-sm text-foreground" /></label>
           </div>
           <div className="rounded-xl border border-border bg-background/60 p-3">
             <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs font-semibold">Moderasi pertanyaan</span><span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold text-success">{spinModeration === "auto" ? "Otomatis" : "Manual"}</span></div>
@@ -205,7 +217,7 @@ export function SpinGimmick() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Input type="number" min={1} max={100} value={count} onChange={(e) => setCount(+e.target.value)} className="w-20" />
+          <NumberField min={LIMITS.aiCount.min} max={LIMITS.aiCount.max} value={count} onChange={setCount} className="w-20" title={`Maks. ${LIMITS.aiCount.max} per permintaan`} />
           <Button variant="secondary" className="flex-1" disabled={ai.loading} onClick={async () => { const l = await ai.run({ task: "generate", gimmick: "spin", category, count }); if (l) setDrafts(l); }}>{ai.loading ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate AI</Button>
         </div>
         {drafts.length > 0 && (
@@ -270,13 +282,13 @@ export function DraftList({ drafts, setDrafts, onSave }: { drafts: string[]; set
 /* ---------------- THIS OR THAT ---------------- */
 export function ThisOrThatGimmick() {
   const cd = useKyoka((s) => s.settings.countdown);
-  const [pair, setPair] = useState<[string, string]>(DEMO.thisOrThat[0]!);
+  const [pair, setPair] = usePersistedState<[string, string]>("tot:pair", DEMO.thisOrThat[0]!);
   const [a, setA] = useState(""); const [b, setB] = useState("");
-  const [timer, setTimer] = useState(true);
+  const [timer, setTimer] = usePersistedState("tot:timer", true);
   const [k, setK] = useState(0);
   const saved = useKyoka((s) => s.questions).filter((q) => q.gimmick === "thisorthat" && q.text.includes("||")).map((q) => q.text.split("||").map((x) => x.trim()) as [string, string]);
   const pool = [...saved, ...DEMO.thisOrThat];
-  const [queue, setQueue] = useState<[string, string][]>([]);
+  const [queue, setQueue] = usePersistedState<[string, string][]>("tot:queue", []);
   const ai = useAi();
   const next = () => {
     if (queue.length) { setPair(queue[0]!); setQueue(queue.slice(1)); }
@@ -323,9 +335,9 @@ export function ThisOrThatGimmick() {
 export function HotTakeGimmick() {
   const all = useKyoka((s) => s.questions);
   const pool = all.filter((q) => q.gimmick === "hottake" && !q.used);
-  const [i, setI] = useState(0);
+  const [i, setI] = usePersistedState("hot:i", 0);
   const cur = pool[i % Math.max(pool.length, 1)];
-  const [fu, setFu] = useState<string[]>([]);
+  const [fu, setFu] = usePersistedState<string[]>("hot:fu", []);
   const ai = useAi();
   const more = async () => { const l = await ai.run({ task: "hottake", gimmick: "hottake", category: "kehidupan sehari-hari", count: 5 }); if (l) { actions.addQuestions(l.map((text) => ({ text, gimmick: "hottake", category: "Random Thoughts" }))); toast.success("Hot take baru masuk"); } };
   if (!cur) return <Panel className="space-y-5"><Stage><p>Semua hot take sudah dipakai.</p><Button variant="live" disabled={ai.loading} onClick={more}><Sparkles /> Bikin hot take baru (AI)</Button></Stage><AudienceHistory gimmick="hottake" /></Panel>;
@@ -355,10 +367,10 @@ export function ConfessionGimmick() {
   const all = useKyoka((s) => s.questions);
   const pool = all.filter((q) => q.gimmick === "confession" && q.category !== VIEWER_CATEGORY);
   const viewerPool = all.filter((q) => q.gimmick === "confession" && q.category === VIEWER_CATEGORY && !q.used);
-  const [i, setI] = useState(0);
-  const [cat, setCat] = useState("Funny");
+  const [i, setI] = usePersistedState("conf:i", 0);
+  const [cat, setCat] = usePersistedState("conf:cat", "Funny");
   const [custom, setCustom] = useState("");
-  const [fu, setFu] = useState<string[]>([]);
+  const [fu, setFu] = usePersistedState<string[]>("conf:fu", []);
   const ai = useAi();
   const cur = pool[i % Math.max(pool.length, 1)];
   return (
@@ -405,10 +417,10 @@ export function ConfessionGimmick() {
 
 /* ---------------- CHAOS ---------------- */
 export function ChaosGimmick() {
-  const [mode, setMode] = useState<"story" | "solution">("story");
-  const [words, setWords] = useState(() => DEMO.words.slice(0, 3));
-  const [problem, setProblem] = useState(DEMO.problems[0]!);
-  const [sols, setSols] = useState(() => DEMO.solutions.slice(0, 3));
+  const [mode, setMode] = usePersistedState<"story" | "solution">("chaos:mode", "story");
+  const [words, setWords] = usePersistedState<string[]>("chaos:words", DEMO.words.slice(0, 3));
+  const [problem, setProblem] = usePersistedState("chaos:problem", DEMO.problems[0]!);
+  const [sols, setSols] = usePersistedState<string[]>("chaos:sols", DEMO.solutions.slice(0, 3));
   const [audience, setAudience] = useState("");
   const viewerProblems = useKyoka((st) => st.questions).filter((q) => q.gimmick === "chaos" && q.category === VIEWER_CATEGORY && !q.used);
   const ai = useAi();

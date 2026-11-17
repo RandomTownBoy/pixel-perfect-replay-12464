@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { CardPayload, Intake, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
+import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
 import "./overlay.css";
@@ -107,6 +107,8 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   const inset = tiktokSafe ? "11% 5% 36% 5%" : "3% 4% 3% 4%";
   const stageStyle = { width: dw, marginLeft: -dw / 2, transform: `scale(${scale})`, opacity: ready ? 1 : 0 } as CSSProperties;
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
+  // Animasi penutup hanya berlaku untuk payload yang sedang tayang (payload baru otomatis menghapusnya).
+  const outro = state.outro && state.outro.at >= state.payloadAt ? state.outro : undefined;
   const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
   const pos = state.guidePos ?? "tr";
   // Slot panduan selalu ada (tinggi tetap) supaya kartu tidak bergeser naik-turun antar gimmick.
@@ -126,15 +128,16 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
           ) : (
             <>
               {guideOnTop && guide}
-              <div key={state.payloadAt} className="ov-card" data-g={p.gimmick === "chaos" ? `chaos-${p.mode}` : p.gimmick} data-phase={"phase" in p ? p.phase : undefined}>
+              <div key={state.payloadAt} className="ov-card" data-g={p.gimmick === "chaos" ? `chaos-${p.mode}` : p.gimmick} data-phase={"phase" in p ? p.phase : undefined} data-outro={outro ? "" : undefined}>
                 {(state.showTitle || state.showBadge) && (
                   <div className="ov-head">
                     {state.showTitle && g ? <span className="ov-chip">{g.emoji} {g.name}</span> : <span />}
                     {state.showBadge && <span className="ov-brand">KYOKA LIVE</span>}
                   </div>
                 )}
-                <Body state={state} />
-                {state.queue && state.queue.pending > 0 && <QueueBar q={state.queue} />}
+                <Body state={state} outro={outro} />
+                {outro && <OutroLayer p={p} outro={outro} />}
+                {state.queue && state.queue.pending > 0 && !outro && <QueueBar q={state.queue} />}
               </div>
               {!guideOnTop && guide}
             </>
@@ -172,7 +175,7 @@ function Attribution({ name }: { name?: string | undefined }) {
   return <span className={`ov-by${n.startsWith("⚡") ? " fast" : ""}`}>{n.startsWith("⚡") ? n : `— ${n}`}</span>;
 }
 
-function Body({ state }: { state: OverlayState }) {
+function Body({ state, outro }: { state: OverlayState; outro?: Outro | undefined }) {
   const p = state.payload!;
   switch (p.gimmick) {
     case "spin":
@@ -187,7 +190,7 @@ function Body({ state }: { state: OverlayState }) {
         </div>
       );
     case "thisorthat":
-      return <ThisOrThat a={p.a} b={p.b} end={p.countdownEnd} votes={state.votes} />;
+      return <ThisOrThat a={p.a} b={p.b} end={p.countdownEnd} votes={outro?.votes ?? state.votes} outro={!!outro} />;
     case "hottake":
       return (
         <div className="ov-body">
@@ -262,33 +265,121 @@ function Opts({ votes, items }: { votes: { a: number; b: number } | undefined; i
   );
 }
 
-function ThisOrThat({ a, b, end, votes }: { a?: string | undefined; b?: string | undefined; end?: number | undefined; votes: { a: number; b: number } | undefined }) {
+function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: string | undefined; end?: number | undefined; votes: { a: number; b: number } | undefined; outro?: boolean }) {
   const [left, setLeft] = useState(0);
+  const [over, setOver] = useState(() => !!end && Date.now() >= end);
   useEffect(() => {
-    if (!end) return;
-    const tick = () => setLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000)));
+    if (!end) { setOver(false); return; }
+    const tick = () => { setLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000))); setOver(Date.now() >= end); };
     tick();
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
   }, [end]);
+  // Hasil keluar kalau countdown habis (dikirim manual) atau waktu tayang antrean habis (outro dari dashboard).
+  const resolved = !!outro || over;
   const a0 = votes?.a ?? 0; const b0 = votes?.b ?? 0; const total = a0 + b0;
   const pa = total ? Math.round((a0 / total) * 100) : 0;
   const pcts = [pa, total ? 100 - pa : 0];
+  const champ = resolved && total ? (a0 > b0 ? 0 : b0 > a0 ? 1 : -1) : -1;
+  const tie = resolved && total > 0 && a0 === b0;
   const opt = (i: 0 | 1, key: string, text: string | undefined, c: string) => (
-    <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}`} style={{ "--c": c, "--pct": `${pcts[i]}%` } as CSSProperties}>
-      <span className="ov-key">{key}</span>
+    <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${champ === i ? " champ" : ""}${champ === 1 - i ? " lose" : ""}${tie ? " tied" : ""}`} style={{ "--c": c, "--pct": `${pcts[i]}%` } as CSSProperties}>
+      <span className="ov-key">{champ === i ? <span className="ov-crown">👑</span> : key}</span>
       <span className="ov-opt-text" style={{ fontSize: `${fit(text) * 0.78}em` }}>{text}</span>
       <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small>{i === 0 ? a0 : b0} suara</small></span>
     </div>
   );
+  const winnerText = champ === 0 ? a : champ === 1 ? b : undefined;
   return (
-    <div className="ov-body">
+    <div className={`ov-body${resolved ? " resolved" : ""}`}>
       <div className="ov-opts">
         {opt(0, "A", a, "var(--primary)")}
-        <div className={`ov-vs${end && left > 0 && left <= 3 ? " urgent" : ""}`}>{end && left > 0 ? left : "VS"}</div>
+        <div className={`ov-vs${!resolved && end && left > 0 && left <= 3 ? " urgent" : ""}${resolved ? " done" : ""}`}>{resolved ? (tie ? "=" : total ? "🏆" : "?") : end && left > 0 ? left : "VS"}</div>
         {opt(1, "B", b, "var(--electric)")}
       </div>
-      <div className="ov-foot"><span className="ov-hint">Komen <b>A</b> atau <b>B</b> untuk vote 🗳️</span></div>
+      {resolved && champ >= 0 && <Burst emoji={["🎉", "✨", "👑", "🎊"]} n={16} />}
+      <div className="ov-foot">
+        {resolved
+          ? <span key="res" className="ov-hint ov-verdict">{tie ? "⚖️ Seri! Penonton terbelah dua" : total ? <>🏆 Pilihan penonton: <b>{winnerText}</b></> : "🤷 Belum ada yang vote"}</span>
+          : <span className="ov-hint">Komen <b>A</b> atau <b>B</b> untuk vote 🗳️</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Animasi penutup (setelah waktu tayang habis, sebelum item antrean berikutnya) ---------- */
+
+/** Ledakan emoji dari tengah kartu. Murni CSS; posisi tiap partikel ditentukan indeksnya supaya konsisten. */
+function Burst({ emoji, n = 14 }: { emoji: string[]; n?: number }) {
+  return (
+    <div className="ov-burst" aria-hidden>
+      {Array.from({ length: n }).map((_, i) => {
+        const ang = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
+        const d = 4.2 + (i % 3) * 1.5;
+        return <i key={i} style={{ "--bx": `${(Math.cos(ang) * d).toFixed(2)}em`, "--by": `${(Math.sin(ang) * d * 0.8).toFixed(2)}em`, "--bd": `${(i % 6) * 0.05}s`, "--br": `${(i * 53) % 360}deg` } as CSSProperties}>{emoji[i % emoji.length]}</i>;
+      })}
+    </div>
+  );
+}
+
+/** Lapisan animasi di atas kartu. This or That tidak memakainya (hasilnya tampil langsung di pilihan A/B). */
+function OutroLayer({ p, outro }: { p: OverlayPayload; outro: Outro }) {
+  const style = { "--oms": `${outro.ms}ms` } as CSSProperties;
+  const more = !outro.fade;
+  const cls = `ov-outro${outro.fade ? " fade" : ""}`;
+  if (p.gimmick === "hottake") return <div className={`${cls} hot`} style={style}><HotOutro votes={outro.votes} /></div>;
+  if (p.gimmick === "confession" || (p.gimmick === "audience" && p.kind === "confession")) return <div className={`${cls} conf`} style={style}><ConfessionOutro more={more} /></div>;
+  if (p.gimmick === "chaos") return <div className={`${cls} chaos`} style={style}><ChaosOutro more={more} /></div>;
+  return null;
+}
+
+/** Hot Take: meteran setuju/tidak terisi, lalu cap hasil menghantam layar. */
+function HotOutro({ votes }: { votes: { a: number; b: number } | undefined }) {
+  const a = votes?.a ?? 0; const b = votes?.b ?? 0; const total = a + b;
+  const pa = total ? Math.round((a / total) * 100) : 0;
+  const pb = total ? 100 - pa : 0;
+  const kind = !total ? "none" : a > b ? "agree" : b > a ? "disagree" : "tie";
+  const V = {
+    agree: { icon: "👍", text: "SETUJU!", sub: "Penonton setuju", burst: ["👍", "🔥", "✨", "💯"] },
+    disagree: { icon: "👎", text: "TIDAK SETUJU!", sub: "Penonton menolak", burst: ["👎", "💥", "😤", "🙅"] },
+    tie: { icon: "⚖️", text: "SERI!", sub: "Penonton terbelah dua", burst: ["⚖️", "🤝", "😮"] },
+    none: { icon: "🤷", text: "BELUM ADA SUARA", sub: "Sepi nih…", burst: [] as string[] },
+  }[kind];
+  return (
+    <div className={`ov-hot ${kind}`}>
+      <div className="ov-meter">
+        <div className="ov-meter-row agree"><span>👍 Setuju</span><div className="ov-meter-bar"><i style={{ "--w": `${pa}%` } as CSSProperties} /></div><b>{pa}%</b></div>
+        <div className="ov-meter-row disagree"><span>👎 Tidak</span><div className="ov-meter-bar"><i style={{ "--w": `${pb}%` } as CSSProperties} /></div><b>{pb}%</b></div>
+      </div>
+      <div className="ov-stamp"><span className="ov-stamp-icon">{V.icon}</span><span className="ov-stamp-text">{V.text}</span></div>
+      <span className="ov-outro-sub">{total ? `${a} setuju · ${b} tidak · ${V.sub}` : V.sub}</span>
+      {V.burst.length > 0 && <Burst emoji={V.burst} n={14} />}
+    </div>
+  );
+}
+
+/** Confession: segel kunci menghantam kartu, gelombang riak, lalu rahasia "disimpan". */
+function ConfessionOutro({ more }: { more: boolean }) {
+  return (
+    <div className="ov-conf-out">
+      <div className="ov-seal-wrap">
+        <i className="ov-ripple" /><i className="ov-ripple r2" /><i className="ov-ripple r3" />
+        <div className="ov-seal"><span>🔒</span></div>
+      </div>
+      <p className="ov-conf-title">Rahasia aman di sini</p>
+      <span className="ov-outro-sub">{more ? <>Rahasia berikutnya<span className="ov-dots" /></> : "Terima kasih sudah jujur 🤫"}</span>
+      <div className="ov-rise" aria-hidden>{["🤫", "✨", "🤐", "💜", "🤫", "✨"].map((e, i) => <i key={i} style={{ "--rx": `${(i - 2.5) * 1.5}em`, "--rd": `${0.5 + i * 0.18}s` } as CSSProperties}>{e}</i>)}</div>
+    </div>
+  );
+}
+
+/** Random Chaos: pusaran menyedot kartu, tulisan glitch, lalu melebar menutupi layar sebagai transisi. */
+function ChaosOutro({ more }: { more: boolean }) {
+  return (
+    <div className="ov-chaos-out">
+      <div className="ov-vortex"><i /><i /><i /></div>
+      <span className="ov-vortex-eye">🌀</span>
+      <p className="ov-glitch" data-t={more ? "CHAOS BERIKUTNYA!" : "CHAOS SELESAI!"}>{more ? "CHAOS BERIKUTNYA!" : "CHAOS SELESAI!"}</p>
     </div>
   );
 }

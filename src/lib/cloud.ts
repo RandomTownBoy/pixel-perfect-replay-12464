@@ -5,7 +5,7 @@ import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
   actions, DEFAULT_INTAKE, getCategories, getQuestions, getSettings, GIMMICKS, hasRemote, isDuplicate, onPersistChange, pushOverlay, readOverlay,
-  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
+  queueSecondsFor, replaceCategories, replaceQuestions, replaceSettings, sendToOverlay, settleQuestion, setOverlayIntake, setOverlayQueue, setOverlayVisible, setOverlayVotes, setRemote, showBanner, SPIN_WHEEL_MAX, spinPoolOf, subscribeOverlay, VIEWER_CATEGORY,
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 
@@ -224,7 +224,7 @@ function watchHostSwitch(o: OverlayState) {
   if (o.payloadAt !== shownAt) abandonQueue();
 }
 
-/** Penyaluran otomatis kiriman bersih: Confession/Hot Take/This or That ditahan di Inbox (ikut antrean hanya kalau sudah berjalan); Spin → roda; sisanya → Question Bank ("Dari Penonton"). */
+/** Penyaluran otomatis kiriman bersih: Confession/Hot Take/This or That ditahan di Inbox (antrean hanya ikut kalau sudah berjalan); Spin → roda; Pick a Card → Question Bank kecuali opsi persetujuan manual aktif; sisanya → Question Bank ("Dari Penonton"). */
 async function saveRouted(r: Submission, target?: GimmickId, category?: string, toWheel = false) {
   const res = await liveActions.saveToBank(r, target, category);
   if (!res.ok) toast.error(res.message);
@@ -245,6 +245,9 @@ function routeSubmission(r: Submission) {
     if (live.nowShowing?.kind === r.kind && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) liveActions.enqueue(r);
     return;
   }
+  // Kartu penonton: otomatis masuk pack "Dari Penonton" (bawaan), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
+  // Isi kartu tersembunyi sampai dibuka, jadi mode tahan berguna kalau host mau menyaring dulu sebelum tayang di stream.
+  if (r.kind === "card" && !getSettings().autoApproveCards) return;
   if (BANKABLE_KINDS.has(r.kind)) void saveRouted(r);
 }
 
@@ -279,6 +282,27 @@ export const liveActions = {
       toast.error(error ? `Gagal memperbarui: ${error.message}` : "Gagal memperbarui: data tidak ditemukan atau tidak ada izin.");
       return false;
     }
+    return true;
+  },
+  /**
+   * Hapus permanen kiriman dari riwayat (satu atau banyak). Hanya status yang sudah selesai (approved/shown/rejected) yang boleh dihapus,
+   * supaya kiriman yang masih menunggu di Inbox tidak hilang tak sengaja. Isi yang sudah masuk Question Bank tidak ikut terhapus.
+   * Tampilan diperbarui lebih dulu dan dikembalikan kalau database gagal.
+   */
+  async deleteHistory(ids: string[]): Promise<boolean> {
+    const set = new Set(ids);
+    const targets = live.history.filter((x) => set.has(x.id)).map((x) => x.id);
+    if (!targets.length) return true;
+    const before = live.history;
+    setLive({ history: live.history.filter((x) => !set.has(x.id)) });
+    const { error } = await supabase.from("audience_submissions").delete().in("id", targets).in("status", ["approved", "shown", "rejected"]);
+    if (error) {
+      console.error("deleteHistory gagal", error);
+      setLive({ history: before });
+      toast.error(`Gagal menghapus riwayat: ${error.message}`);
+      return false;
+    }
+    toast.success(targets.length === 1 ? "Riwayat dihapus" : `${targets.length} riwayat dihapus`);
     return true;
   },
   /** Masukkan kiriman ke antrean overlay. Tiap item tampil sesuai durasi gimmick-nya (Confession 3 mnt, Hot Take/Chaos 2 mnt, This or That 1,5 mnt). */
@@ -508,9 +532,19 @@ function sendAudience() {
 type Row = { id: string; text: string; gimmick: string; category: string; favorite: boolean; used: boolean; demo: boolean; created_at: string };
 const toQ = (r: Row): Question => ({ id: r.id, text: r.text, gimmick: r.gimmick as GimmickId, category: r.category, favorite: r.favorite, used: r.used, demo: r.demo, createdAt: Date.parse(r.created_at) });
 
-async function resyncQuestions() {
-  const { data, error } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
-  if (!error && data) replaceQuestions((data as Row[]).map(toQ));
+/** Muat ulang Question Bank. Permintaan yang datang saat pemuatan sedang jalan digabung jadi satu pemuatan lanjutan (kiriman penonton beruntun tidak menumpuk). */
+let resyncP: Promise<void> | null = null;
+let resyncAgain = false;
+function resyncQuestions(): Promise<void> {
+  if (resyncP) { resyncAgain = true; return resyncP; }
+  resyncP = (async () => {
+    do {
+      resyncAgain = false;
+      const { data, error } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
+      if (!error && data) replaceQuestions((data as Row[]).map(toQ));
+    } while (resyncAgain);
+  })().finally(() => { resyncP = null; });
+  return resyncP;
 }
 
 /** Hitung ulang vote web untuk ronde aktif dari database (supaya tidak 0 setelah refresh). */
@@ -716,10 +750,10 @@ export function useCloudSync(userId: string | undefined) {
           const patch: { text?: string; category?: string; favorite?: boolean; used?: boolean; gimmick?: string } = {};
           for (const k of ["text", "category", "favorite", "used", "gimmick"] as const) if (k in p) (patch as Record<string, unknown>)[k] = p[k];
           supabase.from("questions").update(patch).eq("id", id).select("id")
-            .then(({ data, error }) => { if (error || !data?.length) dbFailed("Perubahan", error ?? { message: "tidak ada baris yang diubah" }); });
+            .then(({ data, error }) => { if (error || !data?.length) { settleQuestion(id); dbFailed("Perubahan", error ?? { message: "tidak ada baris yang diubah" }); } });
         },
         remove: (id) => {
-          supabase.from("questions").delete().eq("id", id).then(({ error }) => { if (error) dbFailed("Penghapusan", error); });
+          supabase.from("questions").delete().eq("id", id).then(({ error }) => { if (error) { settleQuestion(id); dbFailed("Penghapusan", error); } });
         },
         overlay: pushRemote,
       });
@@ -750,6 +784,11 @@ export function useCloudSync(userId: string | undefined) {
     const evCh = supabase.channel(`events-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
       .subscribe();
+    // Question Bank tidak punya pembaruan realtime, jadi perubahan dari tab/perangkat lain diambil saat dashboard kembali difokuskan dan berkala.
+    const refreshBank = () => { if (ownerId && document.visibilityState === "visible") void resyncQuestions(); };
+    document.addEventListener("visibilitychange", refreshBank);
+    window.addEventListener("focus", refreshBank);
+    const bankTimer = startTimer(refreshBank, 30_000, true);
     const offHostSwitch = subscribeOverlay(watchHostSwitch);
     // Simpan perubahan pengaturan/kategori ke database (ditunda 1 detik agar tidak menulis setiap ketikan).
     const offPersist = onPersistChange(() => {
@@ -762,7 +801,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000, true);
     return () => {
-      cancelled = true; setRemote(null); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
+      cancelled = true; setRemote(null); document.removeEventListener("visibilitychange", refreshBank); window.removeEventListener("focus", refreshBank); stopTimer(bankTimer); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

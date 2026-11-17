@@ -43,6 +43,8 @@ export type Settings = {
   fastTrackTier: 0 | 1 | 2 | 3;
   /** Tampilkan notifikasi tiap gift di overlay. */
   giftNotify: boolean;
+  /** Kartu penonton (Pick a Card) langsung disetujui dan masuk pack "Dari Penonton". Mati = ditahan di Inbox sampai host menyetujui. */
+  autoApproveCards: boolean;
   /** Alamat publik untuk link penonton (mis. https://situsmu.lovable.app). Kosong = pakai alamat halaman ini. */
   publicUrl: string;
 };
@@ -197,7 +199,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, publicUrl: "",
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "",
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -263,11 +265,24 @@ export function setRemote(r: Remote | null) { remote = r; }
 export const hasRemote = () => remote !== null;
 /** Kategori khusus untuk konten yang berasal dari kiriman penonton. */
 export const VIEWER_CATEGORY = "Dari Penonton";
+/**
+ * Perubahan lokal yang baru saja dikirim ke database (mis. kartu ditandai terpakai, atau dihapus).
+ * Dipertahankan beberapa detik supaya muat ulang dari database yang kebetulan lebih lama (balapan dengan kiriman penonton)
+ * tidak menimpanya. Kalau database gagal, entri dibuang lewat settleQuestion() dan data asli yang dipakai.
+ */
+const PENDING_MS = 8000;
+const pendingPatch = new Map<string, { patch: Partial<Question>; at: number }>();
+const pendingDelete = new Map<string, number>();
+export function settleQuestion(id: string) { pendingPatch.delete(id); pendingDelete.delete(id); }
 export function replaceQuestions(qs: Question[]) {
+  const now = Date.now();
+  for (const [id, v] of pendingPatch) if (now - v.at > PENDING_MS) pendingPatch.delete(id);
+  for (const [id, at] of pendingDelete) if (now - at > PENDING_MS) pendingDelete.delete(id);
+  const fresh = qs.filter((q) => !pendingDelete.has(q.id)).map((q) => { const p = pendingPatch.get(q.id); return p ? { ...q, ...p.patch } : q; });
   // Kategori dimuat dari isi database juga, supaya konten tidak "hilang" dari dropdown kalau localStorage kosong/ganti perangkat.
   setState((s) => {
-    const merged = [...new Set([...s.categories, ...qs.map((q) => q.category)])];
-    return { ...s, questions: qs, categories: merged.length === s.categories.length ? s.categories : merged };
+    const merged = [...new Set([...s.categories, ...fresh.map((q) => q.category)])];
+    return { ...s, questions: fresh, categories: merged.length === s.categories.length ? s.categories : merged };
   });
 }
 export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
@@ -286,10 +301,12 @@ export const actions = {
     return fresh.length;
   },
   updateQuestion(id: string, patch: Partial<Question>) {
+    pendingPatch.set(id, { patch: { ...pendingPatch.get(id)?.patch, ...patch }, at: Date.now() });
     setState((s) => ({ ...s, questions: s.questions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
     remote?.update(id, patch);
   },
   deleteQuestion(id: string) {
+    pendingDelete.set(id, Date.now()); pendingPatch.delete(id);
     setState((s) => ({ ...s, questions: s.questions.filter((x) => x.id !== id) }));
     remote?.remove(id);
   },

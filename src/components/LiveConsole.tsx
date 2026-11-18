@@ -21,7 +21,7 @@ const EXPANDED_KEY = "kyoka:console:expanded";
 /** Floating control for audience participation: votes, TikTok comment tally, gifts, inbox. Terlipat jadi satu tombol secara default. */
 const PAGE = 15;
 const KIND_ORDER = ["confession", "thisorthat", "hottake", "chaos", "problem", "question", "spin", "card"];
-const QUEUE_PLAY = ["confession", "hottake", "thisorthat"] as const;
+const QUEUE_PLAY = ["confession", "hottake", "thisorthat", "chaos"] as const;
 
 /** Teks kiriman dipotong 3 baris supaya Inbox tetap ringkas; ketuk untuk membuka/menutup. */
 function Clamped({ text }: { text: string }) {
@@ -336,7 +336,7 @@ export function LiveConsole() {
 
               <div className="space-y-2 rounded-xl bg-background/60 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Antrean overlay</p>
-                <p className="text-xs text-muted-foreground">Confession, Hot Take, dan This or That dari penonton ditahan di Inbox dan tidak tampil sendiri. Tekan “Tampilkan antrean” di Inbox atau di halaman gimmick-nya untuk memutar semuanya berurutan; “Tampilkan” di tiap kiriman menampilkannya langsung. Lama tampil: Confession 3 mnt · Hot Take 2 mnt · Random Chaos 2 mnt · This or That 1,5 mnt. Antrean habis → layar tetap di kiriman terakhir. Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>
+                <p className="text-xs text-muted-foreground">Confession, Hot Take, This or That, dan Random Chaos (3 Kata) dari penonton ditahan di Inbox dan tidak tampil sendiri. Tekan “Tampilkan antrean” di Inbox atau di halaman gimmick-nya untuk memutar semuanya berurutan; “Tampilkan” di tiap kiriman menampilkannya langsung. Lama tampil: Confession 3 mnt · Hot Take 2 mnt · Random Chaos 2 mnt · This or That 1,5 mnt. Antrean habis → layar tetap di kiriman terakhir. Kiriman yang ditandai “perlu dicek” tidak pernah otomatis tampil.</p>
                 {nowShowing && <p className="rounded-lg bg-card p-2 text-xs">{queuePaused ? "⏸️ Ditahan" : "Tampil"}: {body(nowShowing)}</p>}
                 {queue.length > 0 && <ul className="max-h-24 space-y-1 overflow-auto text-xs text-muted-foreground">{queue.map((q, i) => <li key={q.id}>{i + 1}. {body(q)}</li>)}</ul>}
                 {!nowShowing && queue.length === 0 && <p className="text-xs text-muted-foreground">Antrean kosong.</p>}

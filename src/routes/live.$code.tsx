@@ -78,6 +78,7 @@ function Audience() {
       const words = w.map((x) => x.trim());
       if (words.some((x) => !x)) { toast.error("Isi ketiga kata."); return null; }
       if (words.some((x) => /\s/.test(x))) { toast.error("Satu kata saja per kotak."); return null; }
+      if (new Set(words.map((x) => x.toLowerCase())).size < words.length) { toast.error("Ketiga kata harus berbeda."); return null; }
       return words.join(", ");
     }
     const t = text.trim();
@@ -121,7 +122,7 @@ function Audience() {
 
       <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
         {KINDS.map((k) => (
-          <Button key={k.id} variant="ghost" onClick={() => setKind(k.id)} aria-pressed={kind === k.id}
+          <Button key={k.id} variant="ghost" onClick={() => { setKind(k.id); setSent(null); }} aria-pressed={kind === k.id}
             className={`h-auto flex-col gap-0 rounded-lg px-1 py-2 text-xs font-semibold ${kind === k.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"} ${closed(k.id) ? "opacity-50" : ""}`}>
             <span className="block text-base">{k.emoji}</span>{k.name}
           </Button>
@@ -133,28 +134,28 @@ function Audience() {
         <p className="text-xs text-muted-foreground">{cur.hint}</p>
 
         {(kind === "question" || kind === "confession" || kind === "hottake" || kind === "card") && (
-          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={kind === "confession" ? 500 : kind === "question" ? 280 : 200} rows={4} disabled={isClosed}
+          <textarea value={text} onChange={(e) => { setText(e.target.value); setSent(null); }} maxLength={kind === "confession" ? 500 : kind === "question" ? 280 : 200} rows={4} disabled={isClosed}
             placeholder={kind === "question" ? "Tulis pertanyaan yang ingin kamu masukkan ke roda…" : kind === "confession" ? "Ngaku aja… (anonim, jangan tulis info pribadi)" : kind === "card" ? "Pertanyaan atau tantangan untuk kartu…" : "Opini panasmu…"}
             className="w-full rounded-xl border border-input bg-background p-3 text-sm" />
         )}
         {kind === "thisorthat" && (
           <div className="space-y-2">
-            <Input placeholder="Pilihan 1, contoh: Ronaldo" maxLength={60} value={pa} onChange={(e) => setPa(e.target.value)} disabled={isClosed} />
+            <Input placeholder="Pilihan 1, contoh: Ronaldo" maxLength={60} value={pa} onChange={(e) => { setPa(e.target.value); setSent(null); }} disabled={isClosed} />
             <p className="text-center text-xs font-bold text-muted-foreground">VS</p>
-            <Input placeholder="Pilihan 2, contoh: Messi" maxLength={60} value={pb} onChange={(e) => setPb(e.target.value)} disabled={isClosed} />
+            <Input placeholder="Pilihan 2, contoh: Messi" maxLength={60} value={pb} onChange={(e) => { setPb(e.target.value); setSent(null); }} disabled={isClosed} />
           </div>
         )}
         {kind === "chaos" && (
           <div className="grid grid-cols-3 gap-2">
             {w.map((x, i) => (
               <Input key={i} placeholder={`Kata ${i + 1}`} maxLength={24} value={x} disabled={isClosed}
-                onChange={(e) => setW(w.map((y, j) => (j === i ? e.target.value : y)))} />
+                onChange={(e) => { setW(w.map((y, j) => (j === i ? e.target.value : y))); setSent(null); }} />
             ))}
           </div>
         )}
 
         <Button size="lg" variant="live" className="w-full" disabled={busy || isClosed} onClick={submit}>{isClosed ? "Sedang ditutup" : "Kirim"}</Button>
-        {sent && <p className="rounded-xl border border-success/40 bg-success/10 p-3 text-center text-sm font-semibold text-success">✅ Terkirim ke Kyoka!</p>}
+        {sent && sent.kind === kind && <p className="rounded-xl border border-success/40 bg-success/10 p-3 text-center text-sm font-semibold text-success">✅ Terkirim ke Kyoka!</p>}
         <p className="text-xs text-muted-foreground">Dikirim tanpa nama. Hindari info pribadi, tautan, dan kata kasar. Kiriman bisa disaring sebelum tampil.</p>
       </div>
 

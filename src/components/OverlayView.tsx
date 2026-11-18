@@ -6,9 +6,12 @@ import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
 
+let audioCtx: AudioContext | null = null;
 function beep() {
   try {
-    const ctx = new AudioContext();
+    audioCtx ??= new AudioContext();
+    const ctx = audioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
     const o = ctx.createOscillator(); const g = ctx.createGain();
     o.type = "triangle"; o.frequency.setValueAtTime(660, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
     g.gain.setValueAtTime(0.15, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
@@ -554,7 +557,7 @@ function ChaosWords({ words, rolling }: { words: string[]; rolling: boolean }) {
     <div className="ov-words">
       {words.map((w, i) => rolling
         ? <div key={`roll-${i}`} className="ov-word roll" style={{ background: COLORS[i % 3] }}>{pool[(tick * (i + 3) + i * 7) % pool.length]}</div>
-        : <div key={w} className="ov-word" style={{ animationDelay: `${i * 0.18}s`, background: COLORS[i % 3] }}>{w}</div>)}
+        : <div key={`${w}-${i}`} className="ov-word" style={{ animationDelay: `${i * 0.18}s`, background: COLORS[i % 3] }}>{w}</div>)}
     </div>
   );
 }

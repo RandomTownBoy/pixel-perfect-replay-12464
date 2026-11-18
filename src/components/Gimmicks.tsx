@@ -8,6 +8,7 @@ import {
 import { SpinWheelSvg } from "@/components/SpinWheel";
 import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check, Tv } from "lucide-react";
 import { toast } from "@/lib/notify";
+import { startTimer } from "@/lib/ticker";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 import { AudienceHistory } from "@/components/AudienceHistory";
@@ -143,7 +144,7 @@ export function SpinGimmick() {
     } else {
       sendToOverlay({ gimmick: "spin", spinning: true, category });
     }
-    setTimeout(() => {
+    startTimer(() => {
       setSpinning(false); setPicked(winner);
       if (!live || !winner) return;
       const cur = readOverlay().payload;
@@ -372,6 +373,7 @@ export function ConfessionGimmick() {
   const cur = pool[i % Math.max(pool.length, 1)];
   return (
     <Panel className="space-y-5">
+      <p className="text-xs font-semibold text-muted-foreground">Label di overlay <span className="font-normal">(tidak memfilter prompt)</span></p>
       <div className="flex flex-wrap gap-1.5">
         {CONF_CATS.map((c) => <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1 text-xs font-semibold ${cat === c ? "bg-pop text-background" : "bg-muted text-muted-foreground"}`}>{c}</button>)}
       </div>
@@ -392,7 +394,7 @@ export function ConfessionGimmick() {
       </div>
       <div className="space-y-2 rounded-xl border border-border bg-background/40 p-3">
         <h4 className="text-sm font-bold">🤫 Confession dari penonton ({viewerPool.length} belum dibacakan)</h4>
-        {!viewerPool.length && <p className="text-xs text-muted-foreground">Belum ada. Di Inbox penonton, pilih “Confession Time” lalu tekan Simpan ke Bank.</p>}
+        {!viewerPool.length && <p className="text-xs text-muted-foreground">Belum ada. Confession dari penonton masuk ke Antrean menunggu di Inbox: tekan Putar untuk menayangkan, atau Simpan ke Bank untuk menyimpannya di sini.</p>}
         <ul className="max-h-64 space-y-2 overflow-auto">
           {viewerPool.map((q) => (
             <li key={q.id} className="rounded-lg bg-card p-3 text-sm">
@@ -425,7 +427,7 @@ export function ChaosGimmick() {
   const overlayWords = () => { const c = readOverlay().payload; return c?.gimmick === "chaos" && c.mode === "story" ? c.words : []; };
   const rollStart = () => { if (isStoryLive()) updateOverlayPayload({ gimmick: "chaos", mode: "story", words: overlayWords(), rolling: true }); return Date.now(); };
   const rollStop = (final: string[], t0: number) => {
-    setTimeout(() => { if (isStoryLive()) updateOverlayPayload({ gimmick: "chaos", mode: "story", words: final, rolling: false }); }, Math.max(0, 1100 - (Date.now() - t0)));
+    startTimer(() => { if (isStoryLive()) updateOverlayPayload({ gimmick: "chaos", mode: "story", words: final, rolling: false }); }, Math.max(0, 1100 - (Date.now() - t0)));
   };
   const shuffleWords = () => { const next = sample(DEMO.words, 3); setWords(next); const t0 = rollStart(); rollStop(next, t0); };
   const aiWords = async () => {

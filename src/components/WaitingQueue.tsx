@@ -3,7 +3,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { readOverlay, subscribeOverlay } from "@/lib/kyoka";
+import { GIMMICKS, readOverlay, subscribeOverlay } from "@/lib/kyoka";
 import { liveActions, onAirGimmick, queueGimmickOf, useLive, waitingOf, waitingOrder, type Submission } from "@/lib/cloud";
 
 const LABEL: Record<string, string> = { confession: "🤫 Confession", hottake: "🔥 Hot Take", thisorthat: "⚡ This or That", chaos: "🎲 Random Chaos" };
@@ -48,7 +48,7 @@ export function QueueManager() {
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
             <span className="text-muted-foreground">Sedang ditampilkan</span>
-            <span className="font-semibold">{activeKind ? LABEL[activeKind] ?? activeKind : "Tidak ada"}</span>
+            <span className="font-semibold">{activeKind ? LABEL[activeKind] ?? activeKind : activeGimmick ? `Idle · layar masih menampilkan ${GIMMICKS.find((g) => g.id === activeGimmick)?.name ?? activeGimmick}` : "Tidak ada"}</span>
           </div>
           {KINDS.map((kind) => {
             const waiting = waitingOrder(waitingOf({ inbox, queue, nowShowing }, kind));
@@ -71,7 +71,7 @@ export function QueueManager() {
                 <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2">
                   <div className="min-w-0 pr-3">
                     <p className="text-xs font-medium">Lanjut otomatis</p>
-                    <p className="text-[10px] text-muted-foreground">{mode === "auto" ? "Input baru otomatis tayang saat layar kosong atau sesi ini berjalan" : "Input baru menunggu perintah host (tekan Jalankan)"}</p>
+                    <p className="text-[10px] text-muted-foreground">{mode === "auto" ? "Kiriman baru jenis ini otomatis masuk antrean saat sesinya aktif atau saat layar idle" : "Input baru menunggu perintah host (tekan Jalankan)"}</p>
                   </div>
                   <Switch checked={mode === "auto"} onCheckedChange={(value) => liveActions.setQueueMode(kind, value ? "auto" : "manual")} aria-label={`Lanjut otomatis ${LABEL[kind]}`} />
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, ListChecks, Pencil, Plus, RotateCcw, Settings2, Shuffle, Trash2, Tv, Layers } from "lucide-react";
 import { toast } from "@/lib/notify";
+import { startTimer, stopTimer } from "@/lib/ticker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -97,7 +98,7 @@ export function CardGimmick() {
     if (!isCardLive()) return;
     lockViewer(d);
     updateOverlayPayload({ gimmick: "card", phase: "shuffling", count: ids.length, opened });
-    setTimeout(() => {
+    startTimer(() => {
       const c = readOverlay().payload;
       if (c?.gimmick === "card" && c.phase === "shuffling") updateOverlayPayload({ gimmick: "card", phase: "dealt", count: ids.length, opened });
     }, SHUFFLE_MS);
@@ -132,12 +133,12 @@ export function CardGimmick() {
   useEffect(() => {
     if (!autoDeal || !cur || cur.status !== "done") return;
     const name = cur.name;
-    const t = setTimeout(() => {
+    const t = startTimer(() => {
       if (!isCardLive()) return;
       const nx = nextPlayableDeck(decksRef.current, name);
       if (nx) goNext(nx);
     }, AUTO_DEAL_MS);
-    return () => clearTimeout(t);
+    return () => stopTimer(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoDeal, cur?.name, cur?.status]);
   // Kartu ditambah/dihapus sebelum dipilih: jumlah kartu di overlay (saat standby) ikut diperbarui in-place.

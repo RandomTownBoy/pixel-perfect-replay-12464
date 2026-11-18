@@ -54,7 +54,6 @@ export function ConfirmDelete({ label, confirmLabel = "Yakin hapus?", onConfirm,
 export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   const history = useLive((l) => l.history);
   const queue = useLive((l) => l.queue);
-  const inbox = useLive((l) => l.inbox);
   const nowShowing = useLive((l) => l.nowShowing);
   const gifters = useLive((l) => l.gifters);
   const questions = useKyoka((s) => s.questions);
@@ -74,7 +73,8 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     return s.nickname ? `${lead}@${s.nickname}` : `${lead}Anonim${gifter ? ` (@${gifter} ✓)` : ""}`;
   };
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
-  const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id || inbox.some((x) => x.id === s.id && x.status === "pending");
+  const isPlaying = (s: Submission) => nowShowing?.id === s.id;
+  const isQueued = (s: Submission) => queue.some((x) => x.id === s.id);
   const isSpinSubmission = (s: Submission) => s.kind === "spin" || s.kind === "question";
   // Sinkron dengan Question Bank: kedua tombol berubah menjadi nonaktif setelah pertanyaan
   // benar-benar masuk ke antrean/roda, termasuk ketika ditambahkan dari tempat lain.
@@ -92,10 +92,6 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   /** Tampilkan ulang di overlay dengan cara yang sama seperti di Inbox. */
   const replay = (s: Submission) => {
     if (QUEUE_KINDS.has(s.kind)) { liveActions.showNow(s); return; }
-    if (s.kind === "thisorthat" || s.kind === "hottake" || s.kind === "chaos") {
-      if (!liveActions.startRound(s)) toast.error("Isi kiriman tidak valid untuk dijadikan ronde.");
-      return;
-    }
     sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
     void liveActions.setStatus(s.id, "shown");
   };
@@ -115,8 +111,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     if (result.ok) toast.success(result.message); else toast.error(result.message);
   };
   const replayLabel = (s: Submission) =>
-    QUEUE_KINDS.has(s.kind) ? (isQueued(s) ? "Sedang tayang" : "Tampilkan lagi")
-      : s.kind === "chaos" ? "Jadikan cerita" : s.kind === "thisorthat" || s.kind === "hottake" ? "Jadikan ronde" : "Tampilkan lagi";
+    QUEUE_KINDS.has(s.kind) && isPlaying(s) ? "Sedang tayang" : "Tampilkan lagi";
 
   return (
     <section className="space-y-3 border-t border-border pt-4">
@@ -144,7 +139,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
                 <Button
                   size="sm"
                   variant="live"
-                  disabled={(QUEUE_KINDS.has(s.kind) && isQueued(s)) || isOnSpinWheel(s)}
+                  disabled={(QUEUE_KINDS.has(s.kind) && isPlaying(s)) || isOnSpinWheel(s)}
                   className="disabled:bg-muted disabled:text-muted-foreground disabled:opacity-55 disabled:shadow-none disabled:hover:brightness-100"
                   onClick={() => replay(s)}
                 >
@@ -163,7 +158,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
                 </Button>
               )}
               {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (
-                <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => void requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>
+                <Button size="sm" variant="secondary" disabled={isQueued(s) || isPlaying(s)} onClick={() => void requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>
               )}
               {s.status !== "approved" && BANKABLE_KINDS.has(s.kind) && (
                 <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>

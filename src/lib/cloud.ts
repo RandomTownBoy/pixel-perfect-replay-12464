@@ -298,13 +298,12 @@ function routeSubmission(r: Submission) {
   }
   if (QUEUE_KINDS.has(r.kind)) {
     const target = queueGimmickOf(r.kind);
-    if (armedKind === target) {
-      // Dalam mode manual, biarkan tetap pending di Inbox sampai host menjalankan antrean.
-      if (queueModeOf(target) === "auto") void liveActions.enqueue(r);
-      return;
-    }
-    // Kiriman problem yang belum punya sesi Chaos aktif tetap masuk jalur Question Bank lama.
-    if (r.kind !== "problem") return;
+    // Semua kiriman antrean (termasuk problem/Random Chaos) tetap berada di Inbox
+    // sampai dijalankan. Mode manual menahan kiriman; mode otomatis mengantrekannya
+    // dan hanya memulai overlay jika tidak ada gimmick lain yang sedang memakai layar.
+    if (queueModeOf(target) === "manual") return;
+    void liveActions.enqueue(r);
+    return;
   }
   // Kartu penonton: otomatis masuk deck penonton ("Penonton #1", "Penonton #2", ...), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
   // Isi kartu tersembunyi sampai dibuka, jadi mode tahan berguna kalau host mau menyaring dulu sebelum tayang di stream.

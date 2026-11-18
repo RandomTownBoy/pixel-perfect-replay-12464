@@ -47,7 +47,8 @@ function Bank() {
       </Panel>
       <div className="space-y-2">
         {list.map((q) => {
-          const gm = GIMMICKS.find((x) => x.id === q.gimmick)!;
+          const gm = GIMMICKS.find((x) => x.id === q.gimmick);
+          if (!gm) return null;
           return (
             <div key={q.id} className={`flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 ${q.used ? "opacity-55" : ""}`}>
               <span className="text-xl">{gm.emoji}</span>

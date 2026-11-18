@@ -176,12 +176,12 @@ function SettingsPage() {
             <option value="bl">Kiri bawah</option>
             <option value="off">Sembunyikan</option>
           </select>
-          <p className="text-xs text-muted-foreground">Tampilannya di overlay hadir di paket 3. Pengaturan ini sudah tersimpan.</p>
         </Panel>
 
         <Panel className="space-y-2 text-sm md:col-span-2">
           <h3 className="font-display text-sm font-bold">Data Demo</h3>
-          <Button variant="destructive" onClick={() => confirm("Reset semua data ke contoh awal?") && actions.resetDemo()}>Reset data demo</Button>
+          <p className="text-xs text-muted-foreground">Hanya mengembalikan konten contoh dan log aktivitas. Pengaturan dan kategori tidak ikut direset.</p>
+          <Button variant="destructive" onClick={() => confirm("Kembalikan konten demo dan log aktivitas ke contoh awal? Pengaturan, kategori, dan konten buatanmu tidak berubah.") && actions.resetDemo()}>Reset data demo</Button>
         </Panel>
       </div>
     </>

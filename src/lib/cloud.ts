@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel, User } from "@supabase/supabase-js";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { startTimer, stopTimer, type TimerHandle } from "@/lib/ticker";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -305,7 +305,6 @@ function watchHostSwitch(o: OverlayState) {
 async function saveRouted(r: Submission, target?: GimmickId, category?: string, toWheel = false) {
   const res = await liveActions.saveToBank(r, target, category);
   if (!res.ok) toast.error(res.message);
-  else if (toWheel) toast.success(`🎡 ${r.nickname ? `@${r.nickname}: ` : ""}pertanyaan masuk ke roda`);
 }
 function routeSubmission(r: Submission) {
   if (r.status !== "pending") return;
@@ -483,7 +482,6 @@ export const liveActions = {
     const ids = new Set(existing.map((x) => x.id));
     setLive({ queue: [...existing, ...list.filter((x) => !ids.has(x.id))] });
     if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
-    toast.success(`▶ ${list.length} kiriman diputar berurutan`);
     return list.length;
   },
   /** Mode otomatis/manual disimpan lokal per gimmick; default otomatis. */

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { aiGenerate, type AiTask } from "@/lib/ai.functions";
 import { getQuestions } from "@/lib/kyoka";
 

@@ -33,6 +33,7 @@ function SettingsPage() {
   const guidePosition = useKyoka((x) => x.settings.guidePosition);
   const vipTiers = useKyoka((x) => x.settings.vipTiers);
   const giftNotify = useKyoka((x) => x.settings.giftNotify);
+  const autoSwitchQueue = useKyoka((x) => x.settings.autoSwitchQueue);
   const publicUrl = useKyoka((x) => x.settings.publicUrl);
   const [newWord, setNewWord] = useState("");
   const addWord = () => {
@@ -155,6 +156,14 @@ function SettingsPage() {
           <label className="flex items-center justify-between gap-2"><span>Notifikasi tiap gift di overlay</span>
             <input type="checkbox" className="h-4 w-4" checked={giftNotify} onChange={(e) => actions.updateSettings({ giftNotify: e.target.checked })} />
           </label>
+        </Panel>
+
+        <Panel className="space-y-3 text-sm">
+          <h3 className="font-display text-sm font-bold">Antrean overlay</h3>
+          <label className="flex items-center justify-between gap-2"><span>Pindah otomatis antar sesi</span>
+            <input type="checkbox" className="h-4 w-4" checked={autoSwitchQueue} onChange={(e) => actions.updateSettings({ autoSwitchQueue: e.target.checked })} />
+          </label>
+          <p className="text-xs text-muted-foreground">Saat antrean satu jenis habis, lanjut ke jenis lain yang punya kiriman menunggu (yang “Lanjut otomatis”-nya hidup). Mati = sesi tetap menunggu input jenis yang sama.</p>
         </Panel>
 
         <Panel className="space-y-3 text-sm">

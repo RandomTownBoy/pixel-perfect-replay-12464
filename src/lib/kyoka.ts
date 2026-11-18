@@ -26,18 +26,12 @@ export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
   sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
   countdown: number; giftRules: GiftRule[];
-  /** Detik tiap kiriman penonton tampil di overlay sebelum diganti item antrean berikutnya. */
-  queueSeconds: number;
-  /** Otomatis masukkan kiriman yang cocok dengan gimmick tayang ke antrean (yang ditandai review tidak pernah otomatis). */
-  autoQueue: boolean;
   /** Posisi tulisan panduan interaksi di overlay. */
   guidePosition: "tr" | "tl" | "br" | "bl" | "off";
   /** Kata tambahan untuk detektor kata tidak pantas (digabung dengan daftar bawaan di database). */
   bannedWords: string[];
   /** Batas total diamond untuk tier ⭐ Supporter, 💎 VIP, 👑 Sultan. */
   vipTiers: [number, number, number];
-  /** Kiriman !spin bersih dari penonton VIP otomatis masuk antrean (kalau Spin sedang tayang). */
-  vipAutoQueue: boolean;
   /** Hitung VIP hanya dari gift setelah waktu ini (ms). 0 = 12 jam terakhir. */
   vipSince: number;
   /** Tier minimal untuk jalur fast track (0 = mati, 1 = ⭐ semua gifter, 2 = 💎, 3 = 👑). */
@@ -234,7 +228,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
+    guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -359,9 +353,12 @@ export function replaceQuestions(qs: Question[]) {
   for (const [id, at] of pendingDelete) if (now - at > PENDING_MS) pendingDelete.delete(id);
   const fresh = qs.filter((q) => !pendingDelete.has(q.id)).map((q) => { const p = pendingPatch.get(q.id); return p ? { ...q, ...p.patch } : q; });
   // Kategori dimuat dari isi database juga, supaya konten tidak "hilang" dari dropdown kalau localStorage kosong/ganti perangkat.
+  // Nama deck Pick a Card ("Penonton #1", dst.) bukan kategori: tidak ikut dimuat, dan sisa lama dibersihkan dari daftar.
   setState((s) => {
-    const merged = [...new Set([...s.categories, ...fresh.map((q) => q.category)])];
-    return { ...s, questions: fresh, categories: merged.length === s.categories.length ? s.categories : merged };
+    const base = s.categories.filter((c) => !/^Penonton #\d+$/.test(c.trim()));
+    const merged = [...new Set([...base, ...fresh.filter((q) => q.gimmick !== "card").map((q) => q.category)])];
+    const same = merged.length === s.categories.length && merged.every((c, i) => c === s.categories[i]);
+    return { ...s, questions: fresh, categories: same ? s.categories : merged };
   });
 }
 export const SAMPLE_QUESTIONS = () => seedQuestions.map((q) => ({ ...q, id: uid(), createdAt: Date.now() }));
@@ -399,7 +396,8 @@ export const actions = {
     pushOverlay({ ...o, ...pick(patch) });
   },
   resetDemo() {
-    setState(() => ({ ...defaultState, activity: [{ id: uid(), text: "Data demo di-reset", at: Date.now() }] }));
+    // Hanya konten demo dan log aktivitas yang dikembalikan; pengaturan dan kategori tidak disentuh (tidak memicu simpan ke database).
+    setState((s) => ({ ...s, questions: [...seedQuestions, ...s.questions.filter((q) => !q.demo)], activity: [{ id: uid(), text: "Data demo di-reset", at: Date.now() }] }));
   },
 };
 

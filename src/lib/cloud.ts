@@ -158,6 +158,16 @@ let queueStartedAt = 0;
 /** Gimmick yang sudah dimulai host tetap armed ketika antrean kosong, agar input baru bisa melanjutkan sesi. */
 let armedKind: string | null = null;
 const QUEUE_ARMED_KEY = "kyoka.queue.armed.v1";
+const QUEUE_SHOWN_KEY = "kyoka.queue.shownAt.v1";
+/** payloadAt overlay dari item terakhir yang ditayangkan antrean sendiri. Dipakai supaya konten manual host tidak ditimpa. */
+let lastQueueShownAt = 0;
+function setLastShown(at: number) {
+  lastQueueShownAt = at;
+  try { if (at) localStorage.setItem(QUEUE_SHOWN_KEY, String(at)); else localStorage.removeItem(QUEUE_SHOWN_KEY); } catch { /* abaikan */ }
+}
+function readLastShown(): number {
+  try { const n = Number(typeof window === "undefined" ? 0 : localStorage.getItem(QUEUE_SHOWN_KEY)); return Number.isFinite(n) ? n : 0; } catch { return 0; }
+}
 const QUEUE_GIMMICKS = ["confession", "hottake", "thisorthat", "chaos"] as const;
 function setArmed(kind: string | null) {
   armedKind = kind;
@@ -254,6 +264,7 @@ function queueTick(skipOutro = false, allowHandoff = true) {
   try { ok = present(next); } finally { presenting = false; }
   if (!ok) { void liveActions.setStatus(next.id, "review"); setLive({ nowShowing: null }); queueTick(); return; }
   shownAt = readOverlay().payloadAt;
+  setLastShown(shownAt);
   void liveActions.setStatus(next.id, "shown");
   const ms = queueSecondsFor(next.kind) * 1000;
   queueDeadline = Date.now() + ms;
@@ -261,12 +272,12 @@ function queueTick(skipOutro = false, allowHandoff = true) {
   queueTimer = startTimer(() => queueTick(), ms);
   syncQueueOverlay();
 }
-/** Sesi antrean sedang idle: tidak ada yang tayang atau antre. */
-const queueIdle = () => !live.nowShowing && live.queue.length === 0 && !queueTimer;
-/** Layar kosong atau masih memegang gimmick antrean. Spin dan Pick a Card tidak pernah diambil alih. */
+/** Sesi antrean sedang idle: tidak ada yang tayang, antre, sedang dipresentasikan, atau memainkan animasi penutup. */
+const queueIdle = () => !live.nowShowing && live.queue.length === 0 && !queueTimer && !presenting && !outroing;
+/** Layar kosong, atau masih berisi tayangan terakhir milik antrean sendiri. Konten manual host serta Spin/Pick a Card tidak pernah ditimpa. */
 function overlayFreeForQueue(): boolean {
-  const g = onAirGimmick();
-  return !g || (QUEUE_GIMMICKS as readonly string[]).includes(g);
+  const o = readOverlay();
+  return !o.payload || (lastQueueShownAt !== 0 && o.payloadAt === lastQueueShownAt);
 }
 /**
  * Serah-terima saat antrean habis: kalau "Pindah otomatis antar sesi" hidup, ambil jenis lain yang auto ON dan punya
@@ -282,14 +293,21 @@ function handoffNext(): boolean {
     if (!best || fastRank(head) > fastRank(best.head) || (fastRank(head) === fastRank(best.head) && Date.parse(head.created_at) < Date.parse(best.head.created_at))) best = { kind: k, head };
   }
   if (!best) return false;
-  return liveActions.playWaiting(best.kind) > 0;
+  const ok = liveActions.playWaiting(best.kind) > 0;
+  if (ok) actions.log(`Antrean pindah otomatis ke ${best.kind}`);
+  return ok;
+}
+/** Setelah reload: sesi armed yang idle dan punya kiriman menunggu jenisnya dilanjutkan. */
+function resumeArmed() {
+  if (!armedKind || !queueIdle() || queueModeOf(armedKind) !== "auto") return;
+  if (waitingOf(live, armedKind).length) liveActions.playWaiting(armedKind);
 }
 /** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, kembali menunggu di Inbox. */
 function abandonQueue() {
   stopTimer(queueTimer); queueTimer = null;
   const rest = live.queue;
   setLive({ queue: [], nowShowing: null, queuePaused: false });
-  setArmed(null);
+  setArmed(null); setLastShown(0);
   syncQueueOverlay();
   // Item antre belum berstatus "shown", jadi masih ada di Inbox: cukup dilepas dari antrean, tidak dibuang ke Bank.
   if (rest.length) toast(`${rest.length} kiriman kembali ke daftar tunggu di Inbox`);
@@ -532,7 +550,7 @@ export const liveActions = {
   /** Tombol panik: sembunyikan overlay seketika, kosongkan antrean dan banner. Kiriman di Inbox tetap aman. */
   panic() {
     stopTimer(queueTimer); queueTimer = null;
-    setArmed(null);
+    setArmed(null); setLastShown(0);
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
     setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
@@ -774,7 +792,7 @@ function handleLiveEvent(e: LiveEvent) {
       if (handledSpinEventIds.size > 5000) handledSpinEventIds.clear();
       const question = match[1]!.trim().slice(0, 280);
       if (question.length >= 3) {
-        void supabase.from("audience_submissions").insert({ owner_id: ownerId, kind: "question", content: question, nickname: e.nickname, source: "tiktok", fingerprint: e.user_id ? `tt:${e.user_id}` : null, status: "pending" } as never).then(({ error }) => {
+        void supabase.from("audience_submissions").insert({ owner_id: ownerId, kind: "question", content: question, nickname: e.nickname, source: "tiktok", fingerprint: e.user_id ? `tt:${e.user_id}` : null, ...(e.flagged ? { status: "review", flagged: true, flag_reason: e.flag_reason ?? null } : { status: "pending" }) } as never).then(({ error }) => {
           if (error) { console.error("Kiriman !spin gagal disimpan", error); toast.error("Kiriman !spin gagal diproses. Periksa kapasitas atau koneksi database."); }
         });
       }
@@ -845,10 +863,14 @@ export function useCloudSync(userId: string | undefined) {
   useEffect(() => {
     setLive({ queueModes: readQueueModes() });
     // Pulihkan sesi armed setelah reload; item yang belum tayang masih pending di database sehingga dihitung ulang dari Inbox.
-    setArmed(readArmed()); shownAt = readOverlay().payloadAt;
+    lastQueueShownAt = readLastShown(); shownAt = readOverlay().payloadAt;
+    // Sesi armed hanya dipulihkan kalau layar belum diganti host selama halaman tertutup.
+    setArmed(readArmed());
+    if (armedKind && shownAt !== lastQueueShownAt) { setArmed(null); setLastShown(0); }
     if (!userId) return;
     ownerId = userId;
     let cancelled = false;
+    let loadRetry: TimerHandle | null = null;
     (async () => { try {
       // Kolom dasar dimuat dulu (link penonton + token overlay) supaya tidak ikut gagal kalau kolom baru belum ada di database.
       let { data: sess, error: sessErr } = await supabase.from("studio_sessions").select("overlay_token, audience_code").eq("owner_id", userId).maybeSingle();
@@ -861,9 +883,9 @@ export function useCloudSync(userId: string | undefined) {
       // Kunci konektor TikTok dimuat terpisah; null kalau migrasi database step 2 belum dijalankan.
       const ik = await supabase.from("studio_sessions").select("ingest_key").eq("owner_id", userId).maybeSingle();
       const ingestKey = ik.error ? null : ((ik.data as unknown as { ingest_key?: string } | null)?.ingest_key ?? null);
-      const { data: qs } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
-      const { data: inbox } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(INBOX_LIMIT);
-      const { data: rev } = await supabase.from("audience_submissions").select("*").eq("status", "review").order("created_at", { ascending: false }).limit(REVIEW_LIMIT);
+      const { data: qs, error: qsErr } = await supabase.from("questions").select("*").order("created_at", { ascending: false }).limit(1000);
+      const { data: inbox, error: inboxErr } = await supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(INBOX_LIMIT);
+      const { data: rev, error: revErr } = await supabase.from("audience_submissions").select("*").eq("status", "review").order("created_at", { ascending: false }).limit(REVIEW_LIMIT);
       // Pengaturan + jendela input (kolom baru paket 1); dilewati kalau migrasinya belum jalan.
       const cfg = await supabase.from("studio_sessions").select("settings, intake").eq("owner_id", userId).maybeSingle();
       const cfgRow = cfg.error ? null : (cfg.data as unknown as { settings?: Record<string, unknown> | null; intake?: Partial<Intake> | null } | null);
@@ -878,7 +900,7 @@ export function useCloudSync(userId: string | undefined) {
         setLive({ tiktokLive: { connected: kind !== "disconnected", handle, at: sysAt } });
       }
       setLive({ feed: events.filter((x) => x.type !== "system" && x.type !== "join" && x.type !== "like").slice(0, 60) });
-      replaceQuestions((qs ?? []).map(toQ));
+      if (!qsErr) replaceQuestions((qs ?? []).map(toQ)); // jangan timpa dengan [] kalau query gagal
       // Terapkan pengaturan dari database; kalau masih kosong, unggah pengaturan lokal sebagai awal.
       settingsSync = !!cfgRow;
       const dbSettings = cfgRow?.settings ?? {};
@@ -906,11 +928,17 @@ export function useCloudSync(userId: string | undefined) {
       }
       setLive({
         overlayToken: sess?.overlay_token ?? null, audienceCode: sess?.audience_code ?? null, ingestKey, intake, gifters,
-        inbox: (inbox ?? []) as unknown as Submission[], review: (rev ?? []) as unknown as Submission[], history: (hist ?? []) as unknown as Submission[],
+        inbox: inboxErr ? live.inbox : ((inbox ?? []) as unknown as Submission[]), review: revErr ? live.review : ((rev ?? []) as unknown as Submission[]), history: (hist ?? []) as unknown as Submission[],
         round: String(readOverlay().payloadAt || ""),
       });
+      if (qsErr || inboxErr || revErr) {
+        console.error("Muat awal sebagian gagal", { qsErr, inboxErr, revErr });
+        toast.error("Sebagian data gagal dimuat. Mencoba lagi otomatis…");
+        loadRetry = startTimer(() => { void refetchInbox(false); void resyncQuestions(); }, 8000);
+      }
       void supabase.rpc("purge_my_old_inputs").then(({ error }) => { if (error) console.warn("purge_my_old_inputs", error.message); });
       void reloadWebTally();
+      resumeArmed();
       setRemote({
         insert: (rows) => {
           supabase.from("questions").insert(rows.map((q) => ({ id: q.id, text: q.text, gimmick: q.gimmick, category: q.category, favorite: q.favorite, used: q.used, demo: !!q.demo })))
@@ -965,7 +993,7 @@ export function useCloudSync(userId: string | undefined) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
       .subscribe();
     // Question Bank tidak punya pembaruan realtime, jadi perubahan dari tab/perangkat lain diambil saat dashboard kembali difokuskan dan berkala.
-    const refetchInbox = async () => {
+    const refetchInbox = async (route = true) => {
       if (!ownerId) return;
       const [pend, rev] = await Promise.all([
         supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(INBOX_LIMIT),
@@ -977,17 +1005,21 @@ export function useCloudSync(userId: string | undefined) {
         const known = new Set(live.inbox.map((x) => x.id));
         setLive({ inbox: sortVip(fresh) });
         // Kiriman yang terlewat saat tab di latar belakang / channel putus disalurkan seperti kiriman baru.
-        for (const r of fresh) if (!known.has(r.id) && QUEUE_KINDS.has(r.kind)) routeSubmission(r);
+        if (route) for (const r of fresh) if (!known.has(r.id) && QUEUE_KINDS.has(r.kind)) routeSubmission(r);
       }
       if (!rev.error && rev.data) setLive({ review: rev.data as unknown as Submission[] });
     };
     const refreshBank = () => { if (ownerId && document.visibilityState === "visible") void resyncQuestions(); };
-    document.addEventListener("visibilitychange", refreshBank); const onVisible = () => { if (document.visibilityState === "visible") void refetchInbox(); }; document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", refreshBank); const onVisible = () => { if (document.visibilityState === "visible") void refetchInbox(); }; document.addEventListener("visibilitychange", onVisible); const onOnline = () => { void refetchInbox(); void resyncQuestions(); }; window.addEventListener("online", onOnline);
     window.addEventListener("focus", refreshBank);
     const bankTimer = startTimer(refreshBank, 30_000, true);
     const offHostSwitch = subscribeOverlay(watchHostSwitch);
     // Simpan perubahan pengaturan/kategori ke database (ditunda 1 detik agar tidak menulis setiap ketikan).
+    let prevSwitch = getSettings().autoSwitchQueue;
     const offPersist = onPersistChange(() => {
+      const nowSwitch = getSettings().autoSwitchQueue;
+      if (nowSwitch && !prevSwitch) handoffNext();
+      prevSwitch = nowSwitch;
       if (!settingsSync) return;
       if (persistTimer) clearTimeout(persistTimer);
       persistTimer = setTimeout(() => persistSettingsNow(userId), 1000);
@@ -997,7 +1029,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000, true);
     return () => {
-      cancelled = true; setRemote(null); document.removeEventListener("visibilitychange", refreshBank); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", refreshBank); stopTimer(bankTimer); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); queueTimer = null; setLive({ queue: [], nowShowing: null }); outroing = false; stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
+      cancelled = true; setRemote(null); document.removeEventListener("visibilitychange", refreshBank); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("online", onOnline); stopTimer(loadRetry); window.removeEventListener("focus", refreshBank); stopTimer(bankTimer); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); queueTimer = null; setLive({ queue: [], nowShowing: null }); outroing = false; stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

@@ -3,6 +3,19 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { clampInt, LIMITS } from "@/lib/limits";
 
 export type AiTask = "generate" | "improve" | "followup" | "remix" | "thisorthat" | "hottake" | "words" | "problem";
+const AI_TASKS: readonly AiTask[] = ["generate", "improve", "followup", "remix", "thisorthat", "hottake", "words", "problem"];
+/** Rate limit per pengguna (token bucket di memori): 20 permintaan per 10 menit. */
+const RATE_MAX = 20;
+const RATE_WINDOW_MS = 10 * 60_000;
+const buckets = new Map<string, { tokens: number; at: number }>();
+export function takeAiToken(userId: string, now = Date.now()): boolean {
+  const b = buckets.get(userId) ?? { tokens: RATE_MAX, at: now };
+  const tokens = Math.min(RATE_MAX, b.tokens + ((now - b.at) / RATE_WINDOW_MS) * RATE_MAX);
+  if (tokens < 1) { buckets.set(userId, { tokens, at: now }); return false; }
+  buckets.set(userId, { tokens: tokens - 1, at: now });
+  if (buckets.size > 2000) for (const [k, v] of buckets) if (now - v.at > RATE_WINDOW_MS) buckets.delete(k);
+  return true;
+}
 type Input = { task: AiTask; gimmick: string; category: string; count: number; text: string; style: string; avoid: string[] };
 
 const GIMMICK_HINT: Record<string, string> = {
@@ -42,11 +55,15 @@ export const aiGenerate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: Input) => ({
     ...d,
+    task: (AI_TASKS.includes(d.task) ? d.task : "generate") as AiTask,
+    gimmick: String(d.gimmick ?? "").slice(0, 30),
+    style: String(d.style ?? "").slice(0, 30),
     text: String(d.text ?? "").slice(0, 500),
     category: String(d.category ?? "").slice(0, 60),
     avoid: Array.isArray(d.avoid) ? d.avoid.map((a) => String(a).slice(0, 200)) : [],
   }))
-  .handler(async ({ data }): Promise<{ lines: string[]; error: string | null }> => {
+  .handler(async ({ data, context }): Promise<{ lines: string[]; error: string | null }> => {
+    if (!takeAiToken(String((context as { userId?: string }).userId ?? "anon"))) return { lines: [], error: "Terlalu sering, coba lagi sebentar." };
     const { generateLines } = await import("./ai.server");
     try {
       return { lines: await generateLines(buildPrompt(data)), error: null };

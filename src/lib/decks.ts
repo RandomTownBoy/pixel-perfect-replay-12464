@@ -19,7 +19,7 @@ export type Deck = {
   name: string; viewer: boolean; cards: Question[];
   /** Jumlah kartu yang sudah dibuka (ditandai terpakai). */
   used: number; total: number; status: DeckStatus;
-  /** Deck penonton terkunci = penuh, sudah tayang di overlay, atau sudah ada kartu yang dibuka. Kartu baru tidak masuk ke deck terkunci. */
+  /** Deck penonton terkunci = penuh, sudah tayang di overlay, atau sudah ada kartu yang dibuka. Lock menjaga overlay aktif, tetapi tidak menghalangi pengisian sampai 6 kartu. */
   locked: boolean;
 };
 
@@ -80,6 +80,7 @@ export function nextPlayableDeck(decks: Deck[], name: string): Deck | undefined 
  * Deck penonton tujuan untuk kartu baru: deck penonton bernomor terkecil yang belum terkunci
  * (belum penuh, belum tayang, belum ada kartu terbuka). Kalau tidak ada, deck berikutnya dibuat.
  * `extra` = jumlah kartu yang sudah dijatah ke deck tertentu tapi belum terlihat di `qs` (dipakai perencana migrasi).
+ * Deck yang pernah ditampilkan tetap diisi sampai 6 kartu; lock tidak memaksa pembuatan deck baru.
  */
 export function pickViewerDeck(qs: Question[], locked: ReadonlySet<string> = new Set(), extra: ReadonlyMap<string, number> = new Map()): string {
   const info = new Map<string, { total: number; locked: boolean }>();
@@ -92,7 +93,9 @@ export function pickViewerDeck(qs: Question[], locked: ReadonlySet<string> = new
   const names = [...info.keys()].sort((a, b) => (viewerDeckNumber(a) ?? 0) - (viewerDeckNumber(b) ?? 0));
   for (const name of names) {
     const d = info.get(name)!;
-    if (!d.locked && d.total < DECK_SIZE) return name;
+    // Deck yang sudah pernah ditampilkan tetap boleh menerima kartu baru sampai 6/6.
+    // Lock hanya mencegah deck aktif diubah pada overlay, bukan memecah kiriman ke deck baru.
+    if (d.total < DECK_SIZE) return name;
   }
   const max = Math.max(0, ...names.map((k) => viewerDeckNumber(k) ?? 0));
   return viewerDeckName(max + 1);
@@ -111,7 +114,7 @@ export type DeckMove = { id: string; category: string };
  * Rencana perapian deck dari data lama (tanpa migrasi database, hanya mengubah kolom kategori):
  * 1. Pack lama berisi > 6 kartu dipecah per 6 ("Weird Questions" → "Weird Questions 1", "Weird Questions 2").
  *    Kalau namanya sudah bernomor, 6 kartu tertua tetap dan sisanya pindah ke nomor berikutnya.
- * 2. Kartu penonton lama di pack "Dari Penonton" menjadi deck "Penonton #n".
+ * 2. Kartu penonton lama dan deck penonton parsial yang belum dimainkan digabung berurutan ke "Penonton #n".
  * 3. Deck penonton yang kelebihan (mis. dua kiriman masuk bersamaan) memindahkan kartu terbarunya ke deck penonton berikutnya.
  * Hasilnya idempoten: setelah diterapkan, rencana berikutnya kosong.
  */
@@ -125,8 +128,11 @@ export function planDeckMoves(qs: Question[], locked: ReadonlySet<string> = new 
   const byCat = new Map<string, Question[]>();
   for (const q of cards) { const g = byCat.get(q.category); if (g) g.push(q); else byCat.set(q.category, [q]); }
 
-  // Kartu penonton yang perlu rumah baru, dari pack lama maupun kelebihan deck penonton.
+  // Kartu penonton yang perlu rumah baru. Deck-deck parsial lama digabung kembali
+  // jika belum ada kartu yang dibuka, supaya satu deck terisi 6 sebelum deck berikutnya dibuat.
   const viewerPool: Question[] = [...(byCat.get(VIEWER_CATEGORY) ?? [])];
+  const viewerGroups = [...byCat.entries()].filter(([name]) => isViewerDeck(name));
+  const canCompactViewerDecks = viewerGroups.every(([, list]) => list.every((q) => !q.used));
   // Simulasi isi tiap deck penonton supaya penjatahan tidak melebihi 6.
   const virtual: Question[] = [];
   const extra = new Map<string, number>();
@@ -135,7 +141,8 @@ export function planDeckMoves(qs: Question[], locked: ReadonlySet<string> = new 
     const sorted = [...list].sort(byAge);
     if (name === VIEWER_CATEGORY) continue;
     if (isViewerDeck(name)) {
-      if (sorted.length > DECK_SIZE) viewerPool.push(...sorted.slice(DECK_SIZE));
+      if (canCompactViewerDecks) viewerPool.push(...sorted);
+      else if (sorted.length > DECK_SIZE) viewerPool.push(...sorted.slice(DECK_SIZE));
       continue;
     }
     if (sorted.length <= DECK_SIZE) continue;

@@ -46,10 +46,12 @@ type Live = {
   giftLog: { id: string; text: string; at: number }[];
   /** Timer antrean overlay sedang ditahan host. */
   queuePaused: boolean;
+  /** Mode kelanjutan antrean per gimmick; otomatis menjadi default. */
+  queueModes: Record<string, "auto" | "manual">;
 };
 let live: Live = {
   overlayToken: null, audienceCode: null, overlayConnected: false, round: "",
-  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, intake: DEFAULT_INTAKE, gifters: {}, perks: [], followStats: { known: 0, unknown: 0 }, giftLog: [], queuePaused: false,
+  web: { a: 0, b: 0 }, tiktok: { a: 0, b: 0 }, gift: { a: 0, b: 0 }, inbox: [], history: [], review: [], queue: [], nowShowing: null, intake: DEFAULT_INTAKE, gifters: {}, perks: [], followStats: { known: 0, unknown: 0 }, giftLog: [], queuePaused: false, queueModes: { confession: "auto", hottake: "auto", thisorthat: "auto", chaos: "auto" },
   ingestKey: null, feed: [], tiktokLive: { connected: false, handle: "", at: 0 },
 };
 const subs = new Set<() => void>();
@@ -150,6 +152,19 @@ let queueDeadline = 0;
 let queueLeft = 0;
 let queueMs = 0;
 let queueStartedAt = 0;
+/** Gimmick yang sudah dimulai host tetap armed ketika antrean kosong, agar input baru bisa melanjutkan sesi. */
+let armedKind: string | null = null;
+const QUEUE_MODE_KEY = "kyoka.queue.modes.v1";
+function readQueueModes(): Record<string, "auto" | "manual"> {
+  const defaults = { confession: "auto", hottake: "auto", thisorthat: "auto", chaos: "auto" } as const;
+  try {
+    if (typeof window === "undefined") return { ...defaults };
+    const raw = localStorage.getItem(QUEUE_MODE_KEY);
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+    return Object.fromEntries(Object.keys(defaults).map((k) => [k, parsed[k] === "manual" ? "manual" : "auto"])) as Record<string, "auto" | "manual">;
+  } catch { return { ...defaults }; }
+}
+function queueModeOf(kind: string): "auto" | "manual" { return live.queueModes[kind] ?? "auto"; }
 /**
  * Kirim ke overlay info garis loading antrean. Aktif hanya kalau ada item tayang DAN masih ada yang menunggu;
  * begitu antrean habis (item terakhir) info dihapus sehingga garis berhenti dan tidak mengulang.
@@ -232,12 +247,15 @@ function abandonQueue() {
   stopTimer(queueTimer); queueTimer = null;
   const rest = live.queue;
   setLive({ queue: [], nowShowing: null, queuePaused: false });
+  armedKind = null;
   syncQueueOverlay();
   // Item antre belum berstatus "shown", jadi masih ada di Inbox: cukup dilepas dari antrean, tidak dibuang ke Bank.
   if (rest.length) toast(`${rest.length} kiriman kembali ke daftar tunggu di Inbox`);
 }
 function watchHostSwitch(o: OverlayState) {
-  if (presenting || !live.nowShowing) return;
+  // Sesi tetap armed ketika antrean kosong. Jika host mengganti payload overlay,
+  // sesi lama harus dilepas agar input berikutnya tidak menimpa gimmick baru.
+  if (presenting || !armedKind) return;
   if (o.payloadAt !== shownAt) abandonQueue();
 }
 
@@ -274,9 +292,9 @@ function routeSubmission(r: Submission) {
     return;
   }
   if (QUEUE_KINDS.has(r.kind)) {
-    // Ikut antrean hanya kalau antrean jenis ini SUDAH berjalan (host menekan "Tampilkan antrean"). Selain itu kiriman ditahan di Inbox,
-    // tidak tampil sendiri dan tidak dibuang ke Bank, sampai host menekan tombol atau menyimpan/menolaknya.
-    if (live.nowShowing?.kind === r.kind && onAirGimmick() === KIND_TO_GIMMICK[r.kind]) liveActions.enqueue(r);
+    // Sesi yang sudah dimulai host tetap aktif saat antrean kosong. Dalam mode otomatis,
+    // input baru melanjutkan sesi yang sama; mode manual menahannya di Inbox.
+    if (armedKind === r.kind && queueModeOf(r.kind) === "auto") liveActions.enqueue(r);
     return;
   }
   // Kartu penonton: otomatis masuk deck penonton ("Penonton #1", "Penonton #2", ...), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
@@ -373,6 +391,7 @@ export const liveActions = {
   enqueue(s: Submission) {
     if (!QUEUE_KINDS.has(s.kind) || s.flagged || s.status === "review") return false;
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
+    if (queueModeOf(s.kind) !== "auto" || armedKind !== s.kind) return false;
     setLive({ queue: [...live.queue, s] });
     if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
     return true;
@@ -386,10 +405,19 @@ export const liveActions = {
       stopTimer(queueTimer); queueTimer = null;
       setLive({ queue: [], nowShowing: null, queuePaused: false });
     }
-    setLive({ queue: [...live.queue, ...list] });
+    armedKind = kind;
+    setLive({ queue: [...(live.nowShowing?.kind === kind ? live.queue : []), ...list] });
     if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
     toast.success(`▶ ${list.length} kiriman diputar berurutan`);
     return list.length;
+  },
+  /** Mode otomatis/manual disimpan lokal per gimmick; default otomatis. */
+  setQueueMode(kind: string, mode: "auto" | "manual") {
+    if (!QUEUE_KINDS.has(kind)) return;
+    const modes = { ...live.queueModes, [kind]: mode };
+    setLive({ queueModes: modes });
+    try { localStorage.setItem(QUEUE_MODE_KEY, JSON.stringify(modes)); } catch { /* abaikan */ }
+    if (mode === "auto" && armedKind === kind && !live.nowShowing && !live.queue.length) liveActions.playWaiting(kind);
   },
   /** Tampilkan satu kiriman sekarang juga, terpisah dari antrean (kalau antrean sedang jalan, antrean berhenti dan sisanya kembali menunggu). */
   showNow(s: Submission): boolean {
@@ -430,6 +458,7 @@ export const liveActions = {
   /** Tombol panik: sembunyikan overlay seketika, kosongkan antrean dan banner. Kiriman di Inbox tetap aman. */
   panic() {
     stopTimer(queueTimer); queueTimer = null;
+    armedKind = null;
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
     setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
@@ -740,6 +769,7 @@ function dbFailed(what: string, error: { message: string }) {
 export function useCloudSync(userId: string | undefined) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
+    setLive({ queueModes: readQueueModes() });
     if (!userId) return;
     ownerId = userId;
     let cancelled = false;

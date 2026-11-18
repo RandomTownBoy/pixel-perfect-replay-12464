@@ -80,10 +80,13 @@ export const HISTORY_LIMIT = 300;
 export const INBOX_LIMIT = 500;
 export const REVIEW_LIMIT = 200;
 /** Jenis kiriman yang masuk antrean tayang di overlay saat gimmick-nya sedang tayang. Spin → roda, Card → bank (isi kartu tetap tersembunyi). */
-export const QUEUE_KINDS = new Set(["confession", "hottake", "chaos", "thisorthat"]);
+export const QUEUE_KINDS = new Set(["confession", "hottake", "chaos", "problem", "thisorthat"]);
+/** Kiriman jenis problem menggunakan antrean dan pengaturan Random Chaos. */
+export const queueGimmickOf = (kind: string): string => kind === "problem" ? "chaos" : kind;
 /** Kiriman yang ditahan di Inbox menunggu giliran: bersih, belum antre/tayang, jenis tertentu (Confession, Hot Take, This or That). */
 export function waitingOf(l: { inbox: Submission[]; queue: Submission[]; nowShowing: Submission | null }, kind: string): Submission[] {
-  return l.inbox.filter((s) => s.kind === kind && s.status === "pending" && !s.flagged && s.id !== l.nowShowing?.id && !l.queue.some((q) => q.id === s.id));
+  const target = queueGimmickOf(kind);
+  return l.inbox.filter((s) => queueGimmickOf(s.kind) === target && s.status === "pending" && !s.flagged && s.id !== l.nowShowing?.id && !l.queue.some((q) => q.id === s.id));
 }
 /** Urutan putar antrean: VIP (fast track) dulu, sisanya yang paling lama menunggu dulu. */
 export const waitingOrder = (list: Submission[]): Submission[] =>
@@ -164,7 +167,7 @@ function readQueueModes(): Record<string, "auto" | "manual"> {
     return Object.fromEntries(Object.keys(defaults).map((k) => [k, parsed[k] === "manual" ? "manual" : "auto"])) as Record<string, "auto" | "manual">;
   } catch { return { ...defaults }; }
 }
-function queueModeOf(kind: string): "auto" | "manual" { return live.queueModes[kind] ?? "auto"; }
+function queueModeOf(kind: string): "auto" | "manual" { return live.queueModes[queueGimmickOf(kind)] ?? "auto"; }
 /**
  * Kirim ke overlay info garis loading antrean. Aktif hanya kalau ada item tayang DAN masih ada yang menunggu;
  * begitu antrean habis (item terakhir) info dihapus sehingga garis berhenti dan tidak mengulang.
@@ -201,6 +204,8 @@ function present(s: Submission): boolean {
     const [a, b] = text.split(" | ");
     if (!a?.trim() || !b?.trim()) return false;
     sendToOverlay({ gimmick: "thisorthat", a: a.trim(), b: b.trim() });
+  } else if (s.kind === "problem") {
+    sendToOverlay({ gimmick: "audience", kind: "problem", content: text, ...(s.nickname ? { nickname: s.nickname } : {}) });
   } else if (s.kind === "chaos") {
     const words = text.split(",").map((w) => w.trim()).filter(Boolean);
     if (words.length !== 3) return false;
@@ -292,10 +297,14 @@ function routeSubmission(r: Submission) {
     return;
   }
   if (QUEUE_KINDS.has(r.kind)) {
-    // Sesi yang sudah dimulai host tetap aktif saat antrean kosong. Dalam mode otomatis,
-    // input baru melanjutkan sesi yang sama; mode manual menahannya di Inbox.
-    if (armedKind === r.kind && queueModeOf(r.kind) === "auto") liveActions.enqueue(r);
-    return;
+    const target = queueGimmickOf(r.kind);
+    if (armedKind === target) {
+      // Dalam mode manual, biarkan tetap pending di Inbox sampai host menjalankan antrean.
+      if (queueModeOf(target) === "auto") void liveActions.enqueue(r);
+      return;
+    }
+    // Kiriman problem yang belum punya sesi Chaos aktif tetap masuk jalur Question Bank lama.
+    if (r.kind !== "problem") return;
   }
   // Kartu penonton: otomatis masuk deck penonton ("Penonton #1", "Penonton #2", ...), atau ditahan di Inbox sampai host menyetujui kalau opsinya dimatikan.
   // Isi kartu tersembunyi sampai dibuka, jadi mode tahan berguna kalau host mau menyaring dulu sebelum tayang di stream.
@@ -332,6 +341,8 @@ async function saveToBankNow(s: Submission, dest: GimmickId, categoryIn: string)
   if (isViewerCard) return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : `Kartu masuk deck ${category} ✅` };
   return { ok: true, message: duplicate ? "Isi yang sama sudah ada di Question Bank." : `Tersimpan di Question Bank → ${destName} ✅` };
 }
+
+const enqueueInFlight = new Set<string>();
 
 export const liveActions = {
   addTiktok(side: "a" | "b", n: number) {
@@ -387,37 +398,65 @@ export const liveActions = {
     toast.success(targets.length === 1 ? "Riwayat dihapus" : `${targets.length} riwayat dihapus`);
     return true;
   },
-  /** Masukkan kiriman ke antrean overlay. Tiap item tampil sesuai durasi gimmick-nya (Confession 3 mnt, Hot Take/Chaos 2 mnt, This or That 1,5 mnt). */
-  enqueue(s: Submission) {
+  /** Masukkan kiriman ke daftar tunggu; tidak mensyaratkan sesi sudah aktif. */
+  async enqueue(s: Submission): Promise<boolean> {
+    const kind = queueGimmickOf(s.kind);
     if (!QUEUE_KINDS.has(s.kind) || s.flagged || s.status === "review") return false;
     if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
-    if (queueModeOf(s.kind) !== "auto" || armedKind !== s.kind) return false;
-    setLive({ queue: [...live.queue, s] });
-    if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
-    return true;
+    if (enqueueInFlight.has(s.id)) return false;
+    enqueueInFlight.add(s.id);
+    try {
+      const alreadyPending = live.inbox.some((x) => x.id === s.id && x.status === "pending");
+      if (!alreadyPending) {
+        const moved = await liveActions.setStatus(s.id, "pending");
+        if (!moved) return false;
+      }
+      // Baca ulang store setelah request async agar klik cepat tidak menghasilkan duplikasi.
+      if (live.queue.some((x) => x.id === s.id) || live.nowShowing?.id === s.id) return false;
+      const pendingItem = live.inbox.find((x) => x.id === s.id) ?? { ...s, status: "pending" };
+      if (armedKind === kind && queueModeOf(kind) === "auto") {
+        setLive({ queue: [...live.queue, pendingItem] });
+        if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
+        return true;
+      }
+      // Auto-start hanya jika overlay kosong. Tidak merebut gimmick lain secara diam-diam.
+      const active = onAirGimmick();
+      if (!armedKind && !live.nowShowing && !active && queueModeOf(kind) === "auto") {
+        armedKind = kind;
+        liveActions.playWaiting(kind);
+      }
+      // Mode manual atau overlay sedang dipakai gimmick lain: tetap pending di Inbox.
+      return true;
+    } finally {
+      enqueueInFlight.delete(s.id);
+    }
   },
   /** ▶ Putar semua kiriman yang menunggu untuk satu jenis (VIP dulu, lalu yang paling lama menunggu). Antrean jenis lain yang sedang jalan dihentikan. */
   playWaiting(kind: string): number {
-    if (!QUEUE_KINDS.has(kind)) return 0;
-    const list = waitingOrder(waitingOf(live, kind));
+    const target = queueGimmickOf(kind);
+    if (!QUEUE_KINDS.has(kind) && !QUEUE_KINDS.has(target)) return 0;
+    const list = waitingOrder(waitingOf(live, target));
     if (!list.length) { toast("Tidak ada kiriman yang menunggu."); return 0; }
-    if (live.nowShowing && live.nowShowing.kind !== kind) {
+    if (live.nowShowing && queueGimmickOf(live.nowShowing.kind) !== target) {
       stopTimer(queueTimer); queueTimer = null;
       setLive({ queue: [], nowShowing: null, queuePaused: false });
     }
-    armedKind = kind;
-    setLive({ queue: [...(live.nowShowing?.kind === kind ? live.queue : []), ...list] });
+    armedKind = target;
+    const existing = live.nowShowing && queueGimmickOf(live.nowShowing.kind) === target ? live.queue : [];
+    const ids = new Set(existing.map((x) => x.id));
+    setLive({ queue: [...existing, ...list.filter((x) => !ids.has(x.id))] });
     if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
     toast.success(`▶ ${list.length} kiriman diputar berurutan`);
     return list.length;
   },
   /** Mode otomatis/manual disimpan lokal per gimmick; default otomatis. */
   setQueueMode(kind: string, mode: "auto" | "manual") {
-    if (!QUEUE_KINDS.has(kind)) return;
-    const modes = { ...live.queueModes, [kind]: mode };
+    const target = queueGimmickOf(kind);
+    if (!QUEUE_KINDS.has(kind) && !QUEUE_KINDS.has(target)) return;
+    const modes = { ...live.queueModes, [target]: mode };
     setLive({ queueModes: modes });
     try { localStorage.setItem(QUEUE_MODE_KEY, JSON.stringify(modes)); } catch { /* abaikan */ }
-    if (mode === "auto" && armedKind === kind && !live.nowShowing && !live.queue.length) liveActions.playWaiting(kind);
+    if (mode === "auto" && armedKind === target && !live.nowShowing && !live.queue.length) liveActions.playWaiting(target);
   },
   /** Tampilkan satu kiriman sekarang juga, terpisah dari antrean (kalau antrean sedang jalan, antrean berhenti dan sisanya kembali menunggu). */
   showNow(s: Submission): boolean {

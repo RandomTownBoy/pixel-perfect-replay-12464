@@ -49,13 +49,13 @@ describe("Kartu penonton mengisi deck penonton", () => {
     expect(pickViewerDeck(many("Penonton #1", 5))).toBe("Penonton #1");
     expect(pickViewerDeck(many("Penonton #1", DECK_SIZE))).toBe("Penonton #2");
   });
-  it("skips a deck that is on air (locked) even if it is not full", () => {
+  it("keeps filling a deck that is already on air until it reaches 6", () => {
     const qs = many("Penonton #1", 3);
-    expect(pickViewerDeck(qs, new Set(["Penonton #1"]))).toBe("Penonton #2");
+    expect(pickViewerDeck(qs, new Set(["Penonton #1"]))).toBe("Penonton #1");
   });
-  it("skips a deck that already has an opened card", () => {
+  it("keeps filling a deck even after one of its cards has been opened", () => {
     const qs = [...many("Penonton #1", 2), card("Penonton #1", { used: true })];
-    expect(pickViewerDeck(qs)).toBe("Penonton #2");
+    expect(pickViewerDeck(qs)).toBe("Penonton #1");
   });
   it("reuses a lower unlocked deck after a gap", () => {
     expect(pickViewerDeck([...many("Penonton #1", DECK_SIZE), ...many("Penonton #2", 2)])).toBe("Penonton #2");
@@ -104,9 +104,19 @@ describe("Perapian data pack lama (tanpa migrasi database)", () => {
     const decks = buildDecks(apply(qs, planDeckMoves(qs)));
     expect(decks.map((d) => [d.name, d.total])).toEqual([["Penonton #1", 6], ["Penonton #2", 2]]);
   });
-  it("does not push old audience cards into a deck that is on air", () => {
+  it("merges unused partial viewer decks into one deck before creating the next", () => {
+    const qs = [...many("Penonton #1", 1), ...many("Penonton #2", 2), ...many("Penonton #3", 1)];
+    const decks = buildDecks(apply(qs, planDeckMoves(qs)));
+    expect(decks.map((d) => [d.name, d.total])).toEqual([["Penonton #1", 4]]);
+  });
+  it("merges untouched partial decks even when they were previously sent to the overlay", () => {
+    const qs = [...many("Penonton #1", 1), ...many("Penonton #2", 2), ...many("Penonton #3", 1)];
+    const decks = buildDecks(apply(qs, planDeckMoves(qs, new Set(["Penonton #1"]))));
+    expect(decks.map((d) => [d.name, d.total])).toEqual([["Penonton #1", 4]]);
+  });
+  it("fills an on-air viewer deck before creating another deck", () => {
     const qs = [...many("Penonton #1", 2), ...many("Dari Penonton", 2)];
     const decks = buildDecks(apply(qs, planDeckMoves(qs, new Set(["Penonton #1"]))));
-    expect(decks.map((d) => [d.name, d.total])).toEqual([["Penonton #1", 2], ["Penonton #2", 2]]);
+    expect(decks.map((d) => [d.name, d.total])).toEqual([["Penonton #1", 4]]);
   });
 });

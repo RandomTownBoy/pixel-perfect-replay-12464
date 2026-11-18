@@ -46,6 +46,8 @@ export type Settings = {
   giftNotify: boolean;
   /** Kartu penonton (Pick a Card) langsung disetujui dan masuk pack "Dari Penonton". Mati = ditahan di Inbox sampai host menyetujui. */
   autoApproveCards: boolean;
+  /** Antrean habis: otomatis pindah ke jenis antrean lain yang punya kiriman menunggu (jenis lain harus auto ON). Mati = tetap armed dan menunggu input. */
+  autoSwitchQueue: boolean;
   /** Alamat publik untuk link penonton (mis. https://situsmu.lovable.app). Kosong = pakai alamat halaman ini. */
   publicUrl: string;
   /** Kapasitas pertanyaan penonton yang belum digunakan. */
@@ -232,7 +234,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
+    queueSeconds: 8, autoQueue: false, guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipAutoQueue: true, vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },

@@ -68,7 +68,7 @@ function scheduleVotePush() {
 }
 /** Tujuan bawaan di bagian Gimmick untuk tiap jenis kiriman penonton. */
 export const KIND_TO_GIMMICK: Record<string, GimmickId> = {
-  confession: "confession", card: "card", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", problem: "chaos", question: "spin",
+  confession: "confession", card: "card", hottake: "hottake", spin: "spin", thisorthat: "thisorthat", chaos: "chaos", problem: "chaos", question: "spin",
 };
 /** Jenis kiriman penonton yang ditampilkan di riwayat tiap gimmick. */
 export const GIMMICK_KINDS: Record<GimmickId, string[]> = {
@@ -92,7 +92,7 @@ export function waitingOf(l: { inbox: Submission[]; queue: Submission[]; nowShow
 export const waitingOrder = (list: Submission[]): Submission[] =>
   [...list].sort((a, b) => fastRank(b) - fastRank(a) || Date.parse(a.created_at) - Date.parse(b.created_at));
 /** Jenis kiriman yang bisa disimpan ke Question Bank. */
-export const BANKABLE_KINDS = new Set(["confession", "card", "hottake", "spin", "thisorthat", "problem", "question"]);
+export const BANKABLE_KINDS = new Set(["confession", "card", "hottake", "spin", "thisorthat", "chaos", "problem", "question"]);
 
 /* ---------- VIP gifter ---------- */
 export const TIER_BADGE = ["", "⭐", "💎", "👑"];
@@ -157,6 +157,18 @@ let queueMs = 0;
 let queueStartedAt = 0;
 /** Gimmick yang sudah dimulai host tetap armed ketika antrean kosong, agar input baru bisa melanjutkan sesi. */
 let armedKind: string | null = null;
+const QUEUE_ARMED_KEY = "kyoka.queue.armed.v1";
+const QUEUE_GIMMICKS = ["confession", "hottake", "thisorthat", "chaos"] as const;
+function setArmed(kind: string | null) {
+  armedKind = kind;
+  try { if (kind) localStorage.setItem(QUEUE_ARMED_KEY, kind); else localStorage.removeItem(QUEUE_ARMED_KEY); } catch { /* abaikan */ }
+}
+function readArmed(): string | null {
+  try {
+    const k = typeof window === "undefined" ? null : localStorage.getItem(QUEUE_ARMED_KEY);
+    return k && (QUEUE_GIMMICKS as readonly string[]).includes(k) ? k : null;
+  } catch { return null; }
+}
 const QUEUE_MODE_KEY = "kyoka.queue.modes.v1";
 function readQueueModes(): Record<string, "auto" | "manual"> {
   const defaults = { confession: "auto", hottake: "auto", thisorthat: "auto", chaos: "auto" } as const;
@@ -215,7 +227,7 @@ function present(s: Submission): boolean {
 }
 /** Item berikutnya tampil dan bertahan sesuai durasi gimmick-nya. Antrean habis: layar tetap di item terakhir (tidak kembali ke gimmick sebelumnya). */
 let outroing = false;
-function queueTick(skipOutro = false) {
+function queueTick(skipOutro = false, allowHandoff = true) {
   queueTimer = null;
   outroing = false;
   const cur = live.nowShowing;
@@ -232,7 +244,9 @@ function queueTick(skipOutro = false) {
   const next = live.queue[0];
   if (!next) {
     if (ov.outro?.fade) setOverlayOutro(undefined);
-    setLive({ nowShowing: null, queuePaused: false }); syncQueueOverlay(); return;
+    setLive({ nowShowing: null, queuePaused: false }); syncQueueOverlay();
+    if (allowHandoff) handoffNext();
+    return;
   }
   setLive({ queue: live.queue.slice(1), nowShowing: next, queuePaused: false });
   presenting = true;
@@ -247,12 +261,35 @@ function queueTick(skipOutro = false) {
   queueTimer = startTimer(() => queueTick(), ms);
   syncQueueOverlay();
 }
+/** Sesi antrean sedang idle: tidak ada yang tayang atau antre. */
+const queueIdle = () => !live.nowShowing && live.queue.length === 0 && !queueTimer;
+/** Layar kosong atau masih memegang gimmick antrean. Spin dan Pick a Card tidak pernah diambil alih. */
+function overlayFreeForQueue(): boolean {
+  const g = onAirGimmick();
+  return !g || (QUEUE_GIMMICKS as readonly string[]).includes(g);
+}
+/**
+ * Serah-terima saat antrean habis: kalau "Pindah otomatis antar sesi" hidup, ambil jenis lain yang auto ON dan punya
+ * kiriman menunggu (VIP dulu, lalu terlama). Kalau mati, sesi tetap armed dan menunggu input.
+ */
+function handoffNext(): boolean {
+  if (!getSettings().autoSwitchQueue || !queueIdle() || !overlayFreeForQueue()) return false;
+  let best: { kind: string; head: Submission } | null = null;
+  for (const k of QUEUE_GIMMICKS) {
+    if (queueModeOf(k) !== "auto") continue;
+    const head = waitingOrder(waitingOf(live, k))[0];
+    if (!head) continue;
+    if (!best || fastRank(head) > fastRank(best.head) || (fastRank(head) === fastRank(best.head) && Date.parse(head.created_at) < Date.parse(best.head.created_at))) best = { kind: k, head };
+  }
+  if (!best) return false;
+  return liveActions.playWaiting(best.kind) > 0;
+}
 /** Host mengganti gimmick sendiri: sisa antrean tidak dibuang, kembali menunggu di Inbox. */
 function abandonQueue() {
   stopTimer(queueTimer); queueTimer = null;
   const rest = live.queue;
   setLive({ queue: [], nowShowing: null, queuePaused: false });
-  armedKind = null;
+  setArmed(null);
   syncQueueOverlay();
   // Item antre belum berstatus "shown", jadi masih ada di Inbox: cukup dilepas dari antrean, tidak dibuang ke Bank.
   if (rest.length) toast(`${rest.length} kiriman kembali ke daftar tunggu di Inbox`);
@@ -374,6 +411,8 @@ export const liveActions = {
       toast.error(error ? `Gagal memperbarui: ${error.message}` : "Gagal memperbarui: data tidak ditemukan atau tidak ada izin.");
       return false;
     }
+    // Dikembalikan ke Inbox / diloloskan dari "Cek": kiriman antrean ikut disalurkan seperti kiriman baru.
+    if (status === "pending" && item && item.status !== "pending" && QUEUE_KINDS.has(item.kind)) routeSubmission({ ...item, status });
     return true;
   },
   /**
@@ -418,10 +457,9 @@ export const liveActions = {
         if (!queueTimer && !live.nowShowing) queueTick(); else syncQueueOverlay();
         return true;
       }
-      // Auto-start hanya jika overlay kosong. Tidak merebut gimmick lain secara diam-diam.
-      const active = onAirGimmick();
-      if (!armedKind && !live.nowShowing && !active && queueModeOf(kind) === "auto") {
-        armedKind = kind;
+      // Auto-start: antrean idle dan layar tidak dipakai Spin/Pick a Card. Sesi armed jenis lain yang sudah idle
+      // hanya digantikan kalau "Pindah otomatis antar sesi" hidup.
+      if (queueModeOf(kind) === "auto" && queueIdle() && overlayFreeForQueue() && (!armedKind || getSettings().autoSwitchQueue)) {
         liveActions.playWaiting(kind);
       }
       // Mode manual atau overlay sedang dipakai gimmick lain: tetap pending di Inbox.
@@ -440,7 +478,7 @@ export const liveActions = {
       stopTimer(queueTimer); queueTimer = null;
       setLive({ queue: [], nowShowing: null, queuePaused: false });
     }
-    armedKind = target;
+    setArmed(target);
     const existing = live.nowShowing && queueGimmickOf(live.nowShowing.kind) === target ? live.queue : [];
     const ids = new Set(existing.map((x) => x.id));
     setLive({ queue: [...existing, ...list.filter((x) => !ids.has(x.id))] });
@@ -496,7 +534,7 @@ export const liveActions = {
   /** Tombol panik: sembunyikan overlay seketika, kosongkan antrean dan banner. Kiriman di Inbox tetap aman. */
   panic() {
     stopTimer(queueTimer); queueTimer = null;
-    armedKind = null;
+    setArmed(null);
     stopTimer(bannerTimer); bannerTimer = null; bannerQ.length = 0;
     setLive({ queue: [], nowShowing: null, queuePaused: false });
     const o = { ...readOverlay() };
@@ -507,7 +545,7 @@ export const liveActions = {
   unpanic() { setOverlayVisible(true); },
   /** ⏭️ Lanjut: langsung ke item berikutnya tanpa menunggu waktu habis. */
   skipQueue() { stopTimer(queueTimer); queueTimer = null; queueTick(true); },
-  clearQueue() { stopTimer(queueTimer); queueTimer = null; setLive({ queue: [] }); queueTick(true); },
+  clearQueue() { stopTimer(queueTimer); queueTimer = null; setLive({ queue: [] }); queueTick(true, false); },
   /** Jadikan kiriman penonton sebagai ronde/cerita (This or That, Hot Take, Random Chaos). Mengganti tampilan overlay. */
   startRound(s: Submission): boolean {
     const text = (s.content ?? "").trim();
@@ -808,6 +846,8 @@ export function useCloudSync(userId: string | undefined) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     setLive({ queueModes: readQueueModes() });
+    // Pulihkan sesi armed setelah reload; item yang belum tayang masih pending di database sehingga dihitung ulang dari Inbox.
+    setArmed(readArmed()); shownAt = readOverlay().payloadAt;
     if (!userId) return;
     ownerId = userId;
     let cancelled = false;
@@ -892,6 +932,7 @@ export function useCloudSync(userId: string | undefined) {
       connectChannels();
       setOverlayIntake(intake);
     } catch (e) { console.error("sync failed", e); } finally { if (!cancelled) setReady(true); } })();
+    let subscribedOnce = false;
     const ch = supabase.channel(`subs-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
         const r = e.new as Submission;
@@ -907,18 +948,43 @@ export function useCloudSync(userId: string | undefined) {
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "audience_submissions", filter: `owner_id=eq.${userId}` }, (e) => {
         const r = e.new as Submission;
+        // Status berubah jadi pending dari tab/perangkat lain (mis. "Kembalikan ke Inbox"): masukkan ke Inbox dan salurkan.
+        if (r.status === "pending" && r.kind !== "vote" && !live.inbox.some((x) => x.id === r.id)) {
+          setLive({ inbox: sortVip([r, ...live.inbox]).slice(0, INBOX_LIMIT), review: live.review.filter((x) => x.id !== r.id), history: live.history.filter((x) => x.id !== r.id) });
+          if (QUEUE_KINDS.has(r.kind)) routeSubmission(r);
+          return;
+        }
         if (!r.verified_uid) return;
         // Tanda verifikasi lama (!fast) dari database: hanya memperbarui lencana di daftar.
         const patch = (l: Submission[]) => l.map((x) => (x.id === r.id ? { ...x, verified_uid: r.verified_uid ?? null } : x));
         setLive({ inbox: sortVip(patch(live.inbox)), review: patch(live.review), history: patch(live.history), queue: patch(live.queue) });
-      }).subscribe();
+      }).subscribe((status) => {
+        // Channel tersambung ulang: ambil ulang Inbox supaya event yang terlewat tidak hilang (sambungan pertama dilewati).
+        if (status === "SUBSCRIBED") { if (subscribedOnce) void refetchInbox(); subscribedOnce = true; }
+      });
     // Channel terpisah: kalau tabel live_events belum ada, inbox penonton tetap jalan.
     const evCh = supabase.channel(`events-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_events", filter: `owner_id=eq.${userId}` }, (e) => handleLiveEvent(e.new as LiveEvent))
       .subscribe();
     // Question Bank tidak punya pembaruan realtime, jadi perubahan dari tab/perangkat lain diambil saat dashboard kembali difokuskan dan berkala.
+    const refetchInbox = async () => {
+      if (!ownerId) return;
+      const [pend, rev] = await Promise.all([
+        supabase.from("audience_submissions").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(INBOX_LIMIT),
+        supabase.from("audience_submissions").select("*").eq("status", "review").order("created_at", { ascending: false }).limit(REVIEW_LIMIT),
+      ]);
+      if (cancelled) return;
+      if (!pend.error && pend.data) {
+        const fresh = pend.data as unknown as Submission[];
+        const known = new Set(live.inbox.map((x) => x.id));
+        setLive({ inbox: sortVip(fresh) });
+        // Kiriman yang terlewat saat tab di latar belakang / channel putus disalurkan seperti kiriman baru.
+        for (const r of fresh) if (!known.has(r.id) && QUEUE_KINDS.has(r.kind)) routeSubmission(r);
+      }
+      if (!rev.error && rev.data) setLive({ review: rev.data as unknown as Submission[] });
+    };
     const refreshBank = () => { if (ownerId && document.visibilityState === "visible") void resyncQuestions(); };
-    document.addEventListener("visibilitychange", refreshBank);
+    document.addEventListener("visibilitychange", refreshBank); const onVisible = () => { if (document.visibilityState === "visible") void refetchInbox(); }; document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", refreshBank);
     const bankTimer = startTimer(refreshBank, 30_000, true);
     const offHostSwitch = subscribeOverlay(watchHostSwitch);
@@ -933,7 +999,7 @@ export function useCloudSync(userId: string | undefined) {
       if (live.tiktokLive.connected && Date.now() - live.tiktokLive.at > 60_000) setLive({ tiktokLive: { ...live.tiktokLive, connected: false } });
     }, 10_000, true);
     return () => {
-      cancelled = true; setRemote(null); document.removeEventListener("visibilitychange", refreshBank); window.removeEventListener("focus", refreshBank); stopTimer(bankTimer); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
+      cancelled = true; setRemote(null); document.removeEventListener("visibilitychange", refreshBank); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", refreshBank); stopTimer(bankTimer); supabase.removeChannel(ch); supabase.removeChannel(evCh); stopTimer(staleTimer); offPersist(); offHostSwitch(); if (persistTimer) clearTimeout(persistTimer); stopTimer(queueTimer); queueTimer = null; setLive({ queue: [], nowShowing: null }); outroing = false; stopTimer(bannerTimer); stopTimer(voteTimer); voteTimer = null; bannerTimer = null; bannerQ.length = 0;
       if (overlayCh) supabase.removeChannel(overlayCh);
       if (audienceCh) supabase.removeChannel(audienceCh);
       overlayCh = audienceCh = null;

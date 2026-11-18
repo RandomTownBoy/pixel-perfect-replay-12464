@@ -107,12 +107,21 @@ describe("Antrean lanjut otomatis", () => {
     unmount();
   });
 
-  it("sisa tayangan jenis antrean dari sesi lama tidak memblokir auto-start", async () => {
-    sendToOverlay({ gimmick: "hottake", topic: "lama" });
+  it("tidak menimpa konten manual host, walau jenisnya jenis antrean", async () => {
+    sendToOverlay({ gimmick: "hottake", topic: "manual host" });
     const { unmount } = await mount();
     await act(async () => { insertEvent(sub("t1", "thisorthat", "2026-01-01T10:00:00Z", "A | B")); });
     await flush();
-    expect(snap().now?.id).toBe("t1");
+    expect(snap().now).toBeNull();
+    unmount();
+  });
+
+  it("sesi armed tidak dipulihkan kalau layar sudah diganti host saat halaman tertutup", async () => {
+    sendToOverlay({ gimmick: "hottake", topic: "manual host" });
+    localStorage.setItem(ARMED_KEY, "hottake");
+    localStorage.setItem("kyoka.queue.shownAt.v1", "123");
+    const { unmount } = await mount();
+    expect(localStorage.getItem(ARMED_KEY)).toBeNull();
     unmount();
   });
 
@@ -160,6 +169,7 @@ describe("Antrean lanjut otomatis", () => {
 
   it("armedKind dipulihkan dari localStorage saat mount dan dibersihkan saat panic", async () => {
     localStorage.setItem(ARMED_KEY, "hottake");
+    localStorage.setItem("kyoka.queue.shownAt.v1", String(readOverlay().payloadAt));
     const { unmount } = await mount();
     await act(async () => { insertEvent(sub("h1", "hottake", "2026-01-01T10:00:00Z")); });
     await flush();

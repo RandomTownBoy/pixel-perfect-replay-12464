@@ -10,7 +10,7 @@ import { LIMITS } from "@/lib/limits";
 import { actions, GIMMICKS, useKyoka, type GimmickId } from "@/lib/kyoka";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 
 export const Route = createFileRoute("/_authenticated/_studio/ai")({
   head: () => ({

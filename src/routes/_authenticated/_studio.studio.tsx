@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink, Maximize2, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { overlayUrl, PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
 import { audienceUrl } from "@/components/LiveConsole";
 import { liveActions, useLive } from "@/lib/cloud";

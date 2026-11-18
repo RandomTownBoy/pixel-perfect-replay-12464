@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/AppShell";
 import { Panel } from "@/components/Gimmicks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { liveActions, useLive } from "@/lib/cloud";
 import { NumberField } from "@/components/NumberField";
 import { LIMITS } from "@/lib/limits";

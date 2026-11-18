@@ -76,7 +76,7 @@ export function CardGimmick() {
   const ov = useOverlayPayload();
   const lockViewer = (d: Deck) => { if (d.viewer) { lockDeck(d.name); setLockTick((t) => t + 1); } };
 
-  /** Tampilkan deck di overlay. Deck penonton langsung terkunci, kartu penonton berikutnya masuk deck baru. */
+  /** Tampilkan deck di overlay. Deck penonton dikunci dari perubahan overlay, tetapi tetap bisa diisi sampai 6 kartu. */
   const showDeck = (d: Deck) => {
     if (!d.total) { toast("Deck ini belum punya kartu"); return; }
     lockViewer(d);
@@ -222,7 +222,7 @@ export function CardGimmick() {
             <div className="flex flex-wrap items-center gap-2">
               <Button size="lg" variant="live" onClick={() => showDeck(cur)} disabled={!cur.total}><Tv /> Tampilkan di Overlay</Button>
               <Button variant="ghost" onClick={() => shuffleDeck(cur)} disabled={cur.total < 2} title="Acak posisi kartu di deck ini saja"><Shuffle /> Kocok urutan</Button>
-              {cur.viewer && !cur.locked && cur.total < DECK_SIZE && <span className="text-xs text-muted-foreground">Belum penuh, tetap bisa dimainkan. Setelah tayang deck ini terkunci.</span>}
+              {cur.viewer && cur.total < DECK_SIZE && <span className="text-xs text-muted-foreground">Deck ini tetap menerima kartu sampai {DECK_SIZE}/6; kartu baru tidak mengubah overlay yang sedang tayang.</span>}
             </div>
           )}
         </>

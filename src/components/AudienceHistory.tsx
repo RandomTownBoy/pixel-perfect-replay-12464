@@ -54,6 +54,7 @@ export function ConfirmDelete({ label, confirmLabel = "Yakin hapus?", onConfirm,
 export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
   const history = useLive((l) => l.history);
   const queue = useLive((l) => l.queue);
+  const inbox = useLive((l) => l.inbox);
   const nowShowing = useLive((l) => l.nowShowing);
   const gifters = useLive((l) => l.gifters);
   const questions = useKyoka((s) => s.questions);
@@ -73,7 +74,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     return s.nickname ? `${lead}@${s.nickname}` : `${lead}Anonim${gifter ? ` (@${gifter} ✓)` : ""}`;
   };
   const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content);
-  const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id;
+  const isQueued = (s: Submission) => queue.some((x) => x.id === s.id) || nowShowing?.id === s.id || inbox.some((x) => x.id === s.id && x.status === "pending");
   const isSpinSubmission = (s: Submission) => s.kind === "spin" || s.kind === "question";
   // Sinkron dengan Question Bank: kedua tombol berubah menjadi nonaktif setelah pertanyaan
   // benar-benar masuk ke antrean/roda, termasuk ketika ditambahkan dari tempat lain.
@@ -98,7 +99,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
     void liveActions.setStatus(s.id, "shown");
   };
-  const requeue = (s: Submission) => { if (!liveActions.enqueue(s)) toast.error("Kiriman ini tidak bisa diantrekan (sudah dalam antrean atau perlu dicek)."); };
+  const requeue = async (s: Submission) => { const ok = await liveActions.enqueue(s); if (!ok) toast.error(s.flagged || s.status === "review" ? "Kiriman perlu disetujui terlebih dahulu." : "Kiriman sudah berada dalam antrean atau tidak dapat diantrekan."); else toast.success("Kiriman dimasukkan ke daftar antrean."); };
   const putBackOnSpin = async (s: Submission) => {
     if (isOnSpinWheel(s)) return;
     const text = (s.content ?? "").trim();
@@ -162,7 +163,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
                 </Button>
               )}
               {s.status !== "rejected" && QUEUE_KINDS.has(s.kind) && (
-                <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>
+                <Button size="sm" variant="secondary" disabled={isQueued(s)} onClick={() => void requeue(s)}><ListPlus /> {isQueued(s) ? "Dalam antrean" : "Antrekan lagi"}</Button>
               )}
               {s.status !== "approved" && BANKABLE_KINDS.has(s.kind) && (
                 <Button size="sm" variant="secondary" disabled={savingId === s.id} onClick={() => void save(s)}><BookmarkPlus /> {savingId === s.id ? "Menyimpan…" : "Simpan ke Bank"}</Button>

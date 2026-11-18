@@ -1,7 +1,7 @@
 import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { liveActions, onAirGimmick, useLive, waitingOf, waitingOrder, type Submission } from "@/lib/cloud";
+import { liveActions, onAirGimmick, queueGimmickOf, useLive, waitingOf, waitingOrder, type Submission } from "@/lib/cloud";
 
 const LABEL: Record<string, string> = { confession: "🤫 Confession", hottake: "🔥 Hot Take", thisorthat: "⚡ This or That", chaos: "🎲 Random Chaos" };
 const body = (s: Submission) => (s.kind === "thisorthat" ? (s.content ?? "").replace(" | ", "  ⚔  ") : s.content ?? "");
@@ -13,7 +13,7 @@ export function QueueManager() {
   const queue = useLive((l) => l.queue);
   const nowShowing = useLive((l) => l.nowShowing);
   const modes = useLive((l) => l.queueModes);
-  const activeKind = nowShowing?.kind ?? null;
+  const activeKind = nowShowing ? queueGimmickOf(nowShowing.kind) : null;
   const activeGimmick = onAirGimmick();
   return (
     <section className="mb-5 space-y-3 rounded-2xl border border-border/80 bg-panel p-4 shadow-lg shadow-black/5">
@@ -27,8 +27,8 @@ export function QueueManager() {
       <div className="grid gap-2 sm:grid-cols-2">
         {KINDS.map((kind) => {
           const waiting = waitingOrder(waitingOf({ inbox, queue, nowShowing }, kind));
-          const queued = queue.filter((s) => s.kind === kind).length;
-          const playing = nowShowing?.kind === kind;
+          const queued = queue.filter((s) => queueGimmickOf(s.kind) === kind).length;
+          const playing = !!nowShowing && queueGimmickOf(nowShowing.kind) === kind;
           const mode = modes[kind] ?? "auto";
           const kindGimmick = kind === "problem" ? "chaos" : kind;
           const heldByOther = !!activeGimmick && activeGimmick !== kindGimmick;
@@ -66,8 +66,8 @@ export function WaitingQueue({ kind, compact = false }: { kind: string; compact?
   const nowShowing = useLive((l) => l.nowShowing);
   const mode = useLive((l) => l.queueModes[kind] ?? "auto");
   const waiting = waitingOrder(waitingOf({ inbox, queue, nowShowing }, kind));
-  const playing = nowShowing?.kind === kind;
-  const left = playing ? queue.filter((q) => q.kind === kind).length : 0;
+  const playing = !!nowShowing && queueGimmickOf(nowShowing.kind) === kind;
+  const left = playing ? queue.filter((q) => queueGimmickOf(q.kind) === queueGimmickOf(kind)).length : 0;
   if (!LABEL[kind]) return null;
   if (compact && !waiting.length && !playing) return null;
   if (compact) {

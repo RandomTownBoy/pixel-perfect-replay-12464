@@ -496,6 +496,7 @@ export function ChaosGimmick() {
           </div>
         </>
       )}
+      <WaitingQueue kind="chaos" />
       <AudienceHistory gimmick="chaos" />
     </Panel>
   );

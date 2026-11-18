@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { waitingOf, waitingOrder, type Submission } from "@/lib/cloud";
+import { QUEUE_KINDS, queueGimmickOf, waitingOf, waitingOrder, type Submission } from "@/lib/cloud";
 
 const sub = (id: string, kind: string, at: string, extra: Partial<Submission> = {}): Submission => ({
   id, kind, round_id: null, choice: null, content: `isi ${id}`, nickname: null, status: "pending", created_at: at, ...extra,
 });
 
 describe("Daftar tunggu per gimmick", () => {
+  it("mengenali problem sebagai bagian dari Random Chaos", () => {
+    expect(QUEUE_KINDS.has("problem")).toBe(true);
+    expect(queueGimmickOf("problem")).toBe("chaos");
+  });
   const inbox = [
     sub("c1", "confession", "2026-01-01T10:00:00Z"),
     sub("c2", "confession", "2026-01-01T10:05:00Z"),
     sub("c3", "confession", "2026-01-01T10:10:00Z", { flagged: true }),
     sub("h1", "hottake", "2026-01-01T10:01:00Z"),
+    sub("p1", "problem", "2026-01-01T10:03:00Z"),
     sub("c4", "confession", "2026-01-01T10:02:00Z", { status: "review" }),
   ];
 
@@ -22,6 +27,11 @@ describe("Daftar tunggu per gimmick", () => {
   it("tidak memuat yang sudah antre atau sedang tayang", () => {
     const ids = waitingOf({ inbox, queue: [inbox[1]!], nowShowing: inbox[0]! }, "confession");
     expect(ids).toEqual([]);
+  });
+
+  it("mengelompokkan kiriman problem ke antrean Random Chaos", () => {
+    const ids = waitingOf({ inbox, queue: [], nowShowing: null }, "chaos").map((s) => s.id);
+    expect(ids).toEqual(["p1"]);
   });
 
   it("memutar yang paling lama menunggu lebih dulu", () => {

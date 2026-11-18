@@ -7,7 +7,7 @@ import {
 } from "@/lib/kyoka";
 import { SpinWheelSvg } from "@/components/SpinWheel";
 import { Send, Shuffle, SkipForward, RotateCw, Plus, Trash2, Save, Sparkles, Check, Tv } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { useAi } from "@/lib/use-ai";
 import { Loader2 } from "lucide-react";
 import { AudienceHistory } from "@/components/AudienceHistory";

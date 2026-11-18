@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BookmarkPlus, ListPlus, RotateCcw, Send, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import {
   BANKABLE_KINDS, GIMMICK_KINDS, QUEUE_KINDS, isFast, liveActions, TIER_BADGE, useLive, vipOf, type Submission,
@@ -99,7 +99,7 @@ export function AudienceHistory({ gimmick }: { gimmick: GimmickId }) {
     sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
     void liveActions.setStatus(s.id, "shown");
   };
-  const requeue = async (s: Submission) => { const ok = await liveActions.enqueue(s); if (!ok) toast.error(s.flagged || s.status === "review" ? "Kiriman perlu disetujui terlebih dahulu." : "Kiriman sudah berada dalam antrean atau tidak dapat diantrekan."); else toast.success("Kiriman dimasukkan ke daftar antrean."); };
+  const requeue = async (s: Submission) => { const ok = await liveActions.enqueue(s); if (!ok) toast.error(s.flagged || s.status === "review" ? "Kiriman perlu disetujui terlebih dahulu." : "Kiriman sudah berada dalam antrean atau tidak dapat diantrekan."); };
   const putBackOnSpin = async (s: Submission) => {
     if (isOnSpinWheel(s)) return;
     const text = (s.content ?? "").trim();

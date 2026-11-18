@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BookmarkPlus, ChevronDown, Copy, Gift, Inbox, LayoutGrid, ListPlus, MessageCircle, Radio, RotateCcw, ShieldAlert, SlidersHorizontal, X, Send } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notify";
 import { WaitingQueue } from "@/components/WaitingQueue";
 import { ConfirmDelete, timeAgo } from "@/components/AudienceHistory";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,7 @@ export function LiveConsole() {
   const show = (s: Submission) => sendToOverlay({ gimmick: "audience", kind: s.kind, content: s.content ?? "", ...(s.nickname ? { nickname: s.nickname } : {}) });
   const KIND_LABEL: Record<string, string> = {
     confession: "🤫 Confession", thisorthat: "⚡ This or That", hottake: "🔥 Hot Take", chaos: "🌀 3 Kata", spin: "🎡 Spin (!spin)",
-    problem: "🌀 Masalah", question: "💬 Pertanyaan", card: "🃏 Pick a Card",
+    problem: "🌀 Masalah", question: "🎡 Spin Question", card: "🃏 Pick a Card",
   };
   const kindLabel = (k: string) => KIND_LABEL[k] ?? k;
   const statusLabel: Record<string, string> = { approved: "✅ Di Question Bank", shown: "📺 Sudah ditampilkan", rejected: "🚫 Ditolak" };

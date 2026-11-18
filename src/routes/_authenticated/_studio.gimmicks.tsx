@@ -5,9 +5,6 @@ import { GIMMICKS, type GimmickId } from "@/lib/kyoka";
 import { QueueManager } from "@/components/WaitingQueue";
 import { usePersistedState } from "@/lib/ui-state";
 import { useEffect } from "react";
-import { QueueManager } from "@/components/WaitingQueue";
-import { usePersistedState } from "@/lib/ui-state";
-import { useEffect } from "react";
 
 export const Route = createFileRoute("/_authenticated/_studio/gimmicks")({
   validateSearch: (s: { g?: GimmickId | undefined }): { g?: GimmickId | undefined } => ({

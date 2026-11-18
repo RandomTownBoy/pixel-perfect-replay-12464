@@ -30,7 +30,9 @@ function GimmicksPage() {
   const Comp = GIMMICK_COMPONENTS[g];
   return (
     <>
-      <PageHeader title="Gimmicks" sub="Pilih gimmick, siapkan, lalu kirim ke overlay." />
+      <PageHeader title="Gimmicks" sub="Pilih gimmick, siapkan, lalu kirim ke overlay.">
+        <QueueManager />
+      </PageHeader>
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {GIMMICKS.map((x) => (
           <button key={x.id} onClick={() => nav({ search: { g: x.id } })}
@@ -39,7 +41,6 @@ function GimmicksPage() {
           </button>
         ))}
       </div>
-      <QueueManager />
       <Comp key={g} />
     </>
   );

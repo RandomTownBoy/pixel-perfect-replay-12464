@@ -3,7 +3,7 @@ import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayl
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
 import { SCENE_FADE_MS, SCENE_MS, nextRound, resolveSceneMode, type Scene, type SceneMode } from "@/lib/scenes";
-import { sfx, music, setSfxEnabled, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
+import { sfx, music, setSfxEnabled, setVolumes, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
 import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
@@ -81,6 +81,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   // Suara aktif hanya di overlay sungguhan (bukan pratinjau dashboard) dan kalau pengaturan "Efek suara" menyala.
   // Diatur saat render supaya efek anak komponen (yang jalan lebih dulu dari efek induk) sudah memakai nilai terbaru.
   setSfxEnabled(!preview && !!state.sound);
+  setVolumes(state.sfxVolume ?? 2, state.musicVolume ?? 1);
   useEffect(() => { unlockSfx(); }, []);
   const wantSound = !preview && !!state.sound;
   useEffect(() => { if (wantSound) probeSfx(); }, [wantSound]);
@@ -232,7 +233,7 @@ function useScene(mode: SceneMode) {
 
 /** Posisi deterministik (tanpa Math.random saat render) dan dibatasi di rel tepi kartu. */
 const GLITS = Array.from({ length: 9 }, (_, i) => ({ x: i % 2 === 0 ? 2 + ((i * 7) % 5) : 93 + ((i * 5) % 5), y: 8 + ((i * 29) % 80), dur: 2.4 + ((i * 3) % 5) * 0.5, dl: -((i * 7) % 9) * 0.4, sz: 0.34 + ((i * 3) % 4) * 0.08 }));
-const PETALS = Array.from({ length: 16 }, (_, i) => ({ right: i % 2 === 1, x: 0.15 + ((i * 13) % 8) * 0.1, dur: 7 + ((i * 5) % 6), dl: -((i * 11) % 13), sw: 0.18 + ((i * 3) % 4) * 0.07, sz: 0.3 + ((i * 7) % 4) * 0.06, hue: i % 3 }));
+const PETALS = Array.from({ length: 22 }, (_, i) => ({ right: i % 2 === 1, x: 0.1 + ((i * 13) % 8) * 0.08, dur: 6 + ((i * 5) % 5), dl: -((i * 11) % 13), sw: 0.15 + ((i * 3) % 4) * 0.05, sz: 0.55 + ((i * 7) % 4) * 0.08, hue: i % 3 }));
 const BARS = Array.from({ length: 40 }, (_, i) => ({ k: Math.round((i / 39) * 100), d: 0.8 + ((i * 7) % 5) * 0.12, dl: -(i * 0.11 + (i % 3) * 0.13) }));
 
 function SceneBody({ scene }: { scene: Scene }) {

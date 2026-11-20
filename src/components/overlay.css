@@ -16,7 +16,7 @@
 /* Ukuran bawaan tiap gimmick (tinggi minimum, lebar penuh). Tidak ada max-height/overflow: hidden lagi,
    kalau isinya lebih tinggi dari area aman, seluruh tumpukan diperkecil (lihat .ov-stage), bukan dipotong. */
 .ov-card { --h: 15em; min-height: var(--h); justify-content: center;
-  position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.45em;
+  position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.75em;
   border-radius: 1.4em; border: 0.1em solid color-mix(in oklab, var(--ov) 70%, transparent);
   background: color-mix(in oklab, var(--background) 84%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 0.9em 2.6em -0.8em color-mix(in oklab, var(--ov) 55%, transparent), 0 0.2em 0.8em rgba(0,0,0,0.35);
@@ -343,47 +343,47 @@
 @keyframes ov-scene-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* 1. SHOWTIME: dua sorot panggung menyapu bergantian dari bawah, follow-spot melintas, bintang berkilau di rel samping. */
-.sc-showtime .beam { position: absolute; bottom: -14%; width: 30%; height: 135%; opacity: 0.14; filter: blur(1.1em); transform-origin: 50% 100%; will-change: transform; }
+.sc-showtime .beam { position: absolute; bottom: -14%; width: 34%; height: 135%; opacity: 0.34; filter: blur(0.9em); transform-origin: 50% 100%; will-change: transform; }
 .sc-showtime .beam-a { left: 3%; background: linear-gradient(0deg, color-mix(in oklab, var(--primary) 65%, white), transparent 82%); animation: ov-sw-a 9s ease-in-out infinite alternate; }
 .sc-showtime .beam-b { right: 3%; background: linear-gradient(0deg, color-mix(in oklab, var(--electric) 60%, white), transparent 82%); animation: ov-sw-b 11s ease-in-out infinite alternate; }
 .sc-showtime .spot { position: absolute; top: 6%; left: -34%; width: 56%; height: 88%; border-radius: 50%; opacity: 0.5; will-change: transform;
-  background: radial-gradient(ellipse at center, rgba(255,255,255,0.15), transparent 66%); animation: ov-spot 12s ease-in-out infinite; }
-.sc-showtime .glit { position: absolute; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.32), transparent 66%); animation: ov-spot 12s ease-in-out infinite; }
+.sc-showtime .glit { position: absolute; width: calc(var(--sz) * 2.2); height: calc(var(--sz) * 2.2); background: #fff; filter: drop-shadow(0 0 0.3em currentColor); opacity: 0; will-change: transform, opacity;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ov-glit var(--d) ease-in-out var(--dl) infinite; }
 .sc-showtime .glit:nth-of-type(3n+1) { background: var(--pop); }
 .sc-showtime .glit:nth-of-type(3n+2) { background: var(--electric); }
-@keyframes ov-sw-a { 0% { transform: rotate(-28deg); opacity: 0.07; } 50% { opacity: 0.2; } 100% { transform: rotate(32deg); opacity: 0.1; } }
-@keyframes ov-sw-b { 0% { transform: rotate(30deg); opacity: 0.1; } 50% { opacity: 0.2; } 100% { transform: rotate(-30deg); opacity: 0.07; } }
+@keyframes ov-sw-a { 0% { transform: rotate(-30deg); opacity: 0.2; } 50% { opacity: 0.42; } 100% { transform: rotate(34deg); opacity: 0.24; } }
+@keyframes ov-sw-b { 0% { transform: rotate(32deg); opacity: 0.24; } 50% { opacity: 0.42; } 100% { transform: rotate(-32deg); opacity: 0.2; } }
 @keyframes ov-spot { 0%, 8% { transform: translateX(0); } 50% { transform: translateX(110%); } 58%, 100% { transform: translateX(0); } }
 @keyframes ov-glit { 0%, 100% { opacity: 0; transform: scale(0) rotate(0); } 40% { opacity: 0.95; transform: scale(1) rotate(60deg); } 70% { opacity: 0.4; transform: scale(0.6) rotate(110deg); } }
 
 /* 2. COMET: dua komet di jalur dalam bingkai (satu searah jarum jam, satu berlawanan) + denyut cahaya di sudut yang dilewati. */
-.sc-comet .ring-wrap { position: absolute; inset: 0.3em; filter: drop-shadow(0 0 0.35em var(--ov)); }
-.sc-comet .ring { position: absolute; inset: 0; border-radius: 1.1em; padding: 0.13em; box-sizing: border-box; overflow: hidden; background: color-mix(in oklab, var(--ov) 14%, transparent);
+.sc-comet .ring-wrap { position: absolute; inset: 0.3em; filter: drop-shadow(0 0 0.55em var(--ov)) drop-shadow(0 0 1.1em var(--pop)); }
+.sc-comet .ring { position: absolute; inset: 0; border-radius: 1.1em; padding: 0.24em; box-sizing: border-box; overflow: hidden; background: color-mix(in oklab, var(--ov) 30%, transparent);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
 .sc-comet .ring i { position: absolute; left: 50%; top: 50%; width: 220%; aspect-ratio: 1; translate: -50% -50%; will-change: transform; }
 .sc-comet .ring .c1 { background: conic-gradient(from 0deg, transparent 0 58%, var(--ov) 76%, var(--pop) 92%, #fff 99.6%, transparent 100%); animation: ov-idle-spin 6s linear infinite; }
 .sc-comet .ring .c2 { background: conic-gradient(from 0deg, #fff 0.4%, var(--electric) 10%, transparent 30% 100%); animation: ov-idle-spin 9s linear infinite reverse; }
-.sc-comet .ping { position: absolute; width: 1.8em; height: 1.8em; border-radius: 50%; opacity: 0; will-change: transform, opacity;
+.sc-comet .ping { position: absolute; width: 3em; height: 3em; border-radius: 50%; opacity: 0; will-change: transform, opacity;
   background: radial-gradient(circle, #fff 0, color-mix(in oklab, var(--ov) 80%, #fff) 22%, transparent 64%); animation: ov-ping 6s linear infinite; }
-.sc-comet .p-tr { top: -0.3em; right: -0.3em; animation-delay: 0.92s; }
-.sc-comet .p-br { bottom: -0.3em; right: -0.3em; animation-delay: 2.08s; }
-.sc-comet .p-bl { bottom: -0.3em; left: -0.3em; animation-delay: 3.92s; }
-.sc-comet .p-tl { top: -0.3em; left: -0.3em; animation-delay: 5.08s; }
+.sc-comet .p-tr { top: -0.8em; right: -0.8em; animation-delay: 0.92s; }
+.sc-comet .p-br { bottom: -0.8em; right: -0.8em; animation-delay: 2.08s; }
+.sc-comet .p-bl { bottom: -0.8em; left: -0.8em; animation-delay: 3.92s; }
+.sc-comet .p-tl { top: -0.8em; left: -0.8em; animation-delay: 5.08s; }
 @keyframes ov-ping { 0%, 14%, 100% { opacity: 0; transform: scale(0.2); } 2% { opacity: 0.95; transform: scale(1); } 10% { opacity: 0; transform: scale(1.9); } }
 
 /* 3. NEKO: animasi idle ala skin hero. Kucing masuk, jalan, joget, menguap, tidur, kaget, lalu lari keluar (12 dtk). Kupu-kupu di rel atas. */
-.sc-neko .neko-track { position: absolute; left: 1.1em; right: 1.1em; bottom: 0.32em; height: 1.05em; }
-.sc-neko .neko, .sc-neko .paw { position: absolute; bottom: 0; left: -8%; line-height: 1; font-size: 0.9em; will-change: left; animation: ov-neko-x 12s linear infinite both; }
-.sc-neko .paw { font-size: 0.6em; bottom: 0.1em; opacity: 0; animation: ov-neko-x 12s linear infinite both, ov-neko-paw 12s linear infinite both; filter: grayscale(0.2) drop-shadow(0 0 0.2em var(--ov)); }
+.sc-neko .neko-track { position: absolute; left: 1.1em; right: 1.1em; bottom: 0.18em; height: 1.45em; }
+.sc-neko .neko, .sc-neko .paw { position: absolute; bottom: 0; left: -8%; line-height: 1; font-size: 1.35em; will-change: left; animation: ov-neko-x 12s linear infinite both; }
+.sc-neko .paw { font-size: 0.85em; bottom: 0.1em; opacity: 0; animation: ov-neko-x 12s linear infinite both, ov-neko-paw 12s linear infinite both; filter: grayscale(0.2) drop-shadow(0 0 0.2em var(--ov)); }
 .sc-neko .paw1 { animation-delay: 0.35s, 0.35s; }
 .sc-neko .paw2 { animation-delay: 0.75s, 0.75s; }
 .sc-neko .cat { display: inline-block; transform-origin: 50% 100%; will-change: transform; animation: ov-neko-act 12s linear infinite; filter: drop-shadow(0 0.08em 0.15em rgba(0,0,0,0.4)); }
-.sc-neko .bub { position: absolute; left: 100%; bottom: 0.1em; margin-left: 0.15em; font-size: 0.62em; font-weight: 900; font-style: normal; color: #fff; text-shadow: 0 0 0.5em var(--ov); opacity: 0; white-space: nowrap; }
+.sc-neko .bub { position: absolute; left: 100%; bottom: 0.1em; margin-left: 0.2em; font-size: 0.95em; font-weight: 900; font-style: normal; color: #fff; text-shadow: 0 0 0.5em var(--ov); opacity: 0; white-space: nowrap; }
 .sc-neko .b-note { animation: ov-neko-note 12s ease-in-out infinite; }
 .sc-neko .b-zzz { animation: ov-neko-zzz 12s ease-in-out infinite; }
 .sc-neko .b-heart { animation: ov-neko-heart 12s ease-out infinite; }
-.sc-neko .flutter { position: absolute; top: 0.12em; left: 90%; font-size: 0.7em; line-height: 1; opacity: 0; will-change: left; animation: ov-fl-x 12s ease-in-out infinite; }
+.sc-neko .flutter { position: absolute; top: 0.05em; left: 90%; font-size: 1em; line-height: 1; opacity: 0; will-change: left; animation: ov-fl-x 12s ease-in-out infinite; }
 .sc-neko .fl-y { display: block; animation: ov-fl-y 2.6s ease-in-out infinite alternate; }
 .sc-neko .wing { display: block; animation: ov-fl-flap 0.28s ease-in-out infinite alternate; filter: drop-shadow(0 0 0.3em var(--pop)); }
 @keyframes ov-neko-x { 0% { left: -8%; } 5.83%, 8.33% { left: 2%; } 35%, 78.33% { left: 44%; } 91.67% { left: 92%; } 100% { left: 110%; } }
@@ -458,24 +458,24 @@
 }
 
 /* 4. SAKURA: kelopak berguguran di rel kiri/kanan dengan putaran 3D; cahaya merah muda bernapas di sudut. */
-.sc-sakura .bloom { position: absolute; width: 46%; aspect-ratio: 1; border-radius: 50%; filter: blur(1.6em); will-change: opacity; }
+.sc-sakura .bloom { position: absolute; width: 60%; aspect-ratio: 1; border-radius: 50%; filter: blur(1.6em); will-change: opacity; }
 .sc-sakura .bl-a { left: -20%; top: -34%; background: radial-gradient(circle, color-mix(in oklab, var(--pop) 70%, #fff) 0, transparent 68%); animation: ov-bloom 7s ease-in-out infinite; }
 .sc-sakura .bl-b { right: -20%; bottom: -34%; background: radial-gradient(circle, color-mix(in oklab, var(--primary) 60%, #fff) 0, transparent 68%); animation: ov-bloom 9s -3s ease-in-out infinite; }
 .sc-sakura .pw { position: absolute; top: 0; height: 100%; width: var(--sz); will-change: transform; animation: ov-petal-fall var(--d) linear var(--dl) infinite; }
 .sc-sakura .pt { position: absolute; left: 0; bottom: 0; width: var(--sz); height: calc(var(--sz) * 1.15); will-change: transform; animation: ov-petal-sway calc(var(--d) / 3) ease-in-out var(--dl) infinite alternate;
-  border-radius: 100% 0 100% 0; background: linear-gradient(135deg, #fff, color-mix(in oklab, var(--pop) 55%, #fff) 55%, color-mix(in oklab, var(--pop) 85%, #fff)); box-shadow: 0 0 0.35em color-mix(in oklab, var(--pop) 60%, transparent); }
+  border-radius: 100% 0 100% 0; background: linear-gradient(135deg, #fff, color-mix(in oklab, var(--pop) 55%, #fff) 55%, color-mix(in oklab, var(--pop) 85%, #fff)); box-shadow: 0 0 0.6em color-mix(in oklab, var(--pop) 80%, transparent); }
 .sc-sakura .pw:nth-of-type(3n) .pt { background: linear-gradient(135deg, #fff, color-mix(in oklab, var(--primary) 40%, #fff)); }
 @keyframes ov-petal-fall { 0% { transform: translateY(-100%); opacity: 0; } 8% { opacity: 0.95; } 92% { opacity: 0.95; } 100% { transform: translateY(0); opacity: 0; } }
 @keyframes ov-petal-sway { 0% { transform: translateX(calc(var(--sw) * -1)) rotate3d(1, 0.4, 0.2, 0deg) rotate(-25deg); } 100% { transform: translateX(var(--sw)) rotate3d(1, 0.4, 0.2, 180deg) rotate(35deg); } }
-@keyframes ov-bloom { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.26; } }
+@keyframes ov-bloom { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.55; } }
 
 /* 5. BEAT: equalizer menari di rel bawah (naik dari garis loading) dan menggantung di rel atas; tepi kartu berdenyut mengikuti ketukan. */
 .sc-beat .eq { position: absolute; left: 1.1em; right: 1.1em; display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; }
-.sc-beat .eq-bot { bottom: 0.42em; height: 0.8em; }
-.sc-beat .eq-top { top: 0.1em; height: 0.55em; align-items: flex-start; opacity: 0.6; }
-.sc-beat .eq i { display: block; width: 0.34em; height: 100%; border-radius: 0.17em; transform-origin: 50% 100%; transform: scaleY(0.15); will-change: transform; box-shadow: 0 0 0.35em color-mix(in oklab, var(--ov) 60%, transparent); animation: ov-eq var(--d) ease-in-out var(--dl) infinite alternate; }
+.sc-beat .eq-bot { bottom: 0.4em; height: 1.2em; }
+.sc-beat .eq-top { top: 0.08em; height: 0.78em; align-items: flex-start; opacity: 0.85; }
+.sc-beat .eq i { display: block; width: 0.4em; height: 100%; border-radius: 0.17em; transform-origin: 50% 100%; transform: scaleY(0.15); will-change: transform; box-shadow: 0 0 0.6em color-mix(in oklab, var(--ov) 85%, transparent); animation: ov-eq var(--d) ease-in-out var(--dl) infinite alternate; }
 .sc-beat .eq-top i { transform-origin: 50% 0; animation-name: ov-eq-top; }
-.sc-beat .beat-glow { position: absolute; inset: 0; border-radius: inherit; opacity: 0; box-shadow: inset 0 0 1.5em color-mix(in oklab, var(--ov) 45%, transparent), inset 0 0 0.4em color-mix(in oklab, var(--pop) 50%, transparent); animation: ov-beat 1.5s ease-out infinite; }
+.sc-beat .beat-glow { position: absolute; inset: 0; border-radius: inherit; opacity: 0; box-shadow: inset 0 0 2.4em color-mix(in oklab, var(--ov) 75%, transparent), inset 0 0 0.6em color-mix(in oklab, var(--pop) 80%, transparent); animation: ov-beat 1.5s ease-out infinite; }
 @keyframes ov-eq { 0% { transform: scaleY(0.12); } 30% { transform: scaleY(0.9); } 55% { transform: scaleY(0.35); } 100% { transform: scaleY(1); } }
 @keyframes ov-eq-top { 0% { transform: scaleY(0.1); } 40% { transform: scaleY(0.8); } 100% { transform: scaleY(0.3); } }
 @keyframes ov-beat { 0% { opacity: 0.9; } 40%, 100% { opacity: 0; } }
@@ -522,7 +522,7 @@
 .ov-opt.lose { animation: ov-lose2 0.8s ease-out both; }
 @keyframes ov-pct-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @keyframes ov-lose2 { 0% { opacity: 1; filter: none; transform: none; } 100% { opacity: 0.38; filter: grayscale(0.85); transform: translateX(calc(var(--sx, 1) * 0.5em)) scale(0.94) rotate(calc(var(--sx, 1) * 0.8deg)); } }
-.ov-finale { position: absolute; inset: -0.8em -1.1em -1.45em; z-index: 4; border-radius: 1.4em; overflow: hidden; pointer-events: none; }
+.ov-finale { position: absolute; inset: -0.8em -1.1em -1.75em; z-index: 4; border-radius: 1.4em; overflow: hidden; pointer-events: none; }
 .ov-slam { position: absolute; left: 50%; top: 46%; translate: -50% -50%; display: flex; align-items: center; gap: 0.25em; white-space: nowrap; will-change: transform, opacity; animation: ov-slam 2.7s both; }
 .ov-slam b { font-family: var(--font-display, system-ui); font-weight: 900; font-size: 2.4em; letter-spacing: 0.04em; color: #fff; line-height: 1;
   text-shadow: 0 0.06em 0 color-mix(in oklab, var(--pop) 90%, #000), 0 0 0.5em var(--ov), 0 0.15em 0.5em rgba(0,0,0,0.6); }

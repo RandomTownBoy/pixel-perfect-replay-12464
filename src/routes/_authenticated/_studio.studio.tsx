@@ -92,6 +92,10 @@ function Studio() {
             {([["showTitle", "Tampilkan judul gimmick"], ["showBadge", "Tampilkan badge KYOKA"], ["sound", "Efek suara"]] as const).map(([k, l]) => (
               <label key={k} className="flex items-center justify-between">{l}<input type="checkbox" checked={s[k]} onChange={(e) => actions.updateSettings({ [k]: e.target.checked })} /></label>
             ))}
+            <label className="block">Volume efek suara: {Math.round(s.sfxVolume * 100)}%
+              <input type="range" min={0} max={3} step={0.1} value={s.sfxVolume} onChange={(e) => actions.updateSettings({ sfxVolume: +e.target.value })} className="w-full accent-primary" /></label>
+            <label className="block">Volume musik latar: {Math.round(s.musicVolume * 100)}%
+              <input type="range" min={0} max={2} step={0.1} value={s.musicVolume} onChange={(e) => actions.updateSettings({ musicVolume: +e.target.value })} className="w-full accent-primary" /></label>
             <div className="flex items-center gap-2">Ukuran
               <NumberField min={LIMITS.overlaySize.min} max={LIMITS.overlaySize.max} value={s.overlayWidth} onChange={(n) => actions.updateSettings({ overlayWidth: n })} className="h-9 w-24 px-2" aria-label="Lebar overlay (px)" />×
               <NumberField min={LIMITS.overlaySize.min} max={LIMITS.overlaySize.max} value={s.overlayHeight} onChange={(n) => actions.updateSettings({ overlayHeight: n })} className="h-9 w-24 px-2" aria-label="Tinggi overlay (px)" />

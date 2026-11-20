@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
-import { sfx, setSfxEnabled, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
+import { sfx, music, setSfxEnabled, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
 import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
@@ -125,6 +125,13 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   const g = p ? GIMMICKS.find((x) => x.id === p.gimmick) : null;
   // Animasi penutup hanya berlaku untuk payload yang sedang tayang (payload baru otomatis menghapusnya).
   const outro = state.outro && state.outro.at >= state.payloadAt ? state.outro : undefined;
+  // Musik latar: tiap jenis gimmick punya lagunya sendiri (ganti gimmick = crossfade); hening kalau overlay disembunyikan / kosong / suara mati.
+  const bgm = wantSound && state.visible && p ? gKey : null;
+  useEffect(() => { if (bgm) music.play(bgm); else music.stop(); }, [bgm]);
+  useEffect(() => () => music.stop(), []);
+  // Saat animasi penutup (hasil) tampil, musik direndahkan supaya efek hasil terdengar jelas.
+  const outroOn = !!outro;
+  useEffect(() => { music.level(outroOn ? 0.35 : 1); }, [outroOn]);
   const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
   const pos = state.guidePos ?? "tr";
   // Slot panduan selalu ada (tinggi tetap) supaya kartu tidak bergeser naik-turun antar gimmick.
@@ -243,6 +250,8 @@ function useVoteSfx(votes: { a: number; b: number } | undefined, key: number) {
     streak.current.n = now - streak.current.at < 2500 ? streak.current.n + d : 0;
     streak.current.at = now;
     sfx.vote(streak.current.n, d);
+    music.hype(Math.min(0.6, 0.25 * d)); // makin ramai vote, makin "naik" musiknya
+    if (Math.floor(n / 25) > Math.floor((n - d) / 25)) sfx.combo(); // tonggak tiap 25 vote
   }, [votes?.a, votes?.b, key]);
 }
 
@@ -432,8 +441,11 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
   // Detak hitung mundur: pelan di 10 detik terakhir, tebal di 3-2-1.
   useEffect(() => {
     if (resolved || !end || left <= 0 || left > 10) return;
+    if (left === 3) sfx.drumroll(3); // gulungan drum menjelang hasil
     sfx.tick(left <= 3);
   }, [left, resolved, end]);
+  // Musik makin tegang mendekati akhir; hasil keluar = musik mereda supaya fanfare menonjol.
+  useEffect(() => { music.energy(resolved ? 0.05 : end && left > 0 ? (left <= 3 ? 1 : left <= 10 ? 0.7 : 0.45) : 0.4); }, [resolved, end, left]);
   // Hasil keluar: gong, lalu fanfare / nada seri / nada sepi. Tidak berbunyi kalau overlay baru dimuat dalam keadaan sudah selesai.
   const wasResolved = useRef(resolved);
   useEffect(() => {
@@ -642,6 +654,7 @@ function SpinStage({ p }: { p: SpinPayload }) {
     if (prevPhase.current === "spinning" && phase === "result") sfx.wheelWin();
     prevPhase.current = phase;
   }, [phase]);
+  useEffect(() => { music.energy(phase === "spinning" ? 1 : phase === "result" ? 0.15 : 0.4); }, [phase]); // roda berputar = musik ngebut
   useEffect(() => { if (p.addedAt !== undefined && Date.now() - p.addedAt < 1500) sfx.add(); }, [p.addedAt]);
   return (
     <div className={`ov-body ov-spin${dense ? " dense" : ""}${phase === "result" ? " res" : ""}`}>
@@ -700,6 +713,7 @@ function CardStage({ p }: { p: CardPayload }) {
     else if (phase === "revealed") sfx.flip();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
+  useEffect(() => { music.energy(phase === "shuffling" ? 0.9 : phase === "dealt" ? 0.55 : phase === "revealed" ? 0.8 : 0.3); }, [phase]);
   useEffect(() => {
     if (p.addedAt === undefined || Date.now() - p.addedAt > 1500) return;
     sfx.add();
@@ -758,6 +772,7 @@ function ChaosWords({ words, rolling }: { words: string[]; rolling: boolean }) {
   }, [rolling]);
   const pool = DEMO.words;
   useEffect(() => { if (rolling) sfx.roll(tick); }, [tick, rolling]);
+  useEffect(() => { music.energy(rolling ? 1 : 0.5); }, [rolling]);
   const wasRolling = useRef(rolling);
   useEffect(() => { if (wasRolling.current && !rolling) sfx.lock(); wasRolling.current = rolling; }, [rolling]);
   return (

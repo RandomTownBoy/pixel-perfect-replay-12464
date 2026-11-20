@@ -67,16 +67,17 @@ function Studio() {
             </div>
             <div className="space-y-2">
               <div>
-                <p className="text-xs font-semibold">Efek visual ambient</p>
-                <p className="text-[11px] text-muted-foreground">Pilih suasana animasi di belakang konten overlay.</p>
+                <p className="text-xs font-semibold">Scene idle overlay</p>
+                <p className="text-[11px] text-muted-foreground">Acak = lima scene animasi bergantian, urutannya diacak tiap ronde. Atau kunci satu scene saja.</p>
               </div>
-              <div className="grid grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
                 {([
-                  ["spotlight", "🔦", "Spotlight"],
-                  ["meteor", "☄️", "Meteor"],
-                  ["aurora", "🌌", "Aurora"],
-                  ["orbit", "🪐", "Orbit"],
-                  ["prism", "✧", "Prism"],
+                  ["random", "🎲", "Acak"],
+                  ["showtime", "🔦", "Showtime"],
+                  ["comet", "☄️", "Comet"],
+                  ["neko", "🐱", "Neko"],
+                  ["sakura", "🌸", "Sakura"],
+                  ["beat", "🎧", "Beat"],
                 ] as const).map(([value, emoji, label]) => (
                   <button key={value} type="button" aria-pressed={s.visualEffect === value}
                     onClick={() => actions.updateSettings({ visualEffect: value })}

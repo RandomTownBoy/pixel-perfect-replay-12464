@@ -297,6 +297,37 @@ export const sfx = {
     tone(988, 0.08, { type: "square", vol: 0.08 }); tone(1319, 0.5, { t: 0.08, type: "square", vol: 0.08 });
     [6, 8, 9, 7, 9].forEach((n, i) => tone(pn(n), 0.2, { t: 0.2 + i * 0.06, type: "sine", vol: 0.08 }));
   },
+  /**
+   * Finale heboh (This or That & Hot Take). Dipanggil di awal animasi hasil: riser menanjak ±1,25 dtk (selama bar hasil "balapan"),
+   * lalu dentuman + simbal tepat saat pemenang meledak, dilanjut fanfare dan sorak. `boo` = ditolak (nada turun + buzzer), `tie` = seri.
+   */
+  finale(kind: "win" | "boo" | "tie" = "win") {
+    if (!gate("finale", 1500)) return;
+    duck(0.15, 3.4);
+    const hit = 1.25;
+    // riser: noise menanjak + nada gergaji naik + detak jantung yang makin rapat
+    noise(hit, { from: 300, to: 7500, vol: 0.14, q: 0.7 });
+    tone(110, hit, { type: "sawtooth", f2: 520, vol: 0.05, attack: hit * 0.8 });
+    [0, 0.5, 0.85, 1.07].forEach((t) => tone(70, 0.14, { t, type: "sine", f2: 45, vol: 0.28 }));
+    // dentuman
+    tone(150, 0.7, { t: hit, type: "sine", f2: 38, vol: 0.5 });
+    noise(0.6, { t: hit, from: 3500, to: 250, vol: 0.24, q: 0.5 });
+    if (kind === "win") {
+      [0, 2, 4, 5, 7].forEach((n, i) => tone(pn(n), 0.3, { t: hit + 0.04 + i * 0.07, type: "square", vol: 0.07 }));
+      [0, 2, 4, 7].forEach((n) => tone(pn(n), 1.2, { t: hit + 0.4, type: "triangle", vol: 0.12 }));
+      noise(1.2, { t: hit, from: 8000, type: "highpass", vol: 0.1, q: 0.4 });
+      setTimeout(() => sfx.cheer(2.4), (hit + 0.1) * 1000);
+      setTimeout(() => sfx.crash(), (hit + 0.9) * 1000); // gelombang konfeti kedua
+    } else if (kind === "boo") {
+      tone(110, 0.9, { t: hit + 0.05, type: "sawtooth", f2: 55, vol: 0.14 });
+      tone(98, 0.9, { t: hit + 0.05, type: "square", vol: 0.06 });
+      setTimeout(() => sfx.buzzer(), (hit + 0.15) * 1000);
+      noise(0.7, { t: hit + 0.1, from: 600, to: 200, vol: 0.12, q: 0.4 }); // gemuruh "buuu"
+    } else {
+      [4, 3, 4, 3, 4].forEach((n, i) => tone(pn(n), 0.2, { t: hit + 0.1 + i * 0.13, type: "triangle", vol: 0.13 }));
+      noise(0.25, { t: hit + 0.05, from: 5000, to: 1500, vol: 0.12, q: 2 }); // retakan petir
+    }
+  },
 };
 
 /* ================= Musik latar generatif =================

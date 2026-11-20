@@ -24,7 +24,8 @@ export type Question = {
 export type Activity = { id: string; text: string; at: number };
 export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
-  visualEffect: "spotlight" | "meteor" | "aurora" | "orbit" | "prism";
+  /** "random" = lima scene idle bergantian, urutan diacak tiap ronde; selain itu mengunci satu scene. */
+  visualEffect: "random" | "showtime" | "comet" | "neko" | "sakura" | "beat";
   sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
   countdown: number; giftRules: GiftRule[];
   /** Posisi tulisan panduan interaksi di overlay. */
@@ -144,7 +145,7 @@ export type Outro = {
   fade?: boolean | undefined;
 };
 /** Lama animasi penutup di overlay (ms) sebelum lanjut ke item antrean berikutnya. */
-export const OUTRO_MS = 3600;
+export const OUTRO_MS = 5200;
 
 type State = { questions: Question[]; categories: string[]; activity: Activity[]; settings: Settings };
 
@@ -233,7 +234,7 @@ const defaultState: State = {
   categories: DEFAULT_CATEGORIES,
   activity: [{ id: "demo-start", text: "Demo Mode aktif — data contoh dimuat", at: now }],
   settings: {
-    creatorName: "Kyoka", accent: "purple", textScale: 1, visualEffect: "spotlight", sound: true,
+    creatorName: "Kyoka", accent: "purple", textScale: 1, visualEffect: "random", sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
     guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, antiDuplicate: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
@@ -254,7 +255,8 @@ const defaultState: State = {
 export function normalizeSettings(s: Settings): Settings {
   const d = defaultState.settings;
   const patch: Partial<Settings> = {};
-  const visualEffects: Settings["visualEffect"][] = ["spotlight", "meteor", "aurora", "orbit", "prism"];
+  // Nilai lama (spotlight/meteor/aurora/orbit/prism) tidak ada di daftar ini, jadi otomatis pindah ke "random".
+  const visualEffects: Settings["visualEffect"][] = ["random", "showtime", "comet", "neko", "sakura", "beat"];
   if (!visualEffects.includes(s.visualEffect)) patch.visualEffect = d.visualEffect;
   const spinCapacity = clampInt(s.spinCapacity, LIMITS.spin.min, LIMITS.spin.max, d.spinCapacity);
   // Irisan roda tidak boleh melebihi kapasitas.

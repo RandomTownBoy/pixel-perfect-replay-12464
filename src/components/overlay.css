@@ -184,44 +184,30 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
 .ov-idle-ring i { position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; will-change: transform;
   background: conic-gradient(transparent 0 22%, var(--ov) 36%, var(--pop) 46%, #fff 50%, transparent 50.2% 72%, var(--electric) 86%, var(--primary) 96%, #fff 100%);
-  animation: ov-idle-spin 9s linear infinite; }
+  animation: ov-idle-spin 3.6s linear infinite; }
 @keyframes ov-idle-breathe { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 @keyframes ov-idle-spin { to { transform: rotate(360deg); } }
 /* Lapisan hidup saat idle. z-index:-1 di dalam .ov-card (yang punya stacking context lewat backdrop-filter) = di atas latar kartu tapi di BAWAH semua teks.
    overflow hidden + radius sama dengan kartu: tidak ada yang keluar dari kotak. Hanya transform/opacity yang dianimasikan, jadi ringan untuk OBS. */
 .ov-fx { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; pointer-events: none; animation: ov-fx-in 0.9s ease-out both; }
-.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.24; will-change: transform; }
+.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.34; will-change: transform; }
 .ov-fx .aur.a { left: -12%; top: -38%; background: radial-gradient(circle, var(--primary) 0%, transparent 68%); animation: ov-aur-a 15s ease-in-out infinite; }
 .ov-fx .aur.b { right: -16%; bottom: -44%; background: radial-gradient(circle, var(--pop) 0%, transparent 68%); animation: ov-aur-b 19s ease-in-out infinite; }
-.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.17; animation: ov-aur-c 23s ease-in-out infinite; }
+.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.26; animation: ov-aur-c 23s ease-in-out infinite; }
 .ov-fx .sp { position: absolute; bottom: -1em; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-  animation: ov-spark var(--d) ease-in-out var(--dl) infinite; }
+  animation: ov-spark var(--d) linear var(--dl) infinite; }
 .ov-fx .sp:nth-of-type(3n+1) { background: var(--pop); }
 .ov-fx .sp:nth-of-type(3n+2) { background: var(--electric); }
 .ov-fx .shine { position: absolute; top: -25%; bottom: -25%; left: 0; width: 26%; will-change: transform;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.2) 55%, transparent);
-  transform: translateX(-160%) skewX(-18deg); opacity: 0.72; animation: ov-shine 12s ease-in-out 2s infinite; }
-/* Ornamen sudut: aksen sirkuit/konstelasi di sisi bawah, tidak memasuki area teks utama. */
-.ov-cornerwork { position: absolute; inset: 0; pointer-events: none; }
-.ov-cornerwork .corner { position: absolute; bottom: 0.72em; width: 3.05em; height: 2.45em; opacity: 0.82; }
-.ov-cornerwork .corner.left { left: 0.78em; }
-.ov-cornerwork .corner.right { right: 0.78em; transform: scaleX(-1); }
-.ov-cornerwork .corner::before { content: ""; position: absolute; left: 0; bottom: 0; width: 2.45em; height: 1.55em; border-left: 1px solid color-mix(in oklab, var(--electric) 82%, white); border-bottom: 1px solid color-mix(in oklab, var(--pop) 78%, white); border-radius: 0 0 0 0.72em; box-shadow: -0.22em 0 0.65em -0.35em var(--electric), 0 0.22em 0.65em -0.35em var(--pop); }
-.ov-cornerwork .corner::after { content: ""; position: absolute; left: 0.48em; bottom: 0.48em; width: 1.05em; height: 0.42em; border: 1px solid color-mix(in oklab, var(--primary) 82%, white); transform: skewX(-34deg); background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 42%, transparent), color-mix(in oklab, var(--electric) 24%, transparent)); box-shadow: 0 0 0.55em color-mix(in oklab, var(--primary) 55%, transparent); animation: ov-corner-glint 3.4s ease-in-out infinite; }
-.ov-cornerwork .corner i { position: absolute; z-index: 1; width: 0.28em; height: 0.28em; border-radius: 50%; border: 1px solid rgba(255,255,255,0.85); background: var(--electric); box-shadow: 0 0 0.5em var(--electric); }
-.ov-cornerwork .corner i:nth-child(1) { left: 0.02em; bottom: 1.48em; }
-.ov-cornerwork .corner i:nth-child(2) { left: 1.12em; bottom: 0.02em; background: var(--pop); box-shadow: 0 0 0.5em var(--pop); }
-.ov-cornerwork .corner i:nth-child(3) { right: 0.02em; top: 0.12em; width: 0.2em; height: 0.2em; background: white; }
-.ov-cornerwork .corner b { position: absolute; right: 0.36em; bottom: 0.92em; color: white; font-size: 0.58em; line-height: 1; text-shadow: 0 0 0.7em var(--pop); animation: ov-corner-star 3.2s ease-in-out infinite; }
+  transform: translateX(-160%) skewX(-18deg); animation: ov-shine 7s ease-in-out 1.2s infinite; }
 @keyframes ov-fx-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ov-aur-a { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(55%, 30%) scale(1.2); } 66% { transform: translate(20%, 70%) scale(0.9); } }
 @keyframes ov-aur-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-70%, -45%) scale(0.85); } }
 @keyframes ov-aur-c { 0%, 100% { transform: translate(0, 0) scale(0.9); } 25% { transform: translate(60%, 40%) scale(1.2); } 75% { transform: translate(-50%, -30%) scale(1); } }
-@keyframes ov-spark { 0%, 100% { transform: translateY(0) rotate(0) scale(0.45); opacity: 0; } 22% { opacity: 0.58; transform: translateY(-0.8em) rotate(35deg) scale(1); } 72% { opacity: 0.28; transform: translateY(-3.8em) rotate(115deg) scale(0.72); } }
+@keyframes ov-spark { 0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; } 12% { opacity: 0.95; transform: translateY(-1.5em) rotate(40deg) scale(1); } 50% { opacity: 0.35; } 62% { opacity: 0.9; } 100% { transform: translateY(-17em) rotate(260deg) scale(0.2); opacity: 0; } }
 @keyframes ov-shine { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 85%, 100% { transform: translateX(520%) skewX(-18deg); } }
-@keyframes ov-corner-glint { 0%, 100% { opacity: 0.35; transform: translateX(0) skewX(-34deg); } 50% { opacity: 0.82; transform: translateX(0.24em) skewX(-34deg); } }
-@keyframes ov-corner-star { 0%, 100% { opacity: 0.65; transform: scale(0.82) rotate(0); } 50% { opacity: 1; transform: scale(1.15) rotate(45deg); } }
 /* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
 .ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
   color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }
@@ -375,4 +361,67 @@
 @keyframes ov-teaser-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.25em); } }
 @media (prefers-reduced-motion: reduce) { .ov-opt.overtook, .ov-overtake, .ov-count3, .ov-opt.champ::after, .ov-teaser-dots i { animation: none !important; } .ov-opt.champ::after { display: none; } }
 
-@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine, .ov-fx .wv, .ov-fx .wv svg, .ov-cornerwork .corner::after, .ov-cornerwork .corner b { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine { animation: none; } }
+
+/* ---- Kyoka Live ambient presets: five suasana visual, semuanya terkunci di dalam kartu ---- */
+.ov-fx { z-index: 0; }
+.ov-card > .ov-head, .ov-card > .ov-body { position: relative; z-index: 1; }
+.ov-fx .ov-cornerwork { z-index: 1; }
+.ov-fx .sp, .ov-fx .dust { bottom: auto; pointer-events: none; }
+
+/* 1. Spotlight — dua sorot panggung yang sangat lembut, bergerak lambat di sisi kartu. */
+.ov-fx.fx-spotlight .beam { position: absolute; top: -34%; bottom: -34%; width: 29%; opacity: 0.13; filter: blur(1.2em); transform-origin: 50% 0; will-change: transform; }
+.ov-fx.fx-spotlight .beam-a { left: 1%; background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 65%, white), transparent 78%); transform: rotate(17deg); animation: ov-beam-a 17s ease-in-out infinite alternate; }
+.ov-fx.fx-spotlight .beam-b { right: 1%; background: linear-gradient(180deg, color-mix(in oklab, var(--electric) 58%, white), transparent 78%); transform: rotate(-17deg); animation: ov-beam-b 21s ease-in-out infinite alternate; }
+.ov-fx.fx-spotlight .shine { opacity: 0.28; }
+@keyframes ov-beam-a { from { transform: translateX(-1.5em) rotate(12deg) scaleX(.8); opacity: .09; } to { transform: translateX(2.4em) rotate(24deg) scaleX(1.1); opacity: .18; } }
+@keyframes ov-beam-b { from { transform: translateX(1.8em) rotate(-23deg) scaleX(1.05); opacity: .08; } to { transform: translateX(-2em) rotate(-12deg) scaleX(.82); opacity: .17; } }
+
+/* 2. Meteor Shower — lintasan pendek di gutter kiri/kanan, tidak memotong area pertanyaan. */
+.ov-fx.fx-meteor .meteor { position: absolute; display: block; width: 3.3em; height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.95) 72%, var(--electric)); box-shadow: 0 0 .45em var(--electric); transform: rotate(-34deg) translate3d(-4em, -2em, 0); will-change: transform, opacity; }
+.ov-fx.fx-meteor .meteor::after { content: ""; position: absolute; right: -.08em; top: -.13em; width: .28em; height: .28em; border-radius: 50%; background: #fff; box-shadow: 0 0 .55em .12em var(--electric); }
+.ov-fx.fx-meteor .m1 { left: 3%; top: 18%; animation: ov-meteor-left 6.8s 0s ease-in infinite; }
+.ov-fx.fx-meteor .m2 { right: 3%; top: 38%; animation: ov-meteor-right 8.2s 1.7s ease-in infinite; }
+.ov-fx.fx-meteor .m3 { left: 5%; top: 62%; animation: ov-meteor-left 7.6s 3.2s ease-in infinite; }
+.ov-fx.fx-meteor .m4 { right: 5%; top: 78%; animation: ov-meteor-right 9.1s 4.5s ease-in infinite; }
+.ov-fx.fx-meteor .m5 { left: 7%; top: 86%; width: 2.4em; animation: ov-meteor-left 10s 6s ease-in infinite; }
+@keyframes ov-meteor-left { 0%, 8% { opacity: 0; transform: rotate(-34deg) translate3d(-4em,-2em,0); } 16% { opacity: .82; } 34% { opacity: 0; transform: rotate(-34deg) translate3d(1.3em,1.1em,0); } 100% { opacity: 0; transform: rotate(-34deg) translate3d(1.3em,1.1em,0); } }
+@keyframes ov-meteor-right { 0%, 8% { opacity: 0; transform: rotate(146deg) translate3d(-4em,-2em,0); } 16% { opacity: .82; } 34% { opacity: 0; transform: rotate(146deg) translate3d(1.3em,1.1em,0); } 100% { opacity: 0; transform: rotate(146deg) translate3d(1.3em,1.1em,0); } }
+
+/* 3. Aurora Flow — pita aurora hanya menyapu tepi atas dan bawah, pusat tetap tenang. */
+.ov-fx.fx-aurora .aur { opacity: .2; filter: blur(1.8em); }
+.ov-fx.fx-aurora .aur.a { left: -22%; top: -62%; width: 76%; background: radial-gradient(ellipse, var(--primary) 0%, transparent 68%); animation: ov-aur-a 19s ease-in-out infinite; }
+.ov-fx.fx-aurora .aur.b { right: -20%; bottom: -58%; width: 78%; background: radial-gradient(ellipse, var(--pop) 0%, transparent 68%); animation: ov-aur-b 23s ease-in-out infinite; }
+.ov-fx.fx-aurora .aur.c { left: 24%; top: -54%; width: 56%; background: radial-gradient(ellipse, var(--electric) 0%, transparent 68%); animation: ov-aur-c 27s ease-in-out infinite; }
+.ov-fx.fx-aurora .aurora-ribbon { position: absolute; left: -10%; width: 120%; height: 2.2em; border-radius: 50%; filter: blur(1em); opacity: .2; transform: rotate(-5deg); }
+.ov-fx.fx-aurora .r1 { top: -1.4em; background: linear-gradient(90deg, transparent, var(--electric), var(--primary), transparent); animation: ov-aurora-ribbon 18s ease-in-out infinite alternate; }
+.ov-fx.fx-aurora .r2 { bottom: -1.4em; background: linear-gradient(90deg, transparent, var(--pop), var(--primary), transparent); animation: ov-aurora-ribbon 22s ease-in-out -5s infinite alternate-reverse; }
+@keyframes ov-aurora-ribbon { from { transform: translateX(-5%) rotate(-5deg) scaleY(.8); opacity: .12; } to { transform: translateX(5%) rotate(5deg) scaleY(1.2); opacity: .28; } }
+
+/* 4. Cosmic Orbit — orbit kecil di sudut, bukan lingkaran besar di belakang teks. */
+.ov-fx.fx-orbit .orbit { position: absolute; display: block; width: 3.4em; height: 1.45em; border: 1px solid color-mix(in oklab, var(--electric) 65%, transparent); border-radius: 50%; opacity: .55; transform: rotate(-28deg); animation: ov-orbit-spin 12s linear infinite; }
+.ov-fx.fx-orbit .o1 { left: .5em; top: 1.1em; }
+.ov-fx.fx-orbit .o2 { right: .5em; bottom: 1.1em; border-color: color-mix(in oklab, var(--pop) 70%, transparent); animation-duration: 16s; animation-direction: reverse; }
+.ov-fx.fx-orbit .o3 { right: .65em; top: 1.1em; width: 2.1em; height: .9em; border-color: color-mix(in oklab, var(--primary) 75%, transparent); animation-duration: 19s; }
+.ov-fx.fx-orbit .orbit b { position: absolute; left: 50%; top: -.18em; width: .36em; height: .36em; border-radius: 50%; background: #fff; box-shadow: 0 0 .55em .12em var(--electric); }
+.ov-fx.fx-orbit .o2 b { background: var(--pop); box-shadow: 0 0 .55em .12em var(--pop); }
+.ov-fx.fx-orbit .o3 b { background: var(--primary); box-shadow: 0 0 .55em .12em var(--primary); }
+.ov-fx.fx-orbit .orbit-star { position: absolute; color: #fff; font-style: normal; text-shadow: 0 0 .65em var(--electric); animation: ov-orbit-twinkle 3.5s ease-in-out infinite; }
+.ov-fx.fx-orbit .s1 { left: 1.4em; bottom: 1.1em; font-size: .7em; }
+.ov-fx.fx-orbit .s2 { right: 1.4em; top: 3.1em; color: var(--pop); animation-delay: -1.7s; }
+@keyframes ov-orbit-spin { to { rotate: 332deg; } }
+@keyframes ov-orbit-twinkle { 0%,100% { opacity: .3; transform: scale(.7) rotate(0); } 50% { opacity: .95; transform: scale(1.2) rotate(45deg); } }
+
+/* 5. Prism Dust — debu cahaya kecil, hanya di sisi dan sudut kartu. */
+.ov-fx.fx-prism .dust { position: absolute; display: block; width: var(--sz); height: var(--sz); opacity: 0; border-radius: 35%; background: linear-gradient(135deg, #fff, var(--electric) 55%, var(--pop)); box-shadow: 0 0 .55em color-mix(in oklab, var(--electric) 70%, transparent); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ov-prism-drift var(--d) ease-in-out var(--dl) infinite; }
+.ov-fx.fx-prism .dust:nth-child(3n) { background: linear-gradient(135deg, #fff, var(--pop)); }
+.ov-fx.fx-prism .prism-glint { position: absolute; width: 2.5em; height: 2.5em; border: 1px solid color-mix(in oklab, var(--electric) 65%, transparent); transform: rotate(45deg) skew(8deg,8deg); opacity: .16; }
+.ov-fx.fx-prism .g1 { left: .8em; bottom: .9em; box-shadow: inset 0 0 .7em color-mix(in oklab, var(--electric) 30%, transparent), 0 0 .8em color-mix(in oklab, var(--electric) 25%, transparent); animation: ov-prism-glint 7s ease-in-out infinite; }
+.ov-fx.fx-prism .g2 { right: .9em; top: .8em; width: 1.5em; height: 1.5em; border-color: color-mix(in oklab, var(--pop) 70%, transparent); animation: ov-prism-glint 9s -3s ease-in-out infinite reverse; }
+@keyframes ov-prism-drift { 0%,100% { opacity: 0; transform: translate3d(0,.5em,0) rotate(0) scale(.45); } 22% { opacity: .72; } 65% { opacity: .38; transform: translate3d(0,-1.5em,0) rotate(100deg) scale(1); } }
+@keyframes ov-prism-glint { 0%,100% { opacity: .08; transform: rotate(45deg) skew(8deg,8deg) scale(.85); } 50% { opacity: .3; transform: rotate(135deg) skew(8deg,8deg) scale(1.08); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-fx .beam, .ov-fx .meteor, .ov-fx .aurora-ribbon, .ov-fx .orbit, .ov-fx .orbit-star, .ov-fx .dust, .ov-fx .prism-glint { animation: none !important; }
+  .ov-fx .meteor, .ov-fx .dust { opacity: .22; }
+}

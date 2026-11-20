@@ -158,6 +158,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
                     {state.showBadge && <span className="ov-brand">KYOKA LIVE</span>}
                   </div>
                 )}
+                {!outro && <AmbientFx effect={state.visualEffect ?? "spotlight"} />}
                 <Body state={state} outro={outro} />
                 {outro && <OutroLayer p={p} outro={outro} />}
                 {!outro && (state.queue && state.queue.pending > 0 ? <QueueBar q={state.queue} /> : <IdleBar />)}
@@ -196,32 +197,50 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   );
 }
 
-/** Partikel ambient dibatasi di gutter kiri/kanan agar tidak melintasi teks utama. */
-const IDLE_SPARKS = Array.from({ length: 8 }, (_, i) => ({
-  x: i % 2 === 0 ? 4 + ((i * 7) % 5) : 91 + ((i * 5) % 5),
-  dur: 9 + ((i * 5) % 5),
-  delay: -((i * 7) % 12),
-  sz: 0.28 + ((i * 3) % 3) * 0.09,
+/** Posisi efek dibuat deterministik dan dibatasi di gutter kiri/kanan agar tidak menyeberangi teks. */
+const IDLE_SPARKS = Array.from({ length: 12 }, (_, i) => ({
+  x: i % 2 === 0 ? 4 + ((i * 7) % 7) : 89 + ((i * 5) % 7),
+  y: 8 + ((i * 17) % 82),
+  dur: 8 + ((i * 5) % 7),
+  delay: -((i * 7) % 13),
+  sz: 0.28 + ((i * 3) % 4) * 0.1,
 }));
 
-/** Antrean kosong: kartu tetap hidup lewat aurora dan kilau kaca. Ornamen sudut menjaga area teks tetap bersih. */
-function IdleBar() {
+/** Ambient visual selalu berada di bawah konten; setiap preset punya gerak dan karakter berbeda. */
+function AmbientFx({ effect = "spotlight" }: { effect?: NonNullable<OverlayState["visualEffect"]> }) {
   return (
-    <>
-      <div className="ov-fx" aria-hidden>
-        <b className="aur a" /><b className="aur b" /><b className="aur c" />
-        {IDLE_SPARKS.map((sp, i) => (
-          <i key={i} className="sp" style={{ left: `${sp.x}%`, "--d": `${sp.dur}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz}em` } as CSSProperties} />
-        ))}
+    <div className={`ov-fx fx-${effect}`} aria-hidden>
+      {effect === "spotlight" && <>
+        <b className="beam beam-a" /><b className="beam beam-b" />
         <div className="shine" />
-        <div className="ov-cornerwork" aria-hidden>
-          <span className="corner left"><i /><i /><i /><b>✦</b></span>
-          <span className="corner right"><i /><i /><i /><b>✦</b></span>
-        </div>
+        {IDLE_SPARKS.slice(0, 4).map((sp, i) => <i key={i} className="sp" style={{ left: `${sp.x}%`, top: `${sp.y}%`, "--d": `${sp.dur}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz}em` } as CSSProperties} />)}
+      </>}
+      {effect === "meteor" && <>
+        <i className="meteor m1" /><i className="meteor m2" /><i className="meteor m3" /><i className="meteor m4" /><i className="meteor m5" />
+      </>}
+      {effect === "aurora" && <>
+        <b className="aur a" /><b className="aur b" /><b className="aur c" />
+        <div className="aurora-ribbon r1" /><div className="aurora-ribbon r2" />
+      </>}
+      {effect === "orbit" && <>
+        <i className="orbit o1"><b /></i><i className="orbit o2"><b /></i><i className="orbit o3"><b /></i>
+        <i className="orbit-star s1">✦</i><i className="orbit-star s2">✧</i>
+      </>}
+      {effect === "prism" && <>
+        {IDLE_SPARKS.map((sp, i) => <i key={i} className="dust" style={{ left: `${sp.x}%`, top: `${sp.y}%`, "--d": `${sp.dur + 3}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz * 1.6}em` } as CSSProperties} />)}
+        <div className="prism-glint g1" /><div className="prism-glint g2" />
+      </>}
+      <div className="ov-cornerwork" aria-hidden>
+        <span className="corner left"><i /><i /><i /><b>✦</b></span>
+        <span className="corner right"><i /><i /><i /><b>✦</b></span>
       </div>
-      <div className="ov-idle-ring" aria-hidden><i /></div>
-    </>
+    </div>
   );
+}
+
+/** Antrean kosong: cincin cahaya halus mengelilingi tepi kartu. */
+function IdleBar() {
+  return <div className="ov-idle-ring" aria-hidden><i /></div>;
 }
 
 /** Pop naik nada tiap ada vote baru; vote beruntun (jeda < 2,5 dtk) membuat nadanya terus naik. Tidak berbunyi untuk vote lama saat overlay dimuat. */

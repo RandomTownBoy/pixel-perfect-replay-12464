@@ -2,22 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
+import { sfx, setSfxEnabled, unlockSfx } from "@/lib/sfx";
 import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
-
-let audioCtx: AudioContext | null = null;
-function beep() {
-  try {
-    audioCtx ??= new AudioContext();
-    const ctx = audioCtx;
-    if (ctx.state === "suspended") void ctx.resume();
-    const o = ctx.createOscillator(); const g = ctx.createGain();
-    o.type = "triangle"; o.frequency.setValueAtTime(660, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
-    g.gain.setValueAtTime(0.15, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.3);
-  } catch { /* autoplay blocked */ }
-}
 
 /** Tulisan panduan untuk penonton, menyesuaikan gimmick yang tayang dan input yang sedang dibuka. */
 function guideLines(p: OverlayPayload, intake?: Intake): string[] {
@@ -88,11 +76,16 @@ export type SafeMode = "auto" | "tiktok" | "off";
 export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayState; preview?: boolean; safe?: SafeMode }) {
   const p = state.payload;
   const { rootRef, safeRef, stageRef, box, scale, ready, dw } = useFit(p?.gimmick);
+  // Suara aktif hanya di overlay sungguhan (bukan pratinjau dashboard) dan kalau pengaturan "Efek suara" menyala.
+  // Diatur saat render supaya efek anak komponen (yang jalan lebih dulu dari efek induk) sudah memakai nilai terbaru.
+  setSfxEnabled(!preview && !!state.sound);
+  useEffect(() => { unlockSfx(); }, []);
   const last = useRef(state.payloadAt);
   useEffect(() => {
-    if (!preview && state.sound && state.payloadAt !== last.current && p) beep();
+    if (state.payloadAt !== last.current && p) sfx.enter(p.gimmick);
     last.current = state.payloadAt;
   }, [state.payloadAt, state.sound, p, preview]);
+  useVoteSfx(state.votes, state.payloadAt);
   // Transisi saat jenis gimmick berganti (bukan saat item berikutnya dari gimmick yang sama): sapuan warna + emoji dan nama gimmick, singkat (~1,3 dtk).
   const gKey = !p ? null : p.gimmick === "audience" ? (p.kind === "confession" ? "confession" : p.kind === "problem" ? "chaos" : p.kind === "spin" || p.kind === "question" ? "spin" : "audience") : p.gimmick;
   const prevKey = useRef<string | null>(gKey);
@@ -102,6 +95,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
     prevKey.current = gKey;
     if (!gKey || !before || before === gKey || !state.visible) return;
     setSw({ key: gKey, at: Date.now() });
+    sfx.swoosh();
     const t = setTimeout(() => setSw(null), 1300);
     return () => clearTimeout(t);
   }, [gKey, state.visible]);
@@ -110,7 +104,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   useEffect(() => {
     if (!state.banner || Date.now() - state.banner.at > 8000) return;
     setBannerOn(true);
-    if (!preview && state.sound) beep();
+    sfx.gift();
     const t = setTimeout(() => setBannerOn(false), 6000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,7 +147,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
                 )}
                 <Body state={state} outro={outro} />
                 {outro && <OutroLayer p={p} outro={outro} />}
-                {state.queue && state.queue.pending > 0 && !outro && <QueueBar q={state.queue} />}
+                {!outro && (state.queue && state.queue.pending > 0 ? <QueueBar q={state.queue} /> : <IdleBar />)}
               </div>
               {!guideOnTop && guide}
               {sw && swInfo && (
@@ -186,6 +180,33 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
       <i key={`${q.startedAt}-${paused ? "p" : "r"}`} style={{ animationDuration: `${q.ms}ms, 1s`, animationDelay: `${-elapsed}ms, ${q.ms - HOT_MS - elapsed}ms` }} />
     </div>
   );
+}
+
+/** Garis di tepi bawah kartu saat antrean kosong: tidak ada progres lagi, jadi diganti animasi "live" yang terus bergerak (komet + napas cahaya + titik berdenyut) supaya tidak terlihat mati. */
+function IdleBar() {
+  return (
+    <div className="ov-idlebar" aria-hidden>
+      <i className="a" /><i className="b" />
+      <span className="ov-idledots"><i /><i /><i /></span>
+    </div>
+  );
+}
+
+/** Pop naik nada tiap ada vote baru; vote beruntun (jeda < 2,5 dtk) membuat nadanya terus naik. Tidak berbunyi untuk vote lama saat overlay dimuat. */
+function useVoteSfx(votes: { a: number; b: number } | undefined, key: number) {
+  const prev = useRef({ key, n: (votes?.a ?? 0) + (votes?.b ?? 0) });
+  const streak = useRef({ n: 0, at: 0 });
+  useEffect(() => {
+    const n = (votes?.a ?? 0) + (votes?.b ?? 0);
+    if (prev.current.key !== key) { prev.current = { key, n }; streak.current = { n: 0, at: 0 }; return; }
+    const d = n - prev.current.n;
+    prev.current.n = n;
+    if (d <= 0) return;
+    const now = Date.now();
+    streak.current.n = now - streak.current.at < 2500 ? streak.current.n + d : 0;
+    streak.current.at = now;
+    sfx.vote(streak.current.n, d);
+  }, [votes?.a, votes?.b, key]);
 }
 
 function Quote({ text, quoted, max }: { text: string; quoted?: boolean; max?: number }) {
@@ -295,6 +316,7 @@ function useOvertake(a: number, b: number, off = false): number {
     if (now - lastAt.current < OVERTAKE_COOLDOWN_MS) return;
     lastAt.current = now;
     setOv({ side: lead, at: now });
+    sfx.overtake();
     const t = setTimeout(() => setOv(null), 2600);
     return () => clearTimeout(t);
   }, [lead, sure, off]);
@@ -308,7 +330,7 @@ function Teaser({ at, ms = 2000, emoji, label, children }: { at: number; ms?: nu
     const l = Math.max(0, ms - (Date.now() - at));
     setLeft(l);
     if (!l) return;
-    const t = setTimeout(() => setLeft(0), l);
+    const t = setTimeout(() => { setLeft(0); sfx.reveal(); }, l);
     return () => clearTimeout(t);
   }, [at, ms]);
   if (left <= 0) return <>{children}</>;
@@ -370,6 +392,23 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
     </div>
   );
   const winnerText = champ === 0 ? a : champ === 1 ? b : undefined;
+  // Detak hitung mundur: pelan di 10 detik terakhir, tebal di 3-2-1.
+  useEffect(() => {
+    if (resolved || !end || left <= 0 || left > 10) return;
+    sfx.tick(left <= 3);
+  }, [left, resolved, end]);
+  // Hasil keluar: gong, lalu fanfare / nada seri / nada sepi. Tidak berbunyi kalau overlay baru dimuat dalam keadaan sudah selesai.
+  const wasResolved = useRef(resolved);
+  useEffect(() => {
+    if (resolved && !wasResolved.current) {
+      sfx.timeUp();
+      const t = setTimeout(() => { if (tie) sfx.tie(); else if (total) sfx.win(); else sfx.none(); }, 450);
+      wasResolved.current = resolved;
+      return () => clearTimeout(t);
+    }
+    wasResolved.current = resolved;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolved]);
   return (
     <div className={`ov-body${resolved ? " resolved" : ""}`}>
       <div className="ov-opts">
@@ -426,6 +465,13 @@ function HotOutro({ votes }: { votes: { a: number; b: number } | undefined }) {
     tie: { icon: "⚖️", text: "SERI!", sub: "Penonton terbelah dua", burst: ["⚖️", "🤝", "😮"] },
     none: { icon: "🤷", text: "BELUM ADA SUARA", sub: "Sepi nih…", burst: [] as string[] },
   }[kind];
+  // Meteran terisi (0,2 dtk) → cap menghantam (≈1,2 dtk, sesuai animasi ov-stamp).
+  useEffect(() => {
+    const t1 = setTimeout(() => sfx.meter(), 200);
+    const t2 = setTimeout(() => sfx.stamp(kind), 1200);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div className={`ov-hot ${kind}`}>
       <div className="ov-meter">
@@ -441,6 +487,7 @@ function HotOutro({ votes }: { votes: { a: number; b: number } | undefined }) {
 
 /** Confession: segel kunci menghantam kartu, gelombang riak, lalu rahasia "disimpan". */
 function ConfessionOutro({ more }: { more: boolean }) {
+  useEffect(() => { const t = setTimeout(() => sfx.seal(), 560); return () => clearTimeout(t); }, []); // segel mendarat ≈ 0,6 dtk
   return (
     <div className="ov-conf-out">
       <div className="ov-seal-wrap">
@@ -456,6 +503,7 @@ function ConfessionOutro({ more }: { more: boolean }) {
 
 /** Random Chaos: pusaran menyedot kartu, tulisan glitch, lalu melebar menutupi layar sebagai transisi. */
 function ChaosOutro({ more }: { more: boolean }) {
+  useEffect(() => { sfx.vortex(); }, []);
   return (
     <div className="ov-chaos-out">
       <div className="ov-vortex"><i /><i /><i /></div>
@@ -543,6 +591,21 @@ function SpinStage({ p }: { p: SpinPayload }) {
   const winner = phase === "result" ? p.winnerIndex : undefined;
   const fresh = new Set(p.addedAt !== undefined && Date.now() - p.addedAt < 3500 ? p.added ?? [] : []);
   const dense = n > 3;
+  // Klik roda tiap melewati satu irisan (makin cepat makin tinggi nadanya), lalu fanfare saat berhenti.
+  const lastSlice = useRef(-1);
+  const lastAngle = useRef(angle);
+  useEffect(() => {
+    if (phase !== "spinning" || n < 1) { lastSlice.current = -1; lastAngle.current = angle; return; }
+    const sl = Math.floor(angle / (360 / n));
+    if (lastSlice.current !== -1 && sl !== lastSlice.current) sfx.wheel(Math.min(1, Math.abs(angle - lastAngle.current) / 25));
+    lastSlice.current = sl; lastAngle.current = angle;
+  }, [angle, phase, n]);
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    if (prevPhase.current === "spinning" && phase === "result") sfx.wheelWin();
+    prevPhase.current = phase;
+  }, [phase]);
+  useEffect(() => { if (p.addedAt !== undefined && Date.now() - p.addedAt < 1500) sfx.add(); }, [p.addedAt]);
   return (
     <div className={`ov-body ov-spin${dense ? " dense" : ""}${phase === "result" ? " res" : ""}`}>
       <div className="ov-spin-top">
@@ -591,6 +654,21 @@ function CardStage({ p }: { p: CardPayload }) {
   const flash = useFlash(p.addedAt, 3000);
   const freshFrom = flash && p.added ? n - p.added : n; // indeks kartu yang baru masuk
   const showMeter = phase === "standby" || phase === "dealt";
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    const before = prevPhase.current; prevPhase.current = phase;
+    if (before === phase) return;
+    if (phase === "shuffling") sfx.shuffle();
+    else if (phase === "dealt") for (let i = 0; i < n; i++) sfx.deal(i);
+    else if (phase === "revealed") sfx.flip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+  useEffect(() => {
+    if (p.addedAt === undefined || Date.now() - p.addedAt > 1500) return;
+    sfx.add();
+    if (n >= 6) setTimeout(() => sfx.win(), 250);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.addedAt]);
   return (
     <div className="ov-body">
       {showMeter && (flash || n < 6) && (
@@ -642,6 +720,9 @@ function ChaosWords({ words, rolling }: { words: string[]; rolling: boolean }) {
     return () => clearInterval(t);
   }, [rolling]);
   const pool = DEMO.words;
+  useEffect(() => { if (rolling) sfx.roll(tick); }, [tick, rolling]);
+  const wasRolling = useRef(rolling);
+  useEffect(() => { if (wasRolling.current && !rolling) sfx.lock(); wasRolling.current = rolling; }, [rolling]);
   return (
     <div className="ov-words">
       {words.map((w, i) => rolling

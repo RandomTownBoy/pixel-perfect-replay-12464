@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
@@ -93,6 +93,19 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
     if (!preview && state.sound && state.payloadAt !== last.current && p) beep();
     last.current = state.payloadAt;
   }, [state.payloadAt, state.sound, p, preview]);
+  // Transisi saat jenis gimmick berganti (bukan saat item berikutnya dari gimmick yang sama): sapuan warna + emoji dan nama gimmick, singkat (~1,3 dtk).
+  const gKey = !p ? null : p.gimmick === "audience" ? (p.kind === "confession" ? "confession" : p.kind === "problem" ? "chaos" : p.kind === "spin" || p.kind === "question" ? "spin" : "audience") : p.gimmick;
+  const prevKey = useRef<string | null>(gKey);
+  const [sw, setSw] = useState<{ key: string; at: number } | null>(null);
+  useEffect(() => {
+    const before = prevKey.current;
+    prevKey.current = gKey;
+    if (!gKey || !before || before === gKey || !state.visible) return;
+    setSw({ key: gKey, at: Date.now() });
+    const t = setTimeout(() => setSw(null), 1300);
+    return () => clearTimeout(t);
+  }, [gKey, state.visible]);
+  const swInfo = sw ? GIMMICKS.find((x) => x.id === sw.key) : null;
   const [bannerOn, setBannerOn] = useState(false);
   useEffect(() => {
     if (!state.banner || Date.now() - state.banner.at > 8000) return;
@@ -143,6 +156,12 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
                 {state.queue && state.queue.pending > 0 && !outro && <QueueBar q={state.queue} />}
               </div>
               {!guideOnTop && guide}
+              {sw && swInfo && (
+                <div key={sw.at} className="ov-switch" data-g={sw.key} aria-hidden>
+                  <span className="ov-switch-emoji">{swInfo.emoji}</span>
+                  <span className="ov-switch-name">{swInfo.name}</span>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -216,7 +235,15 @@ function Body({ state, outro }: { state: OverlayState; outro?: Outro | undefined
         </div>
       );
     case "audience":
-      return (
+      return p.kind === "confession" ? (
+        <Teaser at={state.payloadAt} emoji="🤫" label="Ada confession baru">
+          <div className="ov-body">
+            <span className="ov-chip soft">🤫 Confession anonim</span>
+            <Quote text={p.content ?? ""} quoted />
+            <Attribution name={p.nickname} />
+          </div>
+        </Teaser>
+      ) : (
         <div className="ov-body">
           <span className="ov-chip soft">{p.kind === "confession" ? "🤫 Confession anonim" : p.kind === "spin" ? "🎡 Pertanyaan dari penonton" : p.kind === "problem" ? "🌀 Masalah dari penonton" : "💬 Dari penonton"}</span>
           <Quote text={p.content ?? ""} quoted />
@@ -247,6 +274,52 @@ function Body({ state, outro }: { state: OverlayState; outro?: Outro | undefined
   }
 }
 
+/**
+ * Sisi yang baru saja menyalip (0/1) selama ~2,6 detik, atau -1.
+ * Menyalip hanya dihitung kalau selisih ≥ 2 suara, dan label baru boleh muncul lagi minimal 8 detik setelah yang terakhir (agar tidak berkedip saat suara sangat ketat).
+ */
+const OVERTAKE_MARGIN = 2;
+const OVERTAKE_COOLDOWN_MS = 8000;
+function useOvertake(a: number, b: number, off = false): number {
+  const lead = a > b ? 0 : b > a ? 1 : -1;
+  const sure = Math.abs(a - b) >= OVERTAKE_MARGIN;
+  const prev = useRef(lead);
+  const lastAt = useRef(0);
+  const [ov, setOv] = useState<{ side: number; at: number } | null>(null);
+  useEffect(() => {
+    if (lead === -1 || !sure) return;
+    const before = prev.current;
+    prev.current = lead;
+    if (off || before === -1 || before === lead) return;
+    const now = Date.now();
+    if (now - lastAt.current < OVERTAKE_COOLDOWN_MS) return;
+    lastAt.current = now;
+    setOv({ side: lead, at: now });
+    const t = setTimeout(() => setOv(null), 2600);
+    return () => clearTimeout(t);
+  }, [lead, sure, off]);
+  return ov ? ov.side : -1;
+}
+
+/** Jeda singkat sebelum isi tampil: teaser muncul ~`ms` setelah payload dikirim. Tidak muncul untuk overlay yang dimuat ulang di tengah tayangan. */
+function Teaser({ at, ms = 2000, emoji, label, children }: { at: number; ms?: number; emoji: string; label: string; children: ReactNode }) {
+  const [left, setLeft] = useState(() => Math.max(0, ms - (Date.now() - at)));
+  useEffect(() => {
+    const l = Math.max(0, ms - (Date.now() - at));
+    setLeft(l);
+    if (!l) return;
+    const t = setTimeout(() => setLeft(0), l);
+    return () => clearTimeout(t);
+  }, [at, ms]);
+  if (left <= 0) return <>{children}</>;
+  return (
+    <div className="ov-body ov-teaser">
+      <div className="ov-emoji wiggle">{emoji}</div>
+      <span className="ov-teaser-text">{label}<span className="ov-teaser-dots"><i /><i /><i /></span></span>
+    </div>
+  );
+}
+
 type OptItem = { key: string; label: string; wide?: boolean };
 /** Dua pilihan dengan isi warna menurut persentase vote. */
 function Opts({ votes, items }: { votes: { a: number; b: number } | undefined; items: [OptItem, OptItem] | OptItem[] }) {
@@ -255,13 +328,15 @@ function Opts({ votes, items }: { votes: { a: number; b: number } | undefined; i
   const pcts = [pa, total ? 100 - pa : 0];
   const counts = [a, b];
   const cols = ["var(--primary)", "var(--electric)"];
+  const over = useOvertake(a, b);
   return (
     <div className="ov-opts">
       {items.slice(0, 2).map((it, i) => (
-        <div key={i} className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}`} style={{ "--c": cols[i], "--pct": `${pcts[i]}%` } as CSSProperties}>
+        <div key={i} className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${over === i ? " overtook" : ""}`} style={{ "--c": cols[i], "--pct": `${pcts[i]}%` } as CSSProperties}>
+          {over === i && <span className="ov-overtake">🔥 Menyalip!</span>}
           <span className={`ov-key${it.wide ? " wide" : ""}`}>{it.key}</span>
           <span className="ov-opt-text" style={{ fontSize: `${fit(it.label) * 0.62}em` }}>{it.label}</span>
-          <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small>{counts[i]} suara</small></span>
+          <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small key={counts[i]} className="ov-bump">{counts[i]} suara</small></span>
         </div>
       ))}
     </div>
@@ -284,12 +359,14 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
   const pa = total ? Math.round((a0 / total) * 100) : 0;
   const pcts = [pa, total ? 100 - pa : 0];
   const champ = resolved && total ? (a0 > b0 ? 0 : b0 > a0 ? 1 : -1) : -1;
+  const over = useOvertake(a0, b0, resolved);
   const tie = resolved && total > 0 && a0 === b0;
   const opt = (i: 0 | 1, key: string, text: string | undefined, c: string) => (
-    <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${champ === i ? " champ" : ""}${champ === 1 - i ? " lose" : ""}${tie ? " tied" : ""}`} style={{ "--c": c, "--pct": `${pcts[i]}%` } as CSSProperties}>
+    <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${champ === i ? " champ" : ""}${champ === 1 - i ? " lose" : ""}${tie ? " tied" : ""}${over === i ? " overtook" : ""}`} style={{ "--c": c, "--pct": `${pcts[i]}%` } as CSSProperties}>
+      {over === i && <span className="ov-overtake">🔥 Menyalip!</span>}
       <span className="ov-key">{champ === i ? <span className="ov-crown">👑</span> : key}</span>
       <span className="ov-opt-text" style={{ fontSize: `${fit(text) * 0.78}em` }}>{text}</span>
-      <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small>{i === 0 ? a0 : b0} suara</small></span>
+      <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small key={i === 0 ? a0 : b0} className="ov-bump">{i === 0 ? a0 : b0} suara</small></span>
     </div>
   );
   const winnerText = champ === 0 ? a : champ === 1 ? b : undefined;
@@ -300,6 +377,7 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
         <div className={`ov-vs${!resolved && end && left > 0 && left <= 3 ? " urgent" : ""}${resolved ? " done" : ""}`}>{resolved ? (tie ? "=" : total ? "🏆" : "?") : end && left > 0 ? left : "VS"}</div>
         {opt(1, "B", b, "var(--electric)")}
       </div>
+      {!resolved && end && left > 0 && left <= 3 && <div key={left} className="ov-count3" aria-hidden>{left}</div>}
       {resolved && champ >= 0 && <Burst emoji={["🎉", "✨", "👑", "🎊"]} n={16} />}
       <div className="ov-foot">
         {resolved
@@ -470,9 +548,10 @@ function SpinStage({ p }: { p: SpinPayload }) {
       <div className="ov-spin-top">
         {p.category && <span className="ov-chip soft">{p.category}</span>}
         {flash && <span className="ov-chip add">➕ Ditambahkan ke roda</span>}
+        {p.queued ? <span key={p.queuedAt} className="ov-chip add queued">⏳ {p.queued} pertanyaan baru menunggu putaran berikutnya</span> : null}
       </div>
       <div className="ov-spin-main">
-        <div className="ov-wheelwrap">
+        <div className={`ov-wheelwrap${flash ? " pulse" : ""}`}>
           <span className="ov-pointer" />
           <SpinWheelSvg count={n} winner={winner} className="ov-wheel" style={{ transform: `rotate(${angle}deg)` }} />
         </div>
@@ -509,8 +588,18 @@ function CardStage({ p }: { p: CardPayload }) {
   const showRevealed = phase === "revealed";
   const opened = p.opened ?? (showRevealed && p.revealed !== undefined ? [p.revealed] : []); // deck yang sebagian sudah terbuka tampil dengan kartu terbukanya sejak standby
   const finished = n > 0 && opened.length >= n;
+  const flash = useFlash(p.addedAt, 3000);
+  const freshFrom = flash && p.added ? n - p.added : n; // indeks kartu yang baru masuk
+  const showMeter = phase === "standby" || phase === "dealt";
   return (
     <div className="ov-body">
+      {showMeter && (flash || n < 6) && (
+        <div className="ov-deckinfo">
+          {flash && <span key={p.addedAt} className="ov-chip add">🃏 Kartu baru masuk{n >= 6 ? " · deck penuh!" : ""}</span>}
+          <span className="ov-dots6" aria-label={`${n} dari 6 kartu`}>{Array.from({ length: 6 }).map((_, i) => <i key={i} className={i < n ? "on" : ""} />)}<b>{n}/6</b></span>
+        </div>
+      )}
+      {flash && n >= 6 && <Burst emoji={["🃏", "✨", "🎴", "⭐"]} n={14} />}
       <div className={`ov-deck ${phase}`}>
         {Array.from({ length: n }).map((_, i) => {
           const row = Math.floor(i / 3);
@@ -521,7 +610,7 @@ function CardStage({ p }: { p: CardPayload }) {
           const on = showRevealed && p.revealed === i; // kartu terbaru
           const done = isOpen && !on; // sudah dibuka sebelumnya: tetap terbuka
           return (
-            <div key={i} className={`flip-card ov-fc${on ? " on" : ""}${done ? " done" : ""}`}
+            <div key={i} className={`flip-card ov-fc${on ? " on" : ""}${done ? " done" : ""}${i >= freshFrom ? " ov-fc-new" : ""}`}
               style={{ "--dx": dx, "--dy": dy, "--r": ((i * 7) % 9) - 4, "--i": i } as CSSProperties}>
               <div className={`flip-inner${isOpen ? " flipped" : ""}`}>
                 <div className="flip-face ov-face front">{i + 1}</div>

@@ -31,7 +31,7 @@ function useOverlayPayload(): OverlayPayload | null {
   return p;
 }
 const isCardLive = () => { const c = readOverlay().payload; return c?.gimmick === "card" && c.phase !== undefined; };
-const standbyOf = (d: Deck): CardPayload => ({ gimmick: "card", phase: "standby", count: d.cards.length, opened: usedIdx(d.cards) });
+const standbyOf = (d: Deck): CardPayload => ({ gimmick: "card", phase: "standby", deck: d.name, count: d.cards.length, opened: usedIdx(d.cards) });
 
 /* ---------------- PICK A CARD (deck) ---------------- */
 export function CardGimmick() {
@@ -97,10 +97,10 @@ export function CardGimmick() {
     const opened = ids.flatMap((id, i) => (byId.get(id)?.used ? [i] : []));
     if (!isCardLive()) return;
     lockViewer(d);
-    updateOverlayPayload({ gimmick: "card", phase: "shuffling", count: ids.length, opened });
+    updateOverlayPayload({ gimmick: "card", phase: "shuffling", deck: d.name, count: ids.length, opened });
     startTimer(() => {
       const c = readOverlay().payload;
-      if (c?.gimmick === "card" && c.phase === "shuffling") updateOverlayPayload({ gimmick: "card", phase: "dealt", count: ids.length, opened });
+      if (c?.gimmick === "card" && c.phase === "shuffling") updateOverlayPayload({ gimmick: "card", phase: "dealt", deck: d.name, count: ids.length, opened });
     }, SHUFFLE_MS);
   };
   const pick = (d: Deck, i: number) => {
@@ -109,13 +109,13 @@ export function CardGimmick() {
     lockViewer(d);
     if (!c.used) actions.updateQuestion(c.id, { used: true }); // tanda terpakai bertahan walau database memuat ulang
     const opened = [...new Set([...usedIdx(d.cards), i])];
-    const payload: CardPayload = { gimmick: "card", phase: "revealed", count: d.cards.length, revealed: i, opened, text: c.text };
+    const payload: CardPayload = { gimmick: "card", phase: "revealed", deck: d.name, count: d.cards.length, revealed: i, opened, text: c.text };
     if (isCardLive()) updateOverlayPayload(payload); else sendToOverlay(payload);
   };
   /** Mainkan ulang satu deck: hanya tanda terpakai deck ini yang direset. */
   const replay = (d: Deck) => {
     d.cards.filter((c) => c.used).forEach((c) => actions.updateQuestion(c.id, { used: false }));
-    if (isCardLive() && d.name === cur?.name) updateOverlayPayload({ gimmick: "card", phase: "standby", count: d.cards.length, opened: [] });
+    if (isCardLive() && d.name === cur?.name) updateOverlayPayload({ gimmick: "card", phase: "standby", deck: d.name, count: d.cards.length, opened: [] });
     toast.success(`Deck ${d.name} bisa dimainkan lagi`);
   };
 

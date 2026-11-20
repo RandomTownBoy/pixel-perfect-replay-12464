@@ -196,22 +196,11 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   );
 }
 
-/** Satu lapis gelombang sinyal: dua periode berurutan (lebar 800) supaya bisa digeser mulus selama satu periode (400). `c` = jumlah siklus per 400. */
-function wavePath(amp: number, c: number, ph: number) {
-  let d = "";
-  for (let x = 0; x <= 800; x += 8) d += `${x ? "L" : "M"}${x} ${(20 + amp * Math.sin((2 * Math.PI * c * x) / 400 + ph)).toFixed(2)}`;
-  return d;
-}
-const IDLE_WAVES = [
-  { d: wavePath(10, 1, 0), color: "var(--primary)", dur: 11, breathe: 4.2, rev: false },
-  { d: wavePath(8, 2, 1.6), color: "var(--electric)", dur: 8, breathe: 3.1, rev: true },
-  { d: wavePath(6, 3, 3.1), color: "var(--pop)", dur: 6, breathe: 2.6, rev: false },
-];
 /** Bintang kecil yang naik & berkelip. Tetap (tanpa Math.random) supaya render stabil. */
 const IDLE_SPARKS = Array.from({ length: 18 }, (_, i) => ({ x: (i * 37 + 9) % 96 + 2, dur: 6 + ((i * 13) % 7), delay: -((i * 17) % 11), sz: 0.38 + ((i * 7) % 5) * 0.13 }));
 
 /** Antrean kosong: tidak ada progres lagi, jadi kartu dibuat "hidup" — aurora mengalir di belakang konten, bintang naik berkelip, kilau kaca menyapu,
- *  gelombang sinyal neon di dasar, dan dua komet berputar di tepi. Semuanya dikurung di dalam kotak kartu (overflow hidden) dan ada di belakang teks. */
+ *  aksen prisma berlapis di dasar, dan dua komet berputar di tepi. Semuanya dikurung di dalam kotak kartu (overflow hidden) dan ada di belakang teks. */
 function IdleBar() {
   return (
     <>
@@ -221,14 +210,10 @@ function IdleBar() {
           <i key={i} className="sp" style={{ left: `${sp.x}%`, "--d": `${sp.dur}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz}em` } as CSSProperties} />
         ))}
         <div className="shine" />
-        <div className="wave">
-          {IDLE_WAVES.map((w, i) => (
-            <div key={i} className="wv" style={{ "--bd": `${w.breathe}s`, "--wc": w.color } as CSSProperties}>
-              <svg viewBox="0 0 800 40" preserveAspectRatio="none" style={{ animationDuration: `${w.dur}s`, animationDirection: w.rev ? "reverse" : "normal" }}>
-                <path d={w.d} fill="none" stroke={w.color} strokeWidth="2.2" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
-              </svg>
-            </div>
-          ))}
+        <div className="ov-prism-rail" aria-hidden>
+          <span className="prism-wing left"><i /><i /><i /></span>
+          <span className="prism-core"><i /><b>✦</b><i /></span>
+          <span className="prism-wing right"><i /><i /><i /></span>
         </div>
       </div>
       <div className="ov-idle-ring" aria-hidden><i /></div>

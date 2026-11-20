@@ -202,17 +202,28 @@
 .ov-fx .shine { position: absolute; top: -25%; bottom: -25%; left: 0; width: 26%; will-change: transform;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.2) 55%, transparent);
   transform: translateX(-160%) skewX(-18deg); animation: ov-shine 7s ease-in-out 1.2s infinite; }
-.ov-fx .wave { position: absolute; left: 0; right: 0; bottom: 0.15em; height: 1.7em; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); }
-.ov-fx .wv { position: absolute; inset: 0; transform-origin: 50% 50%; animation: ov-wave-breathe var(--bd) ease-in-out infinite; filter: drop-shadow(0 0 0.3em var(--wc)); opacity: 0.85; }
-.ov-fx .wv svg { position: absolute; left: 0; top: 0; width: 200%; height: 100%; will-change: transform; animation: ov-wave-flow 8s linear infinite; }
+.ov-prism-rail { position: absolute; left: 7%; right: 7%; bottom: 0.58em; height: 1.18em; display: flex; align-items: center; justify-content: center; gap: 0.42em; opacity: 0.9; }
+.ov-prism-rail::before { content: ""; position: absolute; left: 4%; right: 4%; top: 50%; height: 1px; transform: translateY(-50%); background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--electric) 65%, transparent) 18%, color-mix(in oklab, var(--pop) 75%, transparent) 50%, color-mix(in oklab, var(--primary) 65%, transparent) 82%, transparent); box-shadow: 0 0 0.65em var(--ov); }
+.ov-prism-rail .prism-wing { display: flex; align-items: center; gap: 0.24em; flex: 1; height: 100%; }
+.ov-prism-rail .prism-wing.left { justify-content: flex-end; }
+.ov-prism-rail .prism-wing.right { justify-content: flex-start; }
+.ov-prism-rail .prism-wing i { display: block; height: 0.42em; width: clamp(0.7em, 8%, 2.8em); transform: skewX(-34deg); border: 1px solid color-mix(in oklab, var(--electric) 75%, white); background: linear-gradient(180deg, color-mix(in oklab, var(--electric) 45%, transparent), color-mix(in oklab, var(--primary) 18%, transparent)); box-shadow: 0 0 0.55em color-mix(in oklab, var(--electric) 70%, transparent); animation: ov-prism-pulse 2.8s ease-in-out infinite; }
+.ov-prism-rail .prism-wing i:nth-child(2) { width: clamp(1.2em, 13%, 4.2em); animation-delay: -0.9s; border-color: color-mix(in oklab, var(--pop) 80%, white); background: linear-gradient(180deg, color-mix(in oklab, var(--pop) 48%, transparent), transparent); }
+.ov-prism-rail .prism-wing i:nth-child(3) { width: clamp(0.45em, 5%, 1.7em); animation-delay: -1.7s; }
+.ov-prism-rail .prism-core { position: relative; width: 2.65em; height: 1.05em; display: grid; place-items: center; flex: none; }
+.ov-prism-rail .prism-core::before { content: ""; position: absolute; inset: 0.08em 0.5em; transform: rotate(45deg) skew(-8deg,-8deg); border: 1px solid rgba(255,255,255,0.82); background: linear-gradient(135deg, color-mix(in oklab, var(--pop) 70%, transparent), color-mix(in oklab, var(--electric) 58%, transparent)); box-shadow: 0 0 0.8em color-mix(in oklab, var(--pop) 75%, transparent), inset 0 0 0.45em rgba(255,255,255,0.45); }
+.ov-prism-rail .prism-core b { position: relative; z-index: 1; color: white; font-size: 0.72em; line-height: 1; text-shadow: 0 0 0.55em white; animation: ov-prism-star 3s ease-in-out infinite; }
+.ov-prism-rail .prism-core i { position: absolute; top: 50%; width: 0.42em; height: 1px; background: white; box-shadow: 0 0 0.45em var(--electric); }
+.ov-prism-rail .prism-core i:first-child { left: -0.08em; }
+.ov-prism-rail .prism-core i:last-child { right: -0.08em; }
 @keyframes ov-fx-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ov-aur-a { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(55%, 30%) scale(1.2); } 66% { transform: translate(20%, 70%) scale(0.9); } }
 @keyframes ov-aur-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-70%, -45%) scale(0.85); } }
 @keyframes ov-aur-c { 0%, 100% { transform: translate(0, 0) scale(0.9); } 25% { transform: translate(60%, 40%) scale(1.2); } 75% { transform: translate(-50%, -30%) scale(1); } }
 @keyframes ov-spark { 0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; } 12% { opacity: 0.95; transform: translateY(-1.5em) rotate(40deg) scale(1); } 50% { opacity: 0.35; } 62% { opacity: 0.9; } 100% { transform: translateY(-17em) rotate(260deg) scale(0.2); opacity: 0; } }
 @keyframes ov-shine { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 85%, 100% { transform: translateX(520%) skewX(-18deg); } }
-@keyframes ov-wave-flow { to { transform: translateX(-50%); } }
-@keyframes ov-wave-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
+@keyframes ov-prism-pulse { 0%, 100% { opacity: 0.48; filter: brightness(0.85); } 50% { opacity: 1; filter: brightness(1.65); } }
+@keyframes ov-prism-star { 0%, 100% { transform: scale(0.78) rotate(0); opacity: 0.7; } 50% { transform: scale(1.2) rotate(45deg); opacity: 1; } }
 /* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
 .ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
   color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }

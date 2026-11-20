@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
-import { sfx, setSfxEnabled, unlockSfx } from "@/lib/sfx";
+import { sfx, setSfxEnabled, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
 import "./overlay.css";
 
 const ACCENT: Record<string, string> = { purple: "var(--primary)", blue: "var(--electric)", pink: "var(--pop)", yellow: "var(--zest)" };
@@ -80,6 +80,12 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   // Diatur saat render supaya efek anak komponen (yang jalan lebih dulu dari efek induk) sudah memakai nilai terbaru.
   setSfxEnabled(!preview && !!state.sound);
   useEffect(() => { unlockSfx(); }, []);
+  const wantSound = !preview && !!state.sound;
+  useEffect(() => { if (wantSound) probeSfx(); }, [wantSound]);
+  const blocked = useSyncExternalStore(subscribeSfxBlocked, sfxBlocked, () => false);
+  // OBS Browser Source tidak memblokir audio, jadi tombolnya cuma muncul di browser/aplikasi lain yang memblokir.
+  const inObs = typeof window !== "undefined" && "obsstudio" in window;
+  const showSoundPill = wantSound && blocked && !inObs;
   const last = useRef(state.payloadAt);
   useEffect(() => {
     if (state.payloadAt !== last.current && p) sfx.enter(p.gimmick);
@@ -166,6 +172,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
           </div>
         )}
       </div>
+      {showSoundPill && <button type="button" className="ov-sound-pill" onClick={() => void resumeSfx()}>🔊 Klik untuk aktifkan suara</button>}
     </div>
   );
 }
@@ -182,14 +189,9 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   );
 }
 
-/** Garis di tepi bawah kartu saat antrean kosong: tidak ada progres lagi, jadi diganti animasi "live" yang terus bergerak (komet + napas cahaya + titik berdenyut) supaya tidak terlihat mati. */
+/** Antrean kosong: tidak ada progres lagi, jadi diganti dua komet cahaya yang terus berputar mengelilingi tepi kartu (tetap di dalam kotak) supaya kartu tidak terlihat mati. */
 function IdleBar() {
-  return (
-    <div className="ov-idlebar" aria-hidden>
-      <i className="a" /><i className="b" />
-      <span className="ov-idledots"><i /><i /><i /></span>
-    </div>
-  );
+  return <div className="ov-idle-ring" aria-hidden><i /></div>;
 }
 
 /** Pop naik nada tiap ada vote baru; vote beruntun (jeda < 2,5 dtk) membuat nadanya terus naik. Tidak berbunyi untuk vote lama saat overlay dimuat. */

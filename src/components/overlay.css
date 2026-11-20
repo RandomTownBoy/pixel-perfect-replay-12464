@@ -177,21 +177,19 @@
 @keyframes ov-queue-fill { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
 @keyframes ov-queue-sheen { 0% { transform: translate3d(-100%, 0, 0); } 70%, 100% { transform: translate3d(100%, 0, 0); } }
 @keyframes ov-queue-hot { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.8) saturate(1.3); } }
-/* Garis idle (antrean kosong): menggantikan garis loading supaya tepi bawah kartu tidak mati.
-   Dua komet bergantian menyapu kiri↔kanan, jalurnya bernapas (berdenyut), dan tiga titik berdenyut di tengah. */
-.ov-idlebar { position: absolute; left: 1.4em; right: 1.4em; bottom: -0.1em; height: 0.32em; border-radius: 0.4em 0.4em 0 0; overflow: visible; pointer-events: none;
-  background: color-mix(in oklab, var(--ov) 18%, transparent); animation: ov-idle-breathe 2.4s ease-in-out infinite; }
-.ov-idlebar > i { position: absolute; top: 0; bottom: 0; left: 0; width: 34%; border-radius: inherit; will-change: transform;
-  background: linear-gradient(90deg, transparent, var(--ov), var(--pop), #fff); box-shadow: 0 0 0.8em var(--ov);
-  animation: ov-idle-run 2.2s cubic-bezier(.45,.05,.4,.95) infinite; }
-.ov-idlebar > i.b { background: linear-gradient(90deg, transparent, var(--electric), var(--primary), #fff); box-shadow: 0 0 0.8em var(--electric); animation-delay: -1.1s; animation-direction: reverse; }
-.ov-idledots { position: absolute; left: 50%; top: 0.55em; display: flex; gap: 0.3em; translate: -50% 0; }
-.ov-idledots i { width: 0.34em; height: 0.34em; border-radius: 50%; background: var(--ov); box-shadow: 0 0 0.5em var(--ov); animation: ov-idle-dot 1.2s ease-in-out infinite; }
-.ov-idledots i:nth-child(2) { animation-delay: 0.18s; background: var(--pop); box-shadow: 0 0 0.5em var(--pop); }
-.ov-idledots i:nth-child(3) { animation-delay: 0.36s; background: var(--electric); box-shadow: 0 0 0.5em var(--electric); }
-@keyframes ov-idle-run { 0% { transform: translate3d(-100%, 0, 0); } 100% { transform: translate3d(295%, 0, 0); } }
+/* Idle (antrean kosong): dua komet cahaya berputar mengelilingi tepi kartu, menggantikan garis loading.
+   Cincinnya sepanjang tepi kartu saja (di-mask jadi garis tipis + overflow hidden), jadi tidak ada yang keluar dari kotak. Tanpa @property, aman di OBS/CEF lama. */
+.ov-idle-ring { position: absolute; inset: -0.1em; border-radius: 1.4em; padding: 0.17em; box-sizing: border-box; overflow: hidden; pointer-events: none;
+  background: color-mix(in oklab, var(--ov) 22%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.ov-idle-ring i { position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; will-change: transform;
+  background: conic-gradient(transparent 0 22%, var(--ov) 36%, var(--pop) 46%, #fff 50%, transparent 50.2% 72%, var(--electric) 86%, var(--primary) 96%, #fff 100%);
+  animation: ov-idle-spin 3.6s linear infinite; }
 @keyframes ov-idle-breathe { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
-@keyframes ov-idle-dot { 0%, 100% { opacity: 0.25; transform: translateY(0) scale(0.8); } 50% { opacity: 1; transform: translateY(0.25em) scale(1.15); } }
+@keyframes ov-idle-spin { to { transform: rotate(360deg); } }
+/* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
+.ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
+  color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }
 @keyframes ov-item-in { 0% { opacity: 0; transform: translateX(-1.2em) scale(0.9); } 100% { opacity: 1; transform: none; } }
 @keyframes ov-item-glow { 0%, 35% { background: color-mix(in oklab, var(--zest) 70%, transparent); box-shadow: 0 0 1em color-mix(in oklab, var(--zest) 80%, transparent); } 100% { box-shadow: none; } }
 @keyframes ov-shuffle {
@@ -341,3 +339,5 @@
 @keyframes ov-shine { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
 @keyframes ov-teaser-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.25em); } }
 @media (prefers-reduced-motion: reduce) { .ov-opt.overtook, .ov-overtake, .ov-count3, .ov-opt.champ::after, .ov-teaser-dots i { animation: none !important; } .ov-opt.champ::after { display: none; } }
+
+@media (prefers-reduced-motion: reduce) { .ov-idle-ring i { animation: none; } }

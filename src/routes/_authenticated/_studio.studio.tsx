@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink, Maximize2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Eye, EyeOff, Play, RotateCcw, ExternalLink, Maximize2, X, Download } from "lucide-react";
+import { toPng } from "html-to-image";
 import { toast } from "@/lib/notify";
 import { overlayUrl, PageHeader, StatusPill, useOverlayConnected } from "@/components/AppShell";
 import { audienceUrl } from "@/components/LiveConsole";
@@ -35,6 +36,34 @@ function Studio() {
   const aUrl = audienceUrl(code);
   const ratio = s.overlayWidth / s.overlayHeight;
   const [full, setFull] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+
+  /** Unduh tampilan overlay saat ini sebagai PNG berlatar transparan, ukuran mengikuti pengaturan lebar x tinggi overlay. */
+  const downloadOverlay = async () => {
+    const node = captureRef.current;
+    if (!node) return;
+    if (!ov.payload) { toast("Overlay masih kosong. Kirim gimmick dulu, baru diunduh."); return; }
+    setSaving(true);
+    try {
+      await document.fonts?.ready;
+      const rect = node.getBoundingClientRect();
+      const pixelRatio = Math.max(1, s.overlayWidth / Math.max(1, rect.width));
+      const opts = { pixelRatio, cacheBust: true, width: rect.width, height: rect.height, style: { opacity: "1" } };
+      await toPng(node, opts); // pemanasan: pemuatan font/gambar pertama sering belum lengkap
+      const dataUrl = await toPng(node, opts);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `kyoka-overlay-${ov.payload.gimmick}-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast(`Overlay diunduh (${s.overlayWidth}×${s.overlayHeight} PNG transparan)`);
+    } catch (e) {
+      console.error("unduh overlay gagal", e);
+      toast("Gagal mengunduh overlay. Coba lagi.");
+    } finally { setSaving(false); }
+  };
 
   return (
     <>
@@ -106,9 +135,12 @@ function Studio() {
           </Panel>
         </div>
         <Panel>
-          <h3 className="mb-3 font-display text-sm font-bold">Preview {ov.visible ? "" : "(disembunyikan)"}</h3>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="font-display text-sm font-bold">Preview {ov.visible ? "" : "(disembunyikan)"}</h3>
+            <Button size="sm" variant="secondary" onClick={() => void downloadOverlay()} disabled={saving} title="Unduh tampilan overlay sebagai PNG transparan"><Download /> {saving ? "Menyimpan…" : "Unduh PNG"}</Button>
+          </div>
           <div className="mx-auto overflow-hidden rounded-2xl border border-border" style={{ aspectRatio: String(ratio), maxHeight: 640, backgroundImage: "repeating-conic-gradient(var(--muted) 0 25%, var(--background) 0 50%)", backgroundSize: "24px 24px", fontSize: 14 }}>
-            <div className={ov.visible ? "" : "opacity-30"} style={{ height: "100%" }}><OverlayView state={{ ...ov, visible: true }} preview /></div>
+            <div className={ov.visible ? "" : "opacity-30"} style={{ height: "100%" }}><div ref={captureRef} style={{ height: "100%" }}><OverlayView state={{ ...ov, visible: true }} preview /></div></div>
           </div>
         </Panel>
       </div>

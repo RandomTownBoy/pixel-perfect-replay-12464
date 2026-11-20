@@ -16,7 +16,7 @@
 /* Ukuran bawaan tiap gimmick (tinggi minimum, lebar penuh). Tidak ada max-height/overflow: hidden lagi,
    kalau isinya lebih tinggi dari area aman, seluruh tumpukan diperkecil (lihat .ov-stage), bukan dipotong. */
 .ov-card { --h: 15em; min-height: var(--h); justify-content: center;
-  position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.1em;
+  position: relative; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 0.8em; padding: 1em 1.1em 1.45em;
   border-radius: 1.4em; border: 0.1em solid color-mix(in oklab, var(--ov) 70%, transparent);
   background: color-mix(in oklab, var(--background) 84%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 0.9em 2.6em -0.8em color-mix(in oklab, var(--ov) 55%, transparent), 0 0.2em 0.8em rgba(0,0,0,0.35);
@@ -190,24 +190,7 @@
 /* Lapisan hidup saat idle. z-index:-1 di dalam .ov-card (yang punya stacking context lewat backdrop-filter) = di atas latar kartu tapi di BAWAH semua teks.
    overflow hidden + radius sama dengan kartu: tidak ada yang keluar dari kotak. Hanya transform/opacity yang dianimasikan, jadi ringan untuk OBS. */
 .ov-fx { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; pointer-events: none; animation: ov-fx-in 0.9s ease-out both; }
-.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.34; will-change: transform; }
-.ov-fx .aur.a { left: -12%; top: -38%; background: radial-gradient(circle, var(--primary) 0%, transparent 68%); animation: ov-aur-a 15s ease-in-out infinite; }
-.ov-fx .aur.b { right: -16%; bottom: -44%; background: radial-gradient(circle, var(--pop) 0%, transparent 68%); animation: ov-aur-b 19s ease-in-out infinite; }
-.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.26; animation: ov-aur-c 23s ease-in-out infinite; }
-.ov-fx .sp { position: absolute; bottom: -1em; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
-  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-  animation: ov-spark var(--d) linear var(--dl) infinite; }
-.ov-fx .sp:nth-of-type(3n+1) { background: var(--pop); }
-.ov-fx .sp:nth-of-type(3n+2) { background: var(--electric); }
-.ov-fx .shine { position: absolute; top: -25%; bottom: -25%; left: 0; width: 26%; will-change: transform;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.2) 55%, transparent);
-  transform: translateX(-160%) skewX(-18deg); animation: ov-shine 7s ease-in-out 1.2s infinite; }
 @keyframes ov-fx-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes ov-aur-a { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(55%, 30%) scale(1.2); } 66% { transform: translate(20%, 70%) scale(0.9); } }
-@keyframes ov-aur-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-70%, -45%) scale(0.85); } }
-@keyframes ov-aur-c { 0%, 100% { transform: translate(0, 0) scale(0.9); } 25% { transform: translate(60%, 40%) scale(1.2); } 75% { transform: translate(-50%, -30%) scale(1); } }
-@keyframes ov-spark { 0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; } 12% { opacity: 0.95; transform: translateY(-1.5em) rotate(40deg) scale(1); } 50% { opacity: 0.35; } 62% { opacity: 0.9; } 100% { transform: translateY(-17em) rotate(260deg) scale(0.2); opacity: 0; } }
-@keyframes ov-shine { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 85%, 100% { transform: translateX(520%) skewX(-18deg); } }
 /* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
 .ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
   color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }
@@ -246,24 +229,6 @@
 .ov-vs.done { background: linear-gradient(140deg, var(--zest), #ffb347); animation: ov-pulse 0.9s 0.2s ease-in-out 2 both; font-size: 1.1em; }
 .ov-verdict { animation: ov-fade-up 0.5s 0.5s both; }
 
-/* Hot Take: meteran + cap hasil */
-.ov-hot { display: flex; flex-direction: column; align-items: center; gap: 0.5em; width: 100%; }
-.ov-meter { display: flex; flex-direction: column; gap: 0.35em; width: 100%; }
-.ov-meter-row { display: grid; grid-template-columns: 5.2em 1fr 2.6em; align-items: center; gap: 0.5em; font-size: 0.8em; font-weight: 800; text-align: left; }
-.ov-meter-row b { text-align: right; font-family: var(--font-display, system-ui); }
-.ov-meter-bar { height: 0.8em; border-radius: 999px; overflow: hidden; background: color-mix(in oklab, var(--foreground) 14%, transparent); }
-.ov-meter-bar i { display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; transform-origin: left; animation: ov-fill 1.1s 0.2s cubic-bezier(.2,.8,.2,1) both; }
-.ov-meter-row.agree .ov-meter-bar i { background: linear-gradient(90deg, var(--primary), var(--pop)); }
-.ov-meter-row.disagree .ov-meter-bar i { background: linear-gradient(90deg, var(--electric), #5eead4); }
-.ov-hot.agree .ov-meter-row.disagree, .ov-hot.disagree .ov-meter-row.agree { opacity: 0.5; }
-.ov-stamp { display: flex; align-items: center; gap: 0.4em; padding: 0.25em 0.8em; border: 0.14em solid var(--stamp, var(--ov)); border-radius: 0.6em; color: var(--stamp, var(--ov)); background: color-mix(in oklab, var(--background) 80%, transparent);
-  font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.35em; letter-spacing: 0.04em; transform: rotate(-5deg); box-shadow: 0 0 1.2em color-mix(in oklab, var(--stamp, var(--ov)) 50%, transparent);
-  animation: ov-stamp 0.55s 0.9s cubic-bezier(.2,.9,.3,1.1) both; }
-.ov-stamp-icon { font-size: 1.15em; }
-.ov-hot.agree { --stamp: var(--primary); }
-.ov-hot.disagree { --stamp: var(--pop); }
-.ov-hot.tie, .ov-hot.none { --stamp: var(--zest); }
-.ov-hot.disagree .ov-stamp { animation: ov-stamp 0.55s 0.9s cubic-bezier(.2,.9,.3,1.1) both, ov-shake 0.5s 1.45s ease-in-out both; }
 
 /* Confession: segel kunci + riak + emoji naik */
 .ov-conf-out { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.35em; width: 100%; }
@@ -361,67 +326,264 @@
 @keyframes ov-teaser-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.25em); } }
 @media (prefers-reduced-motion: reduce) { .ov-opt.overtook, .ov-overtake, .ov-count3, .ov-opt.champ::after, .ov-teaser-dots i { animation: none !important; } .ov-opt.champ::after { display: none; } }
 
-@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ov-idle-ring i { animation: none; } }
 
-/* ---- Kyoka Live ambient presets: five suasana visual, semuanya terkunci di dalam kartu ---- */
+
+/* =====================================================================================================
+   SCENE IDLE (5 adegan bergantian): semuanya berada DI BAWAH teks (z-index 0 vs 1) dan hanya bergerak di zona kosong:
+   rel kiri/kanan (±1em), rel bawah (padding bawah 1.45em), rel atas (padding atas 1em), dan sudut kartu.
+   Hanya transform/opacity yang dianimasikan (kecuali posisi horizontal elemen mungil), jadi ringan untuk OBS.
+   ===================================================================================================== */
 .ov-fx { z-index: 0; }
 .ov-card > .ov-head, .ov-card > .ov-body { position: relative; z-index: 1; }
-.ov-fx .ov-cornerwork { z-index: 1; }
-.ov-fx .sp, .ov-fx .dust { bottom: auto; pointer-events: none; }
+.ov-scene { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+.ov-scene.in { animation: ov-scene-in 0.9s ease-out both; }
+.ov-scene.out { animation: ov-scene-out 0.9s ease-in both; }
+@keyframes ov-scene-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ov-scene-out { from { opacity: 1; } to { opacity: 0; } }
 
-/* 1. Spotlight — dua sorot panggung yang sangat lembut, bergerak lambat di sisi kartu. */
-.ov-fx.fx-spotlight .beam { position: absolute; top: -34%; bottom: -34%; width: 29%; opacity: 0.13; filter: blur(1.2em); transform-origin: 50% 0; will-change: transform; }
-.ov-fx.fx-spotlight .beam-a { left: 1%; background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 65%, white), transparent 78%); transform: rotate(17deg); animation: ov-beam-a 17s ease-in-out infinite alternate; }
-.ov-fx.fx-spotlight .beam-b { right: 1%; background: linear-gradient(180deg, color-mix(in oklab, var(--electric) 58%, white), transparent 78%); transform: rotate(-17deg); animation: ov-beam-b 21s ease-in-out infinite alternate; }
-.ov-fx.fx-spotlight .shine { opacity: 0.28; }
-@keyframes ov-beam-a { from { transform: translateX(-1.5em) rotate(12deg) scaleX(.8); opacity: .09; } to { transform: translateX(2.4em) rotate(24deg) scaleX(1.1); opacity: .18; } }
-@keyframes ov-beam-b { from { transform: translateX(1.8em) rotate(-23deg) scaleX(1.05); opacity: .08; } to { transform: translateX(-2em) rotate(-12deg) scaleX(.82); opacity: .17; } }
+/* 1. SHOWTIME: dua sorot panggung menyapu bergantian dari bawah, follow-spot melintas, bintang berkilau di rel samping. */
+.sc-showtime .beam { position: absolute; bottom: -14%; width: 30%; height: 135%; opacity: 0.14; filter: blur(1.1em); transform-origin: 50% 100%; will-change: transform; }
+.sc-showtime .beam-a { left: 3%; background: linear-gradient(0deg, color-mix(in oklab, var(--primary) 65%, white), transparent 82%); animation: ov-sw-a 9s ease-in-out infinite alternate; }
+.sc-showtime .beam-b { right: 3%; background: linear-gradient(0deg, color-mix(in oklab, var(--electric) 60%, white), transparent 82%); animation: ov-sw-b 11s ease-in-out infinite alternate; }
+.sc-showtime .spot { position: absolute; top: 6%; left: -34%; width: 56%; height: 88%; border-radius: 50%; opacity: 0.5; will-change: transform;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.15), transparent 66%); animation: ov-spot 12s ease-in-out infinite; }
+.sc-showtime .glit { position: absolute; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ov-glit var(--d) ease-in-out var(--dl) infinite; }
+.sc-showtime .glit:nth-of-type(3n+1) { background: var(--pop); }
+.sc-showtime .glit:nth-of-type(3n+2) { background: var(--electric); }
+@keyframes ov-sw-a { 0% { transform: rotate(-28deg); opacity: 0.07; } 50% { opacity: 0.2; } 100% { transform: rotate(32deg); opacity: 0.1; } }
+@keyframes ov-sw-b { 0% { transform: rotate(30deg); opacity: 0.1; } 50% { opacity: 0.2; } 100% { transform: rotate(-30deg); opacity: 0.07; } }
+@keyframes ov-spot { 0%, 8% { transform: translateX(0); } 50% { transform: translateX(110%); } 58%, 100% { transform: translateX(0); } }
+@keyframes ov-glit { 0%, 100% { opacity: 0; transform: scale(0) rotate(0); } 40% { opacity: 0.95; transform: scale(1) rotate(60deg); } 70% { opacity: 0.4; transform: scale(0.6) rotate(110deg); } }
 
-/* 2. Meteor Shower — lintasan pendek di gutter kiri/kanan, tidak memotong area pertanyaan. */
-.ov-fx.fx-meteor .meteor { position: absolute; display: block; width: 3.3em; height: 1px; border-radius: 99px; opacity: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.95) 72%, var(--electric)); box-shadow: 0 0 .45em var(--electric); transform: rotate(-34deg) translate3d(-4em, -2em, 0); will-change: transform, opacity; }
-.ov-fx.fx-meteor .meteor::after { content: ""; position: absolute; right: -.08em; top: -.13em; width: .28em; height: .28em; border-radius: 50%; background: #fff; box-shadow: 0 0 .55em .12em var(--electric); }
-.ov-fx.fx-meteor .m1 { left: 3%; top: 18%; animation: ov-meteor-left 6.8s 0s ease-in infinite; }
-.ov-fx.fx-meteor .m2 { right: 3%; top: 38%; animation: ov-meteor-right 8.2s 1.7s ease-in infinite; }
-.ov-fx.fx-meteor .m3 { left: 5%; top: 62%; animation: ov-meteor-left 7.6s 3.2s ease-in infinite; }
-.ov-fx.fx-meteor .m4 { right: 5%; top: 78%; animation: ov-meteor-right 9.1s 4.5s ease-in infinite; }
-.ov-fx.fx-meteor .m5 { left: 7%; top: 86%; width: 2.4em; animation: ov-meteor-left 10s 6s ease-in infinite; }
-@keyframes ov-meteor-left { 0%, 8% { opacity: 0; transform: rotate(-34deg) translate3d(-4em,-2em,0); } 16% { opacity: .82; } 34% { opacity: 0; transform: rotate(-34deg) translate3d(1.3em,1.1em,0); } 100% { opacity: 0; transform: rotate(-34deg) translate3d(1.3em,1.1em,0); } }
-@keyframes ov-meteor-right { 0%, 8% { opacity: 0; transform: rotate(146deg) translate3d(-4em,-2em,0); } 16% { opacity: .82; } 34% { opacity: 0; transform: rotate(146deg) translate3d(1.3em,1.1em,0); } 100% { opacity: 0; transform: rotate(146deg) translate3d(1.3em,1.1em,0); } }
+/* 2. COMET: dua komet di jalur dalam bingkai (satu searah jarum jam, satu berlawanan) + denyut cahaya di sudut yang dilewati. */
+.sc-comet .ring-wrap { position: absolute; inset: 0.3em; filter: drop-shadow(0 0 0.35em var(--ov)); }
+.sc-comet .ring { position: absolute; inset: 0; border-radius: 1.1em; padding: 0.13em; box-sizing: border-box; overflow: hidden; background: color-mix(in oklab, var(--ov) 14%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.sc-comet .ring i { position: absolute; left: 50%; top: 50%; width: 220%; aspect-ratio: 1; translate: -50% -50%; will-change: transform; }
+.sc-comet .ring .c1 { background: conic-gradient(from 0deg, transparent 0 58%, var(--ov) 76%, var(--pop) 92%, #fff 99.6%, transparent 100%); animation: ov-idle-spin 6s linear infinite; }
+.sc-comet .ring .c2 { background: conic-gradient(from 0deg, #fff 0.4%, var(--electric) 10%, transparent 30% 100%); animation: ov-idle-spin 9s linear infinite reverse; }
+.sc-comet .ping { position: absolute; width: 1.8em; height: 1.8em; border-radius: 50%; opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(circle, #fff 0, color-mix(in oklab, var(--ov) 80%, #fff) 22%, transparent 64%); animation: ov-ping 6s linear infinite; }
+.sc-comet .p-tr { top: -0.3em; right: -0.3em; animation-delay: 0.92s; }
+.sc-comet .p-br { bottom: -0.3em; right: -0.3em; animation-delay: 2.08s; }
+.sc-comet .p-bl { bottom: -0.3em; left: -0.3em; animation-delay: 3.92s; }
+.sc-comet .p-tl { top: -0.3em; left: -0.3em; animation-delay: 5.08s; }
+@keyframes ov-ping { 0%, 14%, 100% { opacity: 0; transform: scale(0.2); } 2% { opacity: 0.95; transform: scale(1); } 10% { opacity: 0; transform: scale(1.9); } }
 
-/* 3. Aurora Flow — pita aurora hanya menyapu tepi atas dan bawah, pusat tetap tenang. */
-.ov-fx.fx-aurora .aur { opacity: .2; filter: blur(1.8em); }
-.ov-fx.fx-aurora .aur.a { left: -22%; top: -62%; width: 76%; background: radial-gradient(ellipse, var(--primary) 0%, transparent 68%); animation: ov-aur-a 19s ease-in-out infinite; }
-.ov-fx.fx-aurora .aur.b { right: -20%; bottom: -58%; width: 78%; background: radial-gradient(ellipse, var(--pop) 0%, transparent 68%); animation: ov-aur-b 23s ease-in-out infinite; }
-.ov-fx.fx-aurora .aur.c { left: 24%; top: -54%; width: 56%; background: radial-gradient(ellipse, var(--electric) 0%, transparent 68%); animation: ov-aur-c 27s ease-in-out infinite; }
-.ov-fx.fx-aurora .aurora-ribbon { position: absolute; left: -10%; width: 120%; height: 2.2em; border-radius: 50%; filter: blur(1em); opacity: .2; transform: rotate(-5deg); }
-.ov-fx.fx-aurora .r1 { top: -1.4em; background: linear-gradient(90deg, transparent, var(--electric), var(--primary), transparent); animation: ov-aurora-ribbon 18s ease-in-out infinite alternate; }
-.ov-fx.fx-aurora .r2 { bottom: -1.4em; background: linear-gradient(90deg, transparent, var(--pop), var(--primary), transparent); animation: ov-aurora-ribbon 22s ease-in-out -5s infinite alternate-reverse; }
-@keyframes ov-aurora-ribbon { from { transform: translateX(-5%) rotate(-5deg) scaleY(.8); opacity: .12; } to { transform: translateX(5%) rotate(5deg) scaleY(1.2); opacity: .28; } }
+/* 3. NEKO: animasi idle ala skin hero. Kucing masuk, jalan, joget, menguap, tidur, kaget, lalu lari keluar (12 dtk). Kupu-kupu di rel atas. */
+.sc-neko .neko-track { position: absolute; left: 1.1em; right: 1.1em; bottom: 0.32em; height: 1.05em; }
+.sc-neko .neko, .sc-neko .paw { position: absolute; bottom: 0; left: -8%; line-height: 1; font-size: 0.9em; will-change: left; animation: ov-neko-x 12s linear infinite both; }
+.sc-neko .paw { font-size: 0.6em; bottom: 0.1em; opacity: 0; animation: ov-neko-x 12s linear infinite both, ov-neko-paw 12s linear infinite both; filter: grayscale(0.2) drop-shadow(0 0 0.2em var(--ov)); }
+.sc-neko .paw1 { animation-delay: 0.35s, 0.35s; }
+.sc-neko .paw2 { animation-delay: 0.75s, 0.75s; }
+.sc-neko .cat { display: inline-block; transform-origin: 50% 100%; will-change: transform; animation: ov-neko-act 12s linear infinite; filter: drop-shadow(0 0.08em 0.15em rgba(0,0,0,0.4)); }
+.sc-neko .bub { position: absolute; left: 100%; bottom: 0.1em; margin-left: 0.15em; font-size: 0.62em; font-weight: 900; font-style: normal; color: #fff; text-shadow: 0 0 0.5em var(--ov); opacity: 0; white-space: nowrap; }
+.sc-neko .b-note { animation: ov-neko-note 12s ease-in-out infinite; }
+.sc-neko .b-zzz { animation: ov-neko-zzz 12s ease-in-out infinite; }
+.sc-neko .b-heart { animation: ov-neko-heart 12s ease-out infinite; }
+.sc-neko .flutter { position: absolute; top: 0.12em; left: 90%; font-size: 0.7em; line-height: 1; opacity: 0; will-change: left; animation: ov-fl-x 12s ease-in-out infinite; }
+.sc-neko .fl-y { display: block; animation: ov-fl-y 2.6s ease-in-out infinite alternate; }
+.sc-neko .wing { display: block; animation: ov-fl-flap 0.28s ease-in-out infinite alternate; filter: drop-shadow(0 0 0.3em var(--pop)); }
+@keyframes ov-neko-x { 0% { left: -8%; } 5.83%, 8.33% { left: 2%; } 35%, 78.33% { left: 44%; } 91.67% { left: 92%; } 100% { left: 110%; } }
+@keyframes ov-neko-paw { 0%, 8.3% { opacity: 0; } 12%, 33% { opacity: 0.55; } 36%, 82% { opacity: 0; } 86%, 94% { opacity: 0.5; } 98%, 100% { opacity: 0; } }
+@keyframes ov-neko-note { 0%, 34.5% { opacity: 0; transform: translateY(0.1em); } 37% { opacity: 1; } 42% { transform: translateY(-0.12em) rotate(-10deg); } 47% { transform: translateY(0.05em) rotate(10deg); } 52% { opacity: 1; transform: translateY(-0.12em) rotate(-10deg); } 55%, 100% { opacity: 0; } }
+@keyframes ov-neko-zzz { 0%, 58% { opacity: 0; transform: translate(0, 0.1em) scale(0.6); } 62% { opacity: 1; } 70% { opacity: 0.9; transform: translate(0.1em, -0.15em) scale(1); } 78% { opacity: 0; transform: translate(0.2em, -0.32em) scale(1.15); } 100% { opacity: 0; } }
+@keyframes ov-neko-heart { 0%, 78.5% { opacity: 0; transform: scale(0.3); } 81% { opacity: 1; transform: scale(1.35); } 86% { opacity: 1; transform: translateY(-0.1em) scale(1); } 89%, 100% { opacity: 0; transform: translateY(-0.25em) scale(0.9); } }
+@keyframes ov-fl-x { 0% { left: 92%; opacity: 0; } 6% { opacity: 1; } 50% { left: 6%; opacity: 1; } 94% { opacity: 1; } 100% { left: 92%; opacity: 0; } }
+@keyframes ov-fl-y { from { transform: translateY(0); } to { transform: translateY(0.24em); } }
+@keyframes ov-fl-flap { from { transform: scaleX(1) rotate(-8deg); } to { transform: scaleX(0.28) rotate(8deg); } }
+@keyframes ov-neko-act {
+  0.00% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  1.67% { transform: translateY(-0.07em) rotate(4deg) scale(1,1); }
+  3.33% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  5.00% { transform: translateY(-0.07em) rotate(4deg) scale(1,1); }
+  5.83% { transform: translateY(0em) rotate(0deg) scale(1,1); }
+  6.67% { transform: translateY(0em) rotate(-10deg) scale(1,1); }
+  7.50% { transform: translateY(0em) rotate(10deg) scale(1,1); }
+  8.33% { transform: translateY(0em) rotate(0deg) scale(1,1); }
+  10.00% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  11.67% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  13.33% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  15.00% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  16.67% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  18.33% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  20.00% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  21.67% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  23.33% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  25.00% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  26.67% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  28.33% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  30.00% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  31.67% { transform: translateY(0em) rotate(-4deg) scale(1,1); }
+  33.33% { transform: translateY(-0.08em) rotate(4deg) scale(1,1); }
+  35.00% { transform: translateY(0em) rotate(-14deg) scale(1,1); }
+  37.50% { transform: translateY(-0.16em) rotate(14deg) scale(1.08,0.95); }
+  40.00% { transform: translateY(0em) rotate(-14deg) scale(1,1); }
+  42.50% { transform: translateY(-0.16em) rotate(14deg) scale(1.08,0.95); }
+  45.00% { transform: translateY(0em) rotate(-14deg) scale(1,1); }
+  47.50% { transform: translateY(-0.16em) rotate(14deg) scale(1.08,0.95); }
+  50.00% { transform: translateY(0em) rotate(-14deg) scale(1,1); }
+  52.50% { transform: translateY(-0.16em) rotate(14deg) scale(1.08,0.95); }
+  55.00% { transform: translateY(0em) rotate(0deg) scale(1,1); }
+  56.67% { transform: translateY(0em) rotate(0deg) scale(0.85,1.3); }
+  58.33% { transform: translateY(0.04em) rotate(0deg) scale(1.15,0.8); }
+  60.00% { transform: translateY(0.06em) rotate(10deg) scale(1.05,0.85); }
+  65.00% { transform: translateY(0.06em) rotate(10deg) scale(1.05,0.92); }
+  70.00% { transform: translateY(0.06em) rotate(10deg) scale(1.05,0.85); }
+  75.00% { transform: translateY(0.06em) rotate(10deg) scale(1.05,0.92); }
+  78.33% { transform: translateY(0em) rotate(0deg) scale(1.1,0.8); }
+  79.17% { transform: translateY(-0.28em) rotate(0deg) scale(0.9,1.25); }
+  80.83% { transform: translateY(0em) rotate(0deg) scale(1.1,0.85); }
+  82.50% { transform: translateY(0em) rotate(0deg) scale(1,1); }
+  83.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  84.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  85.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  86.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  87.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  88.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  89.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  90.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  91.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  92.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  93.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  94.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  95.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  96.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  97.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  98.50% { transform: translateY(0em) rotate(-6deg) scale(1,1) skewX(-8deg); }
+  99.50% { transform: translateY(-0.1em) rotate(6deg) scale(1,1) skewX(-8deg); }
+  100.00% { transform: translateY(0em) rotate(0deg) scale(1,1) skewX(-8deg); }
+}
 
-/* 4. Cosmic Orbit — orbit kecil di sudut, bukan lingkaran besar di belakang teks. */
-.ov-fx.fx-orbit .orbit { position: absolute; display: block; width: 3.4em; height: 1.45em; border: 1px solid color-mix(in oklab, var(--electric) 65%, transparent); border-radius: 50%; opacity: .55; transform: rotate(-28deg); animation: ov-orbit-spin 12s linear infinite; }
-.ov-fx.fx-orbit .o1 { left: .5em; top: 1.1em; }
-.ov-fx.fx-orbit .o2 { right: .5em; bottom: 1.1em; border-color: color-mix(in oklab, var(--pop) 70%, transparent); animation-duration: 16s; animation-direction: reverse; }
-.ov-fx.fx-orbit .o3 { right: .65em; top: 1.1em; width: 2.1em; height: .9em; border-color: color-mix(in oklab, var(--primary) 75%, transparent); animation-duration: 19s; }
-.ov-fx.fx-orbit .orbit b { position: absolute; left: 50%; top: -.18em; width: .36em; height: .36em; border-radius: 50%; background: #fff; box-shadow: 0 0 .55em .12em var(--electric); }
-.ov-fx.fx-orbit .o2 b { background: var(--pop); box-shadow: 0 0 .55em .12em var(--pop); }
-.ov-fx.fx-orbit .o3 b { background: var(--primary); box-shadow: 0 0 .55em .12em var(--primary); }
-.ov-fx.fx-orbit .orbit-star { position: absolute; color: #fff; font-style: normal; text-shadow: 0 0 .65em var(--electric); animation: ov-orbit-twinkle 3.5s ease-in-out infinite; }
-.ov-fx.fx-orbit .s1 { left: 1.4em; bottom: 1.1em; font-size: .7em; }
-.ov-fx.fx-orbit .s2 { right: 1.4em; top: 3.1em; color: var(--pop); animation-delay: -1.7s; }
-@keyframes ov-orbit-spin { to { rotate: 332deg; } }
-@keyframes ov-orbit-twinkle { 0%,100% { opacity: .3; transform: scale(.7) rotate(0); } 50% { opacity: .95; transform: scale(1.2) rotate(45deg); } }
+/* 4. SAKURA: kelopak berguguran di rel kiri/kanan dengan putaran 3D; cahaya merah muda bernapas di sudut. */
+.sc-sakura .bloom { position: absolute; width: 46%; aspect-ratio: 1; border-radius: 50%; filter: blur(1.6em); will-change: opacity; }
+.sc-sakura .bl-a { left: -20%; top: -34%; background: radial-gradient(circle, color-mix(in oklab, var(--pop) 70%, #fff) 0, transparent 68%); animation: ov-bloom 7s ease-in-out infinite; }
+.sc-sakura .bl-b { right: -20%; bottom: -34%; background: radial-gradient(circle, color-mix(in oklab, var(--primary) 60%, #fff) 0, transparent 68%); animation: ov-bloom 9s -3s ease-in-out infinite; }
+.sc-sakura .pw { position: absolute; top: 0; height: 100%; width: var(--sz); will-change: transform; animation: ov-petal-fall var(--d) linear var(--dl) infinite; }
+.sc-sakura .pt { position: absolute; left: 0; bottom: 0; width: var(--sz); height: calc(var(--sz) * 1.15); will-change: transform; animation: ov-petal-sway calc(var(--d) / 3) ease-in-out var(--dl) infinite alternate;
+  border-radius: 100% 0 100% 0; background: linear-gradient(135deg, #fff, color-mix(in oklab, var(--pop) 55%, #fff) 55%, color-mix(in oklab, var(--pop) 85%, #fff)); box-shadow: 0 0 0.35em color-mix(in oklab, var(--pop) 60%, transparent); }
+.sc-sakura .pw:nth-of-type(3n) .pt { background: linear-gradient(135deg, #fff, color-mix(in oklab, var(--primary) 40%, #fff)); }
+@keyframes ov-petal-fall { 0% { transform: translateY(-100%); opacity: 0; } 8% { opacity: 0.95; } 92% { opacity: 0.95; } 100% { transform: translateY(0); opacity: 0; } }
+@keyframes ov-petal-sway { 0% { transform: translateX(calc(var(--sw) * -1)) rotate3d(1, 0.4, 0.2, 0deg) rotate(-25deg); } 100% { transform: translateX(var(--sw)) rotate3d(1, 0.4, 0.2, 180deg) rotate(35deg); } }
+@keyframes ov-bloom { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.26; } }
 
-/* 5. Prism Dust — debu cahaya kecil, hanya di sisi dan sudut kartu. */
-.ov-fx.fx-prism .dust { position: absolute; display: block; width: var(--sz); height: var(--sz); opacity: 0; border-radius: 35%; background: linear-gradient(135deg, #fff, var(--electric) 55%, var(--pop)); box-shadow: 0 0 .55em color-mix(in oklab, var(--electric) 70%, transparent); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: ov-prism-drift var(--d) ease-in-out var(--dl) infinite; }
-.ov-fx.fx-prism .dust:nth-child(3n) { background: linear-gradient(135deg, #fff, var(--pop)); }
-.ov-fx.fx-prism .prism-glint { position: absolute; width: 2.5em; height: 2.5em; border: 1px solid color-mix(in oklab, var(--electric) 65%, transparent); transform: rotate(45deg) skew(8deg,8deg); opacity: .16; }
-.ov-fx.fx-prism .g1 { left: .8em; bottom: .9em; box-shadow: inset 0 0 .7em color-mix(in oklab, var(--electric) 30%, transparent), 0 0 .8em color-mix(in oklab, var(--electric) 25%, transparent); animation: ov-prism-glint 7s ease-in-out infinite; }
-.ov-fx.fx-prism .g2 { right: .9em; top: .8em; width: 1.5em; height: 1.5em; border-color: color-mix(in oklab, var(--pop) 70%, transparent); animation: ov-prism-glint 9s -3s ease-in-out infinite reverse; }
-@keyframes ov-prism-drift { 0%,100% { opacity: 0; transform: translate3d(0,.5em,0) rotate(0) scale(.45); } 22% { opacity: .72; } 65% { opacity: .38; transform: translate3d(0,-1.5em,0) rotate(100deg) scale(1); } }
-@keyframes ov-prism-glint { 0%,100% { opacity: .08; transform: rotate(45deg) skew(8deg,8deg) scale(.85); } 50% { opacity: .3; transform: rotate(135deg) skew(8deg,8deg) scale(1.08); } }
+/* 5. BEAT: equalizer menari di rel bawah (naik dari garis loading) dan menggantung di rel atas; tepi kartu berdenyut mengikuti ketukan. */
+.sc-beat .eq { position: absolute; left: 1.1em; right: 1.1em; display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; }
+.sc-beat .eq-bot { bottom: 0.42em; height: 0.8em; }
+.sc-beat .eq-top { top: 0.1em; height: 0.55em; align-items: flex-start; opacity: 0.6; }
+.sc-beat .eq i { display: block; width: 0.34em; height: 100%; border-radius: 0.17em; transform-origin: 50% 100%; transform: scaleY(0.15); will-change: transform; box-shadow: 0 0 0.35em color-mix(in oklab, var(--ov) 60%, transparent); animation: ov-eq var(--d) ease-in-out var(--dl) infinite alternate; }
+.sc-beat .eq-top i { transform-origin: 50% 0; animation-name: ov-eq-top; }
+.sc-beat .beat-glow { position: absolute; inset: 0; border-radius: inherit; opacity: 0; box-shadow: inset 0 0 1.5em color-mix(in oklab, var(--ov) 45%, transparent), inset 0 0 0.4em color-mix(in oklab, var(--pop) 50%, transparent); animation: ov-beat 1.5s ease-out infinite; }
+@keyframes ov-eq { 0% { transform: scaleY(0.12); } 30% { transform: scaleY(0.9); } 55% { transform: scaleY(0.35); } 100% { transform: scaleY(1); } }
+@keyframes ov-eq-top { 0% { transform: scaleY(0.1); } 40% { transform: scaleY(0.8); } 100% { transform: scaleY(0.3); } }
+@keyframes ov-beat { 0% { opacity: 0.9; } 40%, 100% { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .ov-fx .beam, .ov-fx .meteor, .ov-fx .aurora-ribbon, .ov-fx .orbit, .ov-fx .orbit-star, .ov-fx .dust, .ov-fx .prism-glint { animation: none !important; }
-  .ov-fx .meteor, .ov-fx .dust { opacity: .22; }
+  .ov-scene.in, .ov-scene.out { animation: none; }
+  .sc-showtime .beam, .sc-showtime .spot, .sc-showtime .glit, .sc-comet .ring i, .sc-comet .ping, .sc-neko .neko, .sc-neko .paw, .sc-neko .cat, .sc-neko .bub, .sc-neko .flutter, .sc-neko .fl-y, .sc-neko .wing,
+  .sc-sakura .bloom, .sc-sakura .pw, .sc-sakura .pt, .sc-beat .eq i, .sc-beat .beat-glow { animation: none !important; }
+  .sc-neko .neko { left: 44%; } .sc-neko .paw, .sc-neko .bub, .sc-neko .flutter, .sc-sakura .pw, .sc-showtime .glit { opacity: 0.4; }
+  .sc-beat .eq i { transform: scaleY(0.5); }
+}
+
+/* =====================================================================================================
+   FINALE HEBOH: This or That ("Showdown") dan Hot Take ("Verdict Arena"). Urutan: bar balapan / tarik-tambang → drumroll →
+   DENTUMAN (flash, guncangan, shockwave) → stempel / slam → perayaan khusus tiap hasil.
+   ===================================================================================================== */
+.ov-confetti, .ov-fireworks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ov-confetti i { position: absolute; top: -1em; left: var(--x); width: var(--w); height: calc(var(--w) * 1.8); background: var(--c); border-radius: 0.06em; opacity: 0; will-change: transform, opacity;
+  animation: ov-confetti var(--d) cubic-bezier(.3,.6,.4,1) var(--dl) both; }
+.ov-confetti i.em { width: auto; height: auto; background: none; font-style: normal; font-size: 1.1em; line-height: 1; }
+@keyframes ov-confetti { 0% { opacity: 0; transform: translate3d(0, 0, 0) rotate3d(1, 0.5, 0, 0deg); } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--dx), 26em, 0) rotate3d(1, 0.5, 0.3, var(--rot)); } }
+.ov-fireworks .fw { position: absolute; width: 0; height: 0; }
+.ov-fireworks .fw b { position: absolute; left: -0.08em; top: -0.25em; width: 0.16em; height: 0.5em; border-radius: 0.1em; background: var(--fc); box-shadow: 0 0 0.5em var(--fc); opacity: 0; animation: ov-fw 1s ease-out var(--fd) forwards; }
+@keyframes ov-fw { 0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scaleY(0.4); } 70% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-3.4em) scaleY(1.2); } }
+.ov-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; animation: ov-flash 0.6s ease-out both; }
+@keyframes ov-flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+@keyframes ov-quake { 0%, 100% { translate: 0 0; } 12% { translate: -0.4em 0.18em; } 26% { translate: 0.35em -0.22em; } 40% { translate: -0.28em -0.12em; } 54% { translate: 0.22em 0.14em; } 70% { translate: -0.12em 0.05em; } }
+
+/* This or That */
+.ov-opts.quake { animation: ov-quake 0.6s ease-out both; }
+.ov-opt.racing::before { transition: none; }
+.ov-opt.racing .ov-pct { animation: ov-pulse 0.35s ease-in-out infinite; }
+.ov-vs.drum { animation: ov-drum 0.18s ease-in-out infinite alternate; }
+@keyframes ov-drum { from { transform: rotate(-12deg) scale(1.05); } to { transform: rotate(12deg) scale(1.2); } }
+.ov-suspense { animation: ov-pulse 0.6s ease-in-out infinite; }
+.ov-opt > .ov-rays { position: absolute; left: 50%; top: 50%; width: 260%; aspect-ratio: 1; translate: -50% -50%; z-index: 0; opacity: 0.55; pointer-events: none; will-change: transform;
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.55) 0 7deg, transparent 7deg 18deg); -webkit-mask: radial-gradient(circle, #000 0, transparent 38%); mask: radial-gradient(circle, #000 0, transparent 38%); animation: ov-rays 8s linear infinite; }
+.ov-opt > .ov-shock-in { position: absolute; left: 50%; top: 50%; width: 3em; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; border: 0.25em solid #fff; opacity: 0; z-index: 0; pointer-events: none; animation: ov-shock 0.9s ease-out both; }
+.ov-opt > .ov-shock-in.s2 { border-color: var(--zest); animation-delay: 0.18s; }
+@keyframes ov-rays { to { transform: rotate(360deg); } }
+@keyframes ov-shock { 0% { opacity: 0.9; scale: 0.2; } 100% { opacity: 0; scale: 9; } }
+.ov-opt.champ { border-color: #fff; }
+.ov-opt.champ .ov-pct { animation: ov-pct-pop 0.7s cubic-bezier(.2,.9,.3,1.5) both; }
+.ov-opt.lose { animation: ov-lose2 0.8s ease-out both; }
+@keyframes ov-pct-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes ov-lose2 { 0% { opacity: 1; filter: none; transform: none; } 100% { opacity: 0.38; filter: grayscale(0.85); transform: translateX(calc(var(--sx, 1) * 0.5em)) scale(0.94) rotate(calc(var(--sx, 1) * 0.8deg)); } }
+.ov-finale { position: absolute; inset: -0.8em -1.1em -1.45em; z-index: 4; border-radius: 1.4em; overflow: hidden; pointer-events: none; }
+.ov-slam { position: absolute; left: 50%; top: 46%; translate: -50% -50%; display: flex; align-items: center; gap: 0.25em; white-space: nowrap; will-change: transform, opacity; animation: ov-slam 2.7s both; }
+.ov-slam b { font-family: var(--font-display, system-ui); font-weight: 900; font-size: 2.4em; letter-spacing: 0.04em; color: #fff; line-height: 1;
+  text-shadow: 0 0.06em 0 color-mix(in oklab, var(--pop) 90%, #000), 0 0 0.5em var(--ov), 0 0.15em 0.5em rgba(0,0,0,0.6); }
+.ov-slam-emoji { font-size: 2.2em; line-height: 1; filter: drop-shadow(0 0.05em 0.3em rgba(0,0,0,0.5)); }
+@keyframes ov-slam { 0% { opacity: 0; transform: scale(3.4) rotate(-14deg); } 10% { opacity: 1; transform: scale(0.9) rotate(-5deg); } 16% { transform: scale(1.06) rotate(-4deg); } 22% { transform: scale(1) rotate(-4deg); } 78% { opacity: 1; transform: scale(1) rotate(-4deg); } 100% { opacity: 0; transform: scale(1.25) rotate(-4deg); } }
+.ov-vs { position: relative; }
+.ov-vs .ov-bolt { position: absolute; left: 50%; top: 50%; width: 24em; height: 1.6em; translate: -50% -50%; overflow: visible; pointer-events: none; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linejoin: round; filter: drop-shadow(0 0 0.35em var(--zest)) drop-shadow(0 0 0.8em var(--electric)); animation: ov-bolt 1.4s steps(2, jump-none) both; }
+@keyframes ov-bolt { 0% { opacity: 0; } 10%, 30%, 50% { opacity: 1; } 20%, 40% { opacity: 0.2; } 70% { opacity: 0.8; } 100% { opacity: 0; } }
+
+/* Hot Take: Verdict Arena */
+.ov-outro.hot { background: radial-gradient(120% 90% at 50% 40%, color-mix(in oklab, var(--ov) 22%, #05040c) 0%, color-mix(in oklab, #05040c 94%, transparent) 78%); }
+.ov-hot2 { --stamp: var(--ov); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.45em; width: 100%; height: 100%; animation: ov-quake 0.65s var(--hit) both; }
+.ov-hot2.agree { --stamp: var(--primary); } .ov-hot2.disagree { --stamp: var(--pop); } .ov-hot2.tie, .ov-hot2.none { --stamp: var(--zest); }
+.ov-hot2.disagree { animation-duration: 0.9s; }
+.hv-topic { margin: 0; max-width: 92%; font-family: var(--font-display, system-ui); font-weight: 800; font-size: 0.78em; line-height: 1.25; color: var(--muted-foreground); text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; animation: ov-fade-up 0.4s 0.05s both; }
+.hv-lock { font-size: 0.62em; font-weight: 900; letter-spacing: 0.2em; text-transform: uppercase; padding: 0.2em 0.9em; border-radius: 999px; background: color-mix(in oklab, var(--foreground) 12%, transparent); animation: ov-fade-up 0.35s 0.15s both; }
+.hv-arena { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.6em; width: 100%; }
+.hv-side { display: flex; flex-direction: column; align-items: center; line-height: 1.05; font-weight: 800; }
+.hv-side span { font-size: 0.62em; opacity: 0.85; white-space: nowrap; }
+.hv-side b { font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.7em; min-width: 2.2em; text-align: center; font-variant-numeric: tabular-nums; }
+.hv-side.agree b { color: color-mix(in oklab, var(--primary) 55%, #fff); text-shadow: 0 0 0.5em var(--primary); }
+.hv-side.disagree b { color: color-mix(in oklab, var(--electric) 55%, #fff); text-shadow: 0 0 0.5em var(--electric); }
+.hv-bar { position: relative; height: 0.95em; border-radius: 999px; background: linear-gradient(90deg, transparent 0, transparent 100%), color-mix(in oklab, var(--electric) 70%, #000); box-shadow: inset 0 0 0.4em rgba(0,0,0,0.5), 0 0 0.9em color-mix(in oklab, var(--electric) 45%, transparent); overflow: visible; }
+.hv-a { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p); border-radius: 999px; background: linear-gradient(90deg, var(--primary), var(--pop)); box-shadow: 0 0 0.9em color-mix(in oklab, var(--pop) 70%, transparent); animation: hv-tug 1.75s 0.3s cubic-bezier(.4,0,.2,1) both; }
+.hv-a::after { content: ""; position: absolute; right: -0.55em; top: 50%; width: 1.1em; height: 1.1em; translate: 0 -50%; border-radius: 50%; background: radial-gradient(circle, #fff 0, #fff 25%, var(--zest) 45%, transparent 70%); animation: ov-pulse 0.18s ease-in-out infinite; }
+@keyframes hv-tug { 0% { width: 50%; } 24% { width: 12%; } 48% { width: 90%; } 70% { width: calc(var(--p) - 14%); } 86% { width: calc(var(--p) + 7%); } 100% { width: var(--p); } }
+.hv-stamp { display: flex; align-items: center; gap: 0.4em; padding: 0.25em 0.8em; border: 0.16em solid var(--stamp); border-radius: 0.6em; color: var(--stamp); background: color-mix(in oklab, #05040c 75%, transparent);
+  font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1.55em; letter-spacing: 0.04em; transform: rotate(-5deg); opacity: 0; box-shadow: 0 0 1.4em color-mix(in oklab, var(--stamp) 60%, transparent), inset 0 0 0.6em color-mix(in oklab, var(--stamp) 30%, transparent);
+  animation: ov-stamp 0.5s var(--hit) cubic-bezier(.2,.9,.3,1.1) both; text-shadow: 0 0 0.45em var(--stamp); }
+.hv-stamp-icon { font-size: 1.1em; }
+.ov-hot2.disagree .hv-stamp { animation: ov-stamp 0.5s var(--hit) cubic-bezier(.2,.9,.3,1.1) both, ov-shake 0.5s calc(var(--hit) + 0.5s) ease-in-out both; }
+.hv-tier { font-weight: 900; font-size: 0.85em; padding: 0.25em 0.9em; border-radius: 999px; color: #fff; background: linear-gradient(110deg, color-mix(in oklab, var(--stamp) 80%, #000), color-mix(in oklab, var(--stamp) 45%, #000)); opacity: 0; position: relative; overflow: hidden; animation: ov-fade-up 0.5s calc(var(--hit) + 0.55s) both; }
+.hv-tier::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.5) 50%, transparent 65%); transform: translateX(-120%); animation: ov-shine 1.2s calc(var(--hit) + 1.1s) ease-out 2 both; }
+.hv-sub { animation-delay: calc(var(--hit) + 0.9s); }
+.hv-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.hv-fx > .ov-flash { animation-delay: var(--hit); }
+.hv-fx .ov-flash { opacity: 0; animation-fill-mode: forwards; }
+.hv-shock { position: absolute; left: 50%; top: 56%; width: 3em; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; border: 0.3em solid var(--stamp); opacity: 0; animation: ov-shock 1s var(--hit) ease-out forwards; }
+.hv-shock.s2 { border-color: #fff; animation-delay: calc(var(--hit) + 0.15s); }
+.hv-rays { position: absolute; left: 50%; top: 56%; width: 150%; aspect-ratio: 1; translate: -50% -50%; opacity: 0; pointer-events: none; will-change: transform;
+  background: repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--primary) 70%, #fff) 0 6deg, transparent 6deg 16deg); -webkit-mask: radial-gradient(circle, #000 0, transparent 52%); mask: radial-gradient(circle, #000 0, transparent 52%);
+  animation: ov-rays 9s linear var(--hit) infinite, hv-fadein 0.6s var(--hit) both; }
+@keyframes hv-fadein { from { opacity: 0; } to { opacity: 0.42; } }
+.hv-vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 56%, transparent 30%, color-mix(in oklab, var(--pop) 55%, #000) 100%); animation: hv-vig 2.4s var(--hit) ease-out both; }
+@keyframes hv-vig { 0% { opacity: 0; } 12% { opacity: 0.9; } 100% { opacity: 0.35; } }
+.hv-crack { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: #fff; stroke-width: 0.7; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 0.15em var(--pop)); opacity: 0; animation: hv-crack-life 3s var(--hit) both; }
+.hv-crack polyline { stroke-dasharray: 100; stroke-dashoffset: 100; animation: hv-draw 0.35s var(--hit) ease-out forwards; }
+.hv-crack polyline:nth-child(n+6) { animation-delay: calc(var(--hit) + 0.12s); }
+@keyframes hv-draw { to { stroke-dashoffset: 0; } }
+@keyframes hv-crack-life { 0% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0.25; } }
+.hv-bolt { position: absolute; left: 0; top: 56%; width: 100%; height: 1.8em; translate: 0 -50%; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linejoin: round; opacity: 0; filter: drop-shadow(0 0 0.35em var(--zest)) drop-shadow(0 0 0.8em var(--electric)); animation: ov-bolt 1.5s var(--hit) steps(2, jump-none) both; }
+.hv-cricket, .hv-tumble { position: absolute; bottom: 0.5em; left: -2em; font-size: 1.2em; opacity: 0; }
+.hv-cricket { animation: hv-cross 2.6s calc(var(--hit) + 0.1s) linear both, hv-hop 0.35s calc(var(--hit) + 0.1s) ease-in-out 8; }
+.hv-tumble { font-size: 1.4em; animation: hv-roll 2.8s calc(var(--hit) + 0.6s) linear both; }
+@keyframes hv-cross { 0% { opacity: 1; left: -2em; } 100% { opacity: 1; left: 105%; } }
+@keyframes hv-hop { 0%, 100% { translate: 0 0; } 50% { translate: 0 -0.5em; } }
+@keyframes hv-roll { 0% { opacity: 1; left: -2em; rotate: 0deg; } 100% { opacity: 1; left: 105%; rotate: 900deg; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-confetti, .ov-fireworks, .ov-flash, .ov-slam, .ov-bolt, .hv-shock, .hv-rays, .hv-vignette, .hv-bolt, .hv-cricket, .hv-tumble { display: none; }
+  .ov-opts.quake, .ov-hot2, .ov-vs.drum, .ov-opt.racing .ov-pct, .ov-suspense, .hv-a, .hv-a::after, .hv-stamp, .hv-tier, .ov-opt.lose, .ov-opt.champ .ov-pct { animation: none !important; }
+  .hv-stamp, .hv-tier { opacity: 1; }
+  .ov-opt > .ov-rays, .ov-opt > .ov-shock-in, .hv-crack { display: none; }
 }

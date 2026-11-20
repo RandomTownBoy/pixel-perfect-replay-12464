@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import type { CardPayload, Intake, Outro, OverlayPayload, OverlayState, SpinPayload } from "@/lib/kyoka";
 import { DEFAULT_INTAKE, DEMO, GIMMICKS } from "@/lib/kyoka";
 import { SpinWheelSvg, wheelColor } from "@/components/SpinWheel";
+import { SCENE_FADE_MS, SCENE_MS, nextRound, resolveSceneMode, type Scene, type SceneMode } from "@/lib/scenes";
 import { sfx, music, setSfxEnabled, unlockSfx, probeSfx, resumeSfx, sfxBlocked, subscribeSfxBlocked } from "@/lib/sfx";
 import "./overlay.css";
 
@@ -76,6 +77,7 @@ export type SafeMode = "auto" | "tiktok" | "off";
 export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayState; preview?: boolean; safe?: SafeMode }) {
   const p = state.payload;
   const { rootRef, safeRef, stageRef, box, scale, ready, dw } = useFit(p?.gimmick);
+  const { scene, prev: prevScene } = useScene(resolveSceneMode(state.visualEffect));
   // Suara aktif hanya di overlay sungguhan (bukan pratinjau dashboard) dan kalau pengaturan "Efek suara" menyala.
   // Diatur saat render supaya efek anak komponen (yang jalan lebih dulu dari efek induk) sudah memakai nilai terbaru.
   setSfxEnabled(!preview && !!state.sound);
@@ -158,7 +160,7 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
                     {state.showBadge && <span className="ov-brand">KYOKA LIVE</span>}
                   </div>
                 )}
-                {!outro && <AmbientFx effect={state.visualEffect ?? "spotlight"} />}
+                {!outro && <AmbientFx scene={scene} prev={prevScene} />}
                 <Body state={state} outro={outro} />
                 {outro && <OutroLayer p={p} outro={outro} />}
                 {!outro && (state.queue && state.queue.pending > 0 ? <QueueBar q={state.queue} /> : <IdleBar />)}
@@ -197,43 +199,101 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   );
 }
 
-/** Posisi efek dibuat deterministik dan dibatasi di gutter kiri/kanan agar tidak menyeberangi teks. */
-const IDLE_SPARKS = Array.from({ length: 12 }, (_, i) => ({
-  x: i % 2 === 0 ? 4 + ((i * 7) % 7) : 89 + ((i * 5) % 7),
-  y: 8 + ((i * 17) % 82),
-  dur: 8 + ((i * 5) % 7),
-  delay: -((i * 7) % 13),
-  sz: 0.28 + ((i * 3) % 4) * 0.1,
-}));
+/**
+ * Scene idle: lima adegan kecil yang "hidup" di tepi kartu (rel kiri/kanan, bawah, atas, sudut), mirip animasi idle skin hero MOBA.
+ * Semuanya berada DI BAWAH teks (z-index) dan sengaja hanya bergerak di zona kosong, jadi tidak pernah menutupi judul, pertanyaan, atau vote.
+ * Mode "random": satu ronde = kelima scene sekali dengan urutan acak (lihat lib/scenes.ts), tiap scene tayang SCENE_MS lalu crossfade.
+ */
+function useScene(mode: SceneMode) {
+  const [cur, setCur] = useState<{ scene: Scene; prev: Scene | null; at: number }>({ scene: "showtime", prev: null, at: 0 });
+  const bag = useRef<Scene[]>([]);
+  const last = useRef<Scene | undefined>(undefined);
+  useEffect(() => {
+    if (mode !== "random") { setCur({ scene: mode, prev: null, at: Date.now() }); return; }
+    const pick = () => {
+      if (!bag.current.length) bag.current = nextRound(last.current);
+      const s = bag.current.shift()!;
+      last.current = s;
+      return s;
+    };
+    setCur({ scene: pick(), prev: null, at: Date.now() });
+    const iv = setInterval(() => { const s = pick(); setCur((c) => ({ scene: s, prev: c.scene, at: Date.now() })); }, SCENE_MS);
+    return () => clearInterval(iv);
+  }, [mode]);
+  // Scene lama dilepas setelah selesai memudar.
+  useEffect(() => {
+    if (!cur.prev) return;
+    const at = cur.at;
+    const t = setTimeout(() => setCur((c) => (c.at === at ? { ...c, prev: null } : c)), SCENE_FADE_MS + 100);
+    return () => clearTimeout(t);
+  }, [cur.at, cur.prev]);
+  return cur;
+}
 
-/** Ambient visual selalu berada di bawah konten; setiap preset punya gerak dan karakter berbeda. */
-function AmbientFx({ effect = "spotlight" }: { effect?: NonNullable<OverlayState["visualEffect"]> }) {
+/** Posisi deterministik (tanpa Math.random saat render) dan dibatasi di rel tepi kartu. */
+const GLITS = Array.from({ length: 9 }, (_, i) => ({ x: i % 2 === 0 ? 2 + ((i * 7) % 5) : 93 + ((i * 5) % 5), y: 8 + ((i * 29) % 80), dur: 2.4 + ((i * 3) % 5) * 0.5, dl: -((i * 7) % 9) * 0.4, sz: 0.34 + ((i * 3) % 4) * 0.08 }));
+const PETALS = Array.from({ length: 16 }, (_, i) => ({ right: i % 2 === 1, x: 0.15 + ((i * 13) % 8) * 0.1, dur: 7 + ((i * 5) % 6), dl: -((i * 11) % 13), sw: 0.18 + ((i * 3) % 4) * 0.07, sz: 0.3 + ((i * 7) % 4) * 0.06, hue: i % 3 }));
+const BARS = Array.from({ length: 40 }, (_, i) => ({ k: Math.round((i / 39) * 100), d: 0.8 + ((i * 7) % 5) * 0.12, dl: -(i * 0.11 + (i % 3) * 0.13) }));
+
+function SceneBody({ scene }: { scene: Scene }) {
+  switch (scene) {
+    case "showtime":
+      // Lampu panggung: dua sorot menyapu bergantian dari bawah + follow-spot yang melintas pelan + kilau bintang di rel samping.
+      return (
+        <>
+          <b className="beam beam-a" /><b className="beam beam-b" /><b className="spot" />
+          {GLITS.map((g, i) => <i key={i} className="glit" style={{ left: `${g.x}%`, top: `${g.y}%`, "--d": `${g.dur}s`, "--dl": `${g.dl}s`, "--sz": `${g.sz}em` } as CSSProperties} />)}
+        </>
+      );
+    case "comet":
+      // Dua komet berlari di jalur dalam bingkai kartu, sudut kartu "berdenyut" saat dilewati.
+      return (
+        <>
+          <div className="ring-wrap"><div className="ring"><i className="c1" /><i className="c2" /></div></div>
+          <span className="ping p-tr" /><span className="ping p-br" /><span className="ping p-bl" /><span className="ping p-tl" />
+        </>
+      );
+    case "neko":
+      // Idle ala hero: kucing masuk, jalan, joget, menguap, tidur, kaget, lalu lari keluar; kupu-kupu melayang di rel atas.
+      return (
+        <>
+          <div className="neko-track">
+            <span className="paw paw2">🐾</span><span className="paw paw1">🐾</span>
+            <span className="neko">
+              <span className="cat">🐱</span>
+              <span className="bub b-note">♪</span><span className="bub b-zzz">💤</span><span className="bub b-heart">💖</span>
+            </span>
+          </div>
+          <span className="flutter"><span className="fl-y"><span className="wing">🦋</span></span></span>
+        </>
+      );
+    case "sakura":
+      // Kelopak berguguran di rel kiri-kanan dengan putaran 3D; cahaya merah muda bernapas di sudut.
+      return (
+        <>
+          <b className="bloom bl-a" /><b className="bloom bl-b" />
+          {PETALS.map((p, i) => (
+            <i key={i} className="pw" style={{ [p.right ? "right" : "left"]: `${p.x}em`, "--d": `${p.dur}s`, "--dl": `${p.dl}s`, "--sw": `${p.sw}em`, "--sz": `${p.sz}em`, "--h": p.hue } as CSSProperties}><b className="pt" /></i>
+          ))}
+        </>
+      );
+    case "beat":
+      // Equalizer menari di rel bawah (dan gantung di rel atas) + denyut cahaya di tepi kartu mengikuti "ketukan".
+      return (
+        <>
+          <i className="beat-glow" />
+          <div className="eq eq-bot">{BARS.map((b, i) => <i key={i} style={{ "--d": `${b.d}s`, "--dl": `${b.dl}s`, background: `color-mix(in oklab, var(--primary) ${100 - b.k}%, var(--electric))` } as CSSProperties} />)}</div>
+          <div className="eq eq-top">{BARS.map((b, i) => <i key={i} style={{ "--d": `${b.d + 0.25}s`, "--dl": `${b.dl - 0.4}s`, background: `color-mix(in oklab, var(--pop) ${100 - b.k}%, var(--primary))` } as CSSProperties} />)}</div>
+        </>
+      );
+  }
+}
+
+function AmbientFx({ scene, prev }: { scene: Scene; prev: Scene | null }) {
   return (
-    <div className={`ov-fx fx-${effect}`} aria-hidden>
-      {effect === "spotlight" && <>
-        <b className="beam beam-a" /><b className="beam beam-b" />
-        <div className="shine" />
-        {IDLE_SPARKS.slice(0, 4).map((sp, i) => <i key={i} className="sp" style={{ left: `${sp.x}%`, top: `${sp.y}%`, "--d": `${sp.dur}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz}em` } as CSSProperties} />)}
-      </>}
-      {effect === "meteor" && <>
-        <i className="meteor m1" /><i className="meteor m2" /><i className="meteor m3" /><i className="meteor m4" /><i className="meteor m5" />
-      </>}
-      {effect === "aurora" && <>
-        <b className="aur a" /><b className="aur b" /><b className="aur c" />
-        <div className="aurora-ribbon r1" /><div className="aurora-ribbon r2" />
-      </>}
-      {effect === "orbit" && <>
-        <i className="orbit o1"><b /></i><i className="orbit o2"><b /></i><i className="orbit o3"><b /></i>
-        <i className="orbit-star s1">✦</i><i className="orbit-star s2">✧</i>
-      </>}
-      {effect === "prism" && <>
-        {IDLE_SPARKS.map((sp, i) => <i key={i} className="dust" style={{ left: `${sp.x}%`, top: `${sp.y}%`, "--d": `${sp.dur + 3}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz * 1.6}em` } as CSSProperties} />)}
-        <div className="prism-glint g1" /><div className="prism-glint g2" />
-      </>}
-      <div className="ov-cornerwork" aria-hidden>
-        <span className="corner left"><i /><i /><i /><b>✦</b></span>
-        <span className="corner right"><i /><i /><i /><b>✦</b></span>
-      </div>
+    <div className="ov-fx" aria-hidden>
+      {prev && prev !== scene && <div key={`o-${prev}`} className={`ov-scene out sc-${prev}`}><SceneBody scene={prev} /></div>}
+      <div key={scene} className={`ov-scene in sc-${scene}`}><SceneBody scene={scene} /></div>
     </div>
   );
 }
@@ -418,6 +478,62 @@ function Opts({ votes, items }: { votes: { a: number; b: number } | undefined; i
   );
 }
 
+/** Angka naik dari 0 ke `target` selama `ms` (easeOutCubic). `on` = false: langsung `target`. Dipakai balapan bar hasil. */
+function useCountUp(target: number, on: boolean, ms: number) {
+  const [v, setV] = useState(on ? 0 : target);
+  useIsoLayoutEffect(() => {
+    if (!on) { setV(target); return; }
+    setV(0);
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      setV(target * (1 - (1 - t) ** 3));
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, on, ms]);
+  return v;
+}
+
+/** Hujan konfeti (atau emoji kalau `emoji` diisi). Posisi dan waktu ditentukan indeks supaya konsisten antar render. Murni CSS, sekali putar. */
+function Confetti({ n = 40, emoji, delay = 0, colors }: { n?: number; emoji?: string[]; delay?: number; colors?: string[] }) {
+  const cols = colors ?? ["var(--primary)", "var(--pop)", "var(--electric)", "var(--zest)", "#fff"];
+  return (
+    <div className="ov-confetti" aria-hidden>
+      {Array.from({ length: n }).map((_, i) => {
+        const r = (k: number) => ((i * k) % 97) / 97;
+        const st = { "--x": `${(r(37) * 100).toFixed(1)}%`, "--dx": `${((r(53) - 0.5) * 5).toFixed(2)}em`, "--rot": `${Math.round(r(71) * 720 - 360)}deg`, "--d": `${(1.9 + r(29) * 1.3).toFixed(2)}s`, "--dl": `${(delay + r(13) * 0.9).toFixed(2)}s`, "--c": cols[i % cols.length], "--w": `${(0.22 + r(61) * 0.2).toFixed(2)}em` } as CSSProperties;
+        return emoji ? <i key={i} className="em" style={st}>{emoji[i % emoji.length]}</i> : <i key={i} style={st} />;
+      })}
+    </div>
+  );
+}
+
+/** Kembang api: tiap titik meledakkan 12 percikan ke segala arah. */
+function Fireworks({ spots }: { spots: { x: number; y: number; d: number; c: string }[] }) {
+  return (
+    <div className="ov-fireworks" aria-hidden>
+      {spots.map((sp, i) => (
+        <i key={i} className="fw" style={{ left: `${sp.x}%`, top: `${sp.y}%`, "--fd": `${sp.d}s`, "--fc": sp.c } as CSSProperties}>
+          {Array.from({ length: 12 }).map((_, j) => <b key={j} style={{ "--a": `${j * 30}deg` } as CSSProperties} />)}
+        </i>
+      ))}
+    </div>
+  );
+}
+
+const RACE_MS = 1250; // lama bar hasil "balapan" sebelum pemenang meledak (sinkron dengan sfx.finale)
+
+/** Judul tingkat kemenangan berdasarkan selisih persentase (0-100). */
+function tierOf(margin: number, tie: boolean) {
+  if (tie) return { text: "SERI!!", emoji: "⚡", sub: "Penonton terbelah dua" };
+  if (margin >= 40) return { text: "DOMINASI!", emoji: "💥", sub: "Menang telak" };
+  if (margin >= 15) return { text: "GACOR!", emoji: "🔥", sub: "Pilihan favorit" };
+  return { text: "BEDA TIPIS!", emoji: "⚡", sub: "Photo finish" };
+}
+
 function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: string | undefined; end?: number | undefined; votes: { a: number; b: number } | undefined; outro?: boolean }) {
   const [left, setLeft] = useState(0);
   const [isTimeOver, setIsTimeOver] = useState(() => !!end && Date.now() >= end);
@@ -433,18 +549,44 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
   const a0 = votes?.a ?? 0; const b0 = votes?.b ?? 0; const total = a0 + b0;
   const pa = total ? Math.round((a0 / total) * 100) : 0;
   const pcts = [pa, total ? 100 - pa : 0];
-  const champ = resolved && total ? (a0 > b0 ? 0 : b0 > a0 ? 1 : -1) : -1;
-  const over = useOvertake(a0, b0, resolved);
   const tie = resolved && total > 0 && a0 === b0;
-  const opt = (i: 0 | 1, key: string, text: string | undefined, c: string) => (
-    <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${champ === i ? " champ" : ""}${champ === 1 - i ? " lose" : ""}${tie ? " tied" : ""}${over === i ? " overtook" : ""}`} style={{ "--c": c, "--pct": `${pcts[i]}%` } as CSSProperties}>
-      {over === i && <span className="ov-overtake">🔥 Menyalip!</span>}
-      <span className="ov-key">{champ === i ? <span className="ov-crown">👑</span> : key}</span>
-      <span className="ov-opt-text" style={{ fontSize: `${fit(text) * 0.78}em` }}>{text}</span>
-      <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pcts[i]}%<small key={i === 0 ? a0 : b0} className="ov-bump">{i === 0 ? a0 : b0} suara</small></span>
-    </div>
-  );
-  const winnerText = champ === 0 ? a : champ === 1 ? b : undefined;
+  const champIdx = resolved && total ? (a0 > b0 ? 0 : b0 > a0 ? 1 : -1) : -1;
+
+  // Urutan finale: live → race (bar balapan dari 0, angka menghitung naik, drumroll) → boom (pemenang meledak).
+  // Overlay yang dimuat ulang dalam keadaan sudah selesai langsung menampilkan hasil statis tanpa memutar ulang pertunjukan.
+  const startResolved = useRef(resolved);
+  const animated = useRef(false);
+  const [stage, setStage] = useState<"live" | "race" | "boom">(resolved ? "boom" : "live");
+  useEffect(() => {
+    if (!resolved) { setStage("live"); return; }
+    if (startResolved.current) { startResolved.current = false; return; }
+    animated.current = true;
+    setStage("race");
+    const t = setTimeout(() => setStage("boom"), RACE_MS);
+    return () => clearTimeout(t);
+  }, [resolved]);
+  const boom = stage === "boom";
+  const finale = boom && animated.current && total > 0;
+  const k = useCountUp(1, stage === "race", RACE_MS);
+  const shown = (v: number) => Math.round(v * k);
+  const champ = boom ? champIdx : -1;
+  const margin = Math.abs(pcts[0]! - pcts[1]!);
+  const tier = tierOf(margin, tie);
+  const over = useOvertake(a0, b0, resolved);
+  const opt = (i: 0 | 1, key: string, text: string | undefined, c: string) => {
+    const pct = shown(pcts[i]!);
+    const votesN = shown(i === 0 ? a0 : b0);
+    return (
+      <div className={`ov-opt${total && pcts[i]! > pcts[1 - i]! ? " win" : ""}${stage === "race" ? " racing" : ""}${champ === i ? " champ" : ""}${champ === 1 - i ? " lose" : ""}${boom && tie ? " tied" : ""}${over === i ? " overtook" : ""}`} style={{ "--c": c, "--pct": `${pct}%`, "--sx": i === 0 ? -1 : 1 } as CSSProperties}>
+        {champ === i && finale && <><span className="ov-rays" /><i className="ov-shock-in" /><i className="ov-shock-in s2" /></>}
+        {over === i && <span className="ov-overtake">🔥 Menyalip!</span>}
+        <span className="ov-key">{champ === i ? <span className="ov-crown">👑</span> : key}</span>
+        <span className="ov-opt-text" style={{ fontSize: `${fit(text) * 0.78}em` }}>{text}</span>
+        <span className="ov-pct" style={{ fontSize: "1.5em" }}>{pct}%<small key={stage === "race" ? "r" : i === 0 ? a0 : b0} className="ov-bump">{votesN} suara</small></span>
+      </div>
+    );
+  };
+  const winnerText = champIdx === 0 ? a : champIdx === 1 ? b : undefined;
   // Detak hitung mundur: pelan di 10 detik terakhir, tebal di 3-2-1.
   useEffect(() => {
     if (resolved || !end || left <= 0 || left > 10) return;
@@ -453,30 +595,50 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
   }, [left, resolved, end]);
   // Musik makin tegang mendekati akhir; hasil keluar = musik mereda supaya fanfare menonjol.
   useEffect(() => { music.energy(resolved ? 0.05 : end && left > 0 ? (left <= 3 ? 1 : left <= 10 ? 0.7 : 0.45) : 0.4); }, [resolved, end, left]);
-  // Hasil keluar: gong, lalu fanfare / nada seri / nada sepi. Tidak berbunyi kalau overlay baru dimuat dalam keadaan sudah selesai.
+  // Hasil keluar: gong, riser selama bar balapan, dentuman + fanfare saat pemenang meledak. Tidak berbunyi kalau overlay baru dimuat dalam keadaan sudah selesai.
   const wasResolved = useRef(resolved);
   useEffect(() => {
     if (resolved && !wasResolved.current) {
       sfx.timeUp();
-      const t = setTimeout(() => { if (tie) sfx.tie(); else if (total) sfx.win(); else sfx.none(); }, 450);
+      if (total) sfx.finale(tie ? "tie" : "win");
+      const t = total ? undefined : setTimeout(() => sfx.none(), 450);
       wasResolved.current = resolved;
-      return () => clearTimeout(t);
+      return () => { if (t) clearTimeout(t); };
     }
     wasResolved.current = resolved;
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved]);
+  const wy = champIdx === 0 ? 0 : 1;
   return (
     <div className={`ov-body${resolved ? " resolved" : ""}`}>
-      <div className="ov-opts">
+      <div className={`ov-opts${boom && animated.current ? " quake" : ""}`}>
         {opt(0, "A", a, "var(--primary)")}
-        <div className={`ov-vs${!resolved && end && left > 0 && left <= 3 ? " urgent" : ""}${resolved ? " done" : ""}`}>{resolved ? (tie ? "=" : total ? "🏆" : "?") : end && left > 0 ? left : "VS"}</div>
+        <div className={`ov-vs${!resolved && end && left > 0 && left <= 3 ? " urgent" : ""}${resolved ? " done" : ""}${stage === "race" ? " drum" : ""}`}>
+          {resolved ? (stage === "race" ? "🥁" : tie ? "=" : total ? "🏆" : "?") : end && left > 0 ? left : "VS"}
+          {finale && tie && (
+            <svg className="ov-bolt" viewBox="0 0 240 24" preserveAspectRatio="none" aria-hidden>
+              <polyline points="0,12 28,4 52,18 80,6 108,19 134,5 160,18 188,7 214,17 240,12" />
+            </svg>
+          )}
+        </div>
         {opt(1, "B", b, "var(--electric)")}
       </div>
       {!resolved && end && left > 0 && left <= 3 && <div key={left} className="ov-count3" aria-hidden>{left}</div>}
-      {resolved && champ >= 0 && <Burst emoji={["🎉", "✨", "👑", "🎊"]} n={16} />}
+      {finale && (
+        <div className="ov-finale" data-win={wy} aria-hidden>
+          <i className="ov-flash" />
+          {!tie && <Confetti n={44} />}
+          {!tie && <Confetti n={26} delay={0.9} />}
+          <Fireworks spots={tie ? [{ x: 50, y: 42, d: 0, c: "var(--zest)" }] : [{ x: 16, y: 24, d: 0.05, c: "var(--zest)" }, { x: 84, y: 30, d: 0.25, c: "var(--pop)" }, { x: 50, y: 62, d: 0.45, c: "var(--electric)" }]} />
+          <div className="ov-slam"><span className="ov-slam-emoji">{tier.emoji}</span><b>{tier.text}</b></div>
+        </div>
+      )}
       <div className="ov-foot">
         {resolved
-          ? <span key="res" className="ov-hint ov-verdict">{tie ? "⚖️ Seri! Penonton terbelah dua" : total ? <>🏆 Pilihan penonton: <b>{winnerText}</b></> : "🤷 Belum ada yang vote"}</span>
+          ? stage === "race"
+            ? <span key="drum" className="ov-hint ov-suspense">🥁 Menghitung suara<span className="ov-dots" /></span>
+            : <span key="res" className="ov-hint ov-verdict">{tie ? "⚖️ Seri! Penonton terbelah dua" : total ? <>{tier.emoji} Pilihan penonton: <b>{winnerText}</b></> : "🤷 Belum ada yang vote"}</span>
           : <span className="ov-hint">Komen <b>A</b> atau <b>B</b> untuk vote 🗳️</span>}
       </div>
     </div>
@@ -486,13 +648,13 @@ function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: s
 /* ---------- Animasi penutup (setelah waktu tayang habis, sebelum item antrean berikutnya) ---------- */
 
 /** Ledakan emoji dari tengah kartu. Murni CSS; posisi tiap partikel ditentukan indeksnya supaya konsisten. */
-function Burst({ emoji, n = 14 }: { emoji: string[]; n?: number }) {
+function Burst({ emoji, n = 14, delay = 0 }: { emoji: string[]; n?: number; delay?: number }) {
   return (
     <div className="ov-burst" aria-hidden>
       {Array.from({ length: n }).map((_, i) => {
         const ang = (i / n) * Math.PI * 2 + (i % 2) * 0.2;
         const d = 4.2 + (i % 3) * 1.5;
-        return <i key={i} style={{ "--bx": `${(Math.cos(ang) * d).toFixed(2)}em`, "--by": `${(Math.sin(ang) * d * 0.8).toFixed(2)}em`, "--bd": `${(i % 6) * 0.05}s`, "--br": `${(i * 53) % 360}deg` } as CSSProperties}>{emoji[i % emoji.length]}</i>;
+        return <i key={i} style={{ "--bx": `${(Math.cos(ang) * d).toFixed(2)}em`, "--by": `${(Math.sin(ang) * d * 0.8).toFixed(2)}em`, "--bd": `${(delay + (i % 6) * 0.05).toFixed(2)}s`, "--br": `${(i * 53) % 360}deg` } as CSSProperties}>{emoji[i % emoji.length]}</i>;
       })}
     </div>
   );
@@ -503,40 +665,68 @@ function OutroLayer({ p, outro }: { p: OverlayPayload; outro: Outro }) {
   const style = { "--oms": `${outro.ms}ms` } as CSSProperties;
   const more = !outro.fade;
   const cls = `ov-outro${outro.fade ? " fade" : ""}`;
-  if (p.gimmick === "hottake") return <div className={`${cls} hot`} style={style}><HotOutro votes={outro.votes} /></div>;
+  if (p.gimmick === "hottake") return <div className={`${cls} hot`} style={style}><HotOutro votes={outro.votes} topic={p.topic} /></div>;
   if (p.gimmick === "confession" || (p.gimmick === "audience" && p.kind === "confession")) return <div className={`${cls} conf`} style={style}><ConfessionOutro more={more} /></div>;
   if (p.gimmick === "chaos") return <div className={`${cls} chaos`} style={style}><ChaosOutro more={more} /></div>;
   return null;
 }
 
-/** Hot Take: meteran setuju/tidak terisi, lalu cap hasil menghantam layar. */
-function HotOutro({ votes }: { votes: { a: number; b: number } | undefined }) {
+/**
+ * Hot Take: "Verdict Arena". Layar menggelap, bar tarik-tambang setuju vs tidak berayun liar (dengan percikan di titik benturan)
+ * dan akhirnya mengunci di hasil; angka menghitung naik, drumroll memuncak, lalu stempel menghantam disertai kilat, guncangan,
+ * dan perayaan khas tiap hasil: setuju = sunburst + konfeti + kembang api, ditolak = layar retak + hujan 👎, seri = petir, sepi = jangkrik.
+ * Total ±3,2 dtk; dentuman jatuh di 2,0 dtk (sinkron dengan sfx.finale yang dipanggil di 0,75 dtk).
+ */
+const HOT_HIT = 2.0;
+function HotOutro({ votes, topic }: { votes: { a: number; b: number } | undefined; topic?: string | undefined }) {
   const a = votes?.a ?? 0; const b = votes?.b ?? 0; const total = a + b;
   const pa = total ? Math.round((a / total) * 100) : 0;
   const pb = total ? 100 - pa : 0;
   const kind = !total ? "none" : a > b ? "agree" : b > a ? "disagree" : "tie";
+  const top = Math.max(pa, pb);
+  const tier = kind === "tie" ? "⚖️ Penonton terbelah dua" : kind === "none" ? "Sepi nih…" : top >= 80 ? (kind === "agree" ? "💯 MUTLAK! Hampir semua sepakat" : "💀 DITOLAK MUTLAK!") : top >= 60 ? (kind === "agree" ? "🔥 Mayoritas kuat" : "🙅 Mayoritas menolak") : (kind === "agree" ? "⚡ Tipis, tapi menang" : "⚡ Tipis, tapi ditolak");
   const V = {
-    agree: { icon: "👍", text: "SETUJU!", sub: "Penonton setuju", burst: ["👍", "🔥", "✨", "💯"] },
-    disagree: { icon: "👎", text: "TIDAK SETUJU!", sub: "Penonton menolak", burst: ["👎", "💥", "😤", "🙅"] },
-    tie: { icon: "⚖️", text: "SERI!", sub: "Penonton terbelah dua", burst: ["⚖️", "🤝", "😮"] },
-    none: { icon: "🤷", text: "BELUM ADA SUARA", sub: "Sepi nih…", burst: [] as string[] },
+    agree: { icon: "👍", text: "SETUJU!", rain: ["👍", "🔥", "✨", "💯"] },
+    disagree: { icon: "👎", text: "TIDAK SETUJU!", rain: ["👎", "💥", "😤", "🙅"] },
+    tie: { icon: "⚖️", text: "SERI!", rain: ["⚖️", "🤝", "😮"] },
+    none: { icon: "🤷", text: "BELUM ADA SUARA", rain: [] as string[] },
   }[kind];
-  // Meteran terisi (0,2 dtk) → cap menghantam (≈1,2 dtk, sesuai animasi ov-stamp).
+  const na = useCountUp(pa, true, 1700);
+  const nb = useCountUp(pb, true, 1700);
+  // Meteran naik (0,2 dtk) → riser + dentuman finale (kena di HOT_HIT). Hasil sepi: nada sedih saat stempel mendarat.
   useEffect(() => {
     const t1 = setTimeout(() => sfx.meter(), 200);
-    const t2 = setTimeout(() => sfx.stamp(kind), 1200);
+    const t2 = setTimeout(() => { if (kind === "none") sfx.none(); else sfx.finale(kind === "agree" ? "win" : kind === "disagree" ? "boo" : "tie"); }, kind === "none" ? HOT_HIT * 1000 : (HOT_HIT - 1.25) * 1000);
     return () => { clearTimeout(t1); clearTimeout(t2); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const style = { "--hit": `${HOT_HIT}s`, "--p": `${pa}%` } as CSSProperties;
   return (
-    <div className={`ov-hot ${kind}`}>
-      <div className="ov-meter">
-        <div className="ov-meter-row agree"><span>👍 Setuju</span><div className="ov-meter-bar"><i style={{ "--w": `${pa}%` } as CSSProperties} /></div><b>{pa}%</b></div>
-        <div className="ov-meter-row disagree"><span>👎 Tidak</span><div className="ov-meter-bar"><i style={{ "--w": `${pb}%` } as CSSProperties} /></div><b>{pb}%</b></div>
+    <div className={`ov-hot2 ${kind}`} style={style}>
+      {topic && <p className="hv-topic">“{topic}”</p>}
+      <span className="hv-lock">🔒 Voting ditutup</span>
+      <div className="hv-arena">
+        <div className="hv-side agree"><span>👍 Setuju</span><b>{Math.round(na)}%</b></div>
+        <div className="hv-bar"><i className="hv-a" /></div>
+        <div className="hv-side disagree"><span>Tidak 👎</span><b>{Math.round(nb)}%</b></div>
       </div>
-      <div className="ov-stamp"><span className="ov-stamp-icon">{V.icon}</span><span className="ov-stamp-text">{V.text}</span></div>
-      <span className="ov-outro-sub">{total ? `${a} setuju · ${b} tidak · ${V.sub}` : V.sub}</span>
-      {V.burst.length > 0 && <Burst emoji={V.burst} n={14} />}
+      <div className="hv-stamp"><span className="hv-stamp-icon">{V.icon}</span><span className="hv-stamp-text">{V.text}</span></div>
+      <span className="hv-tier">{tier}</span>
+      <span className="ov-outro-sub hv-sub">{total ? `${a} setuju · ${b} tidak` : "Belum ada yang vote"}</span>
+      {/* efek: lapisan di atas semuanya, tidak menangkap klik */}
+      <div className="hv-fx" aria-hidden>
+        <i className="ov-flash" />
+        {kind === "agree" && <><span className="hv-rays" /><Confetti n={48} delay={HOT_HIT} /><Confetti n={26} delay={HOT_HIT + 1} /><Burst emoji={V.rain} n={16} delay={HOT_HIT} /><Fireworks spots={[{ x: 14, y: 26, d: HOT_HIT + 0.05, c: "var(--zest)" }, { x: 86, y: 30, d: HOT_HIT + 0.25, c: "var(--pop)" }, { x: 50, y: 78, d: HOT_HIT + 0.45, c: "var(--electric)" }]} /></>}
+        {kind === "disagree" && <>
+          <span className="hv-vignette" />
+          <svg className="hv-crack" viewBox="0 0 100 100" preserveAspectRatio="none"><g><polyline points="50,48 41,36 44,22 33,10 35,0" /><polyline points="50,48 62,38 58,24 70,14 74,0" /><polyline points="50,48 64,56 78,52 90,62 100,58" /><polyline points="50,48 36,58 24,54 12,66 0,62" /><polyline points="50,48 46,66 54,80 48,92 52,100" /><polyline points="41,36 28,34 18,24" /><polyline points="64,56 70,70 82,76" /></g></svg>
+          <Confetti n={22} delay={HOT_HIT} emoji={V.rain} />
+          <Burst emoji={["💥", "👎"]} n={10} delay={HOT_HIT} />
+        </>}
+        {kind === "tie" && <><svg className="hv-bolt" viewBox="0 0 240 24" preserveAspectRatio="none"><polyline points="0,12 28,4 52,18 80,6 108,19 134,5 160,18 188,7 214,17 240,12" /></svg><Fireworks spots={[{ x: 30, y: 55, d: HOT_HIT, c: "var(--primary)" }, { x: 70, y: 55, d: HOT_HIT + 0.12, c: "var(--electric)" }, { x: 50, y: 40, d: HOT_HIT + 0.3, c: "var(--zest)" }]} /></>}
+        {kind === "none" && <><span className="hv-cricket">🦗</span><span className="hv-tumble">🍂</span></>}
+        <i className="hv-shock" /><i className="hv-shock s2" />
+      </div>
     </div>
   );
 }

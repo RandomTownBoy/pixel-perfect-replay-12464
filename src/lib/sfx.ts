@@ -10,7 +10,7 @@ let musicBus: GainNode | null = null; // bus musik latar (bisa di-duck saat efek
 let noiseBuf: AudioBuffer | null = null;
 let enabled = false;
 const lastAt: Record<string, number> = {};
-const MUSIC_BASE = 0.3;
+const MUSIC_BASE = 0.42; // backsound dinaikkan agar lebih terasa di live
 
 /** Nyalakan/matikan semua suara. Dipanggil OverlayView menurut `state.sound` dan mode pratinjau. */
 export function setSfxEnabled(on: boolean) {
@@ -28,7 +28,8 @@ function ac(): AudioContext | null {
       const comp = ctx.createDynamicsCompressor(); // supaya banyak suara sekaligus tidak pecah
       comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.004; comp.release.value = 0.2;
       comp.connect(ctx.destination);
-      master = ctx.createGain(); master.gain.value = 0.9; master.connect(comp);
+      master = ctx.createGain(); master.gain.value = 1.15; // boost efek suara sekitar 28%, tetap melewati compressor
+      master.connect(comp);
       musicBus = ctx.createGain(); musicBus.gain.value = MUSIC_BASE; musicBus.connect(comp);
     }
     if (ctx.state === "suspended") void ctx.resume();
@@ -351,15 +352,22 @@ const TRACKS: Record<string, Track> = {
       if (e > 0.8 && s === 0) inst(out, t, 300, d * 16, { type: "sawtooth", f2: 900, vol: 0.02, lp: 1500 });
     },
   },
-  /** Confession: misterius, detak jantung + kotak musik. */
+  /** Confession: misterius ringan — music box hangat, petikan lembut, tanpa nuansa horor. */
   confession: {
-    bpm: 70, base: 0.3, prog: [ch(50, MIN), ch(46, MAJ), ch(43, MIN), ch(45, MAJ)],
+    bpm: 88, base: 0.28, swing: 0.12,
+    prog: [ch(53, MAJ7), ch(57, MIN7), ch(48, MAJ7), ch(50, DOM7)],
     step({ t, s, e, chord, out, d, r }) {
       const { r: root, q } = chord;
-      if (s === 0) { q.forEach((n) => pad(out, t, mf(root + n), d * 16, 0.05)); inst(out, t, mf(root - 12), d * 15, { type: "sine", vol: 0.13, a: 0.4, sustain: true }); kick(out, t, 0.2); }
-      if (s === 3) kick(out, t, 0.13);
-      if (s % 2 === 0 && r() < 0.16 + e * 0.3) bell(out, t, mf(root + 24 + pick(MINP, Math.floor(r() * 5)) + (r() < 0.3 ? 12 : 0)), 0.08);
-      if (s === 8 && r() < 0.18) nz(out, t, 1.4, { from: 3000, to: 1500, vol: 0.02, q: 3 });
+      // Pad hangat menjaga suasana penasaran tanpa nada rendah yang mencekam.
+      if (s === 0) q.forEach((n) => pad(out, t, mf(root + n + 12), d * 15, 0.032));
+      // Pola petikan seperti kotak musik; cukup aktif agar terasa hidup, bukan menyeramkan.
+      if ([0, 3, 4, 7, 8, 11, 12, 15].includes(s)) {
+        const seq = [q[2]!, q[1]!, q[0]!, q[1]! + 12, q[2]! + 12, q[1]!, q[0]! + 12, q[1]!];
+        harp(out, t, mf(root + 24 + seq[(s >> 1) % seq.length]!), 0.048);
+      }
+      // Kilau kecil sesekali, bukan jumpscare atau bunyi tajam.
+      if ((s === 6 || s === 14) && r() < 0.65) bell(out, t, mf(root + 36 + pick([0, 4, 7, 11], Math.floor(r() * 4))), 0.035);
+      if (s === 0 && e > 0.72) inst(out, t, mf(root - 12), d * 5, { type: "sine", vol: 0.035, a: 0.18, sustain: true });
     },
   },
   /** Random Chaos: glitchy, acak, nada disonan. */

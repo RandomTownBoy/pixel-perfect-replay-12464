@@ -345,16 +345,16 @@ function Opts({ votes, items }: { votes: { a: number; b: number } | undefined; i
 
 function ThisOrThat({ a, b, end, votes, outro }: { a?: string | undefined; b?: string | undefined; end?: number | undefined; votes: { a: number; b: number } | undefined; outro?: boolean }) {
   const [left, setLeft] = useState(0);
-  const [over, setOver] = useState(() => !!end && Date.now() >= end);
+  const [isTimeOver, setIsTimeOver] = useState(() => !!end && Date.now() >= end);
   useEffect(() => {
-    if (!end) { setOver(false); return; }
-    const tick = () => { setLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000))); setOver(Date.now() >= end); };
+    if (!end) { setIsTimeOver(false); return; }
+    const tick = () => { setLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000))); setIsTimeOver(Date.now() >= end); };
     tick();
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
   }, [end]);
   // Hasil keluar kalau countdown habis (dikirim manual) atau waktu tayang antrean habis (outro dari dashboard).
-  const resolved = !!outro || over;
+  const resolved = !!outro || isTimeOver;
   const a0 = votes?.a ?? 0; const b0 = votes?.b ?? 0; const total = a0 + b0;
   const pa = total ? Math.round((a0 / total) * 100) : 0;
   const pcts = [pa, total ? 100 - pa : 0];

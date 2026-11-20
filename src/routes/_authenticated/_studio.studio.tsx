@@ -65,6 +65,27 @@ function Studio() {
                   className={`h-9 w-9 rounded-full ring-offset-2 ring-offset-background ${s.accent === a ? "ring-2 ring-foreground" : ""} ${{ purple: "bg-primary", blue: "bg-electric", pink: "bg-pop", yellow: "bg-zest" }[a]}`} />
               ))}
             </div>
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs font-semibold">Efek visual ambient</p>
+                <p className="text-[11px] text-muted-foreground">Pilih suasana animasi di belakang konten overlay.</p>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {([
+                  ["spotlight", "🔦", "Spotlight"],
+                  ["meteor", "☄️", "Meteor"],
+                  ["aurora", "🌌", "Aurora"],
+                  ["orbit", "🪐", "Orbit"],
+                  ["prism", "✧", "Prism"],
+                ] as const).map(([value, emoji, label]) => (
+                  <button key={value} type="button" aria-pressed={s.visualEffect === value}
+                    onClick={() => actions.updateSettings({ visualEffect: value })}
+                    className={`flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[10px] font-semibold transition-colors ${s.visualEffect === value ? "border-primary bg-primary/15 text-foreground ring-1 ring-primary/50" : "border-border bg-background/50 text-muted-foreground hover:bg-muted"}`}>
+                    <span className="text-base leading-none">{emoji}</span><span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="block">Ukuran teks: {s.textScale.toFixed(1)}x
               <input type="range" min={0.7} max={1.6} step={0.1} value={s.textScale} onChange={(e) => actions.updateSettings({ textScale: +e.target.value })} className="w-full accent-primary" /></label>
             {([["showTitle", "Tampilkan judul gimmick"], ["showBadge", "Tampilkan badge KYOKA"], ["sound", "Efek suara"]] as const).map(([k, l]) => (

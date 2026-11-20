@@ -196,11 +196,15 @@ function QueueBar({ q }: { q: NonNullable<OverlayState["queue"]> }) {
   );
 }
 
-/** Bintang kecil yang naik & berkelip. Tetap (tanpa Math.random) supaya render stabil. */
-const IDLE_SPARKS = Array.from({ length: 18 }, (_, i) => ({ x: (i * 37 + 9) % 96 + 2, dur: 6 + ((i * 13) % 7), delay: -((i * 17) % 11), sz: 0.38 + ((i * 7) % 5) * 0.13 }));
+/** Partikel ambient dibatasi di gutter kiri/kanan agar tidak melintasi teks utama. */
+const IDLE_SPARKS = Array.from({ length: 8 }, (_, i) => ({
+  x: i % 2 === 0 ? 4 + ((i * 7) % 5) : 91 + ((i * 5) % 5),
+  dur: 9 + ((i * 5) % 5),
+  delay: -((i * 7) % 12),
+  sz: 0.28 + ((i * 3) % 3) * 0.09,
+}));
 
-/** Antrean kosong: tidak ada progres lagi, jadi kartu dibuat "hidup" — aurora mengalir di belakang konten, bintang naik berkelip, kilau kaca menyapu,
- *  aksen prisma berlapis di dasar, dan dua komet berputar di tepi. Semuanya dikurung di dalam kotak kartu (overflow hidden) dan ada di belakang teks. */
+/** Antrean kosong: kartu tetap hidup lewat aurora dan kilau kaca. Ornamen sudut menjaga area teks tetap bersih. */
 function IdleBar() {
   return (
     <>
@@ -210,10 +214,9 @@ function IdleBar() {
           <i key={i} className="sp" style={{ left: `${sp.x}%`, "--d": `${sp.dur}s`, "--dl": `${sp.delay}s`, "--sz": `${sp.sz}em` } as CSSProperties} />
         ))}
         <div className="shine" />
-        <div className="ov-prism-rail" aria-hidden>
-          <span className="prism-wing left"><i /><i /><i /></span>
-          <span className="prism-core"><i /><b>✦</b><i /></span>
-          <span className="prism-wing right"><i /><i /><i /></span>
+        <div className="ov-cornerwork" aria-hidden>
+          <span className="corner left"><i /><i /><i /><b>✦</b></span>
+          <span className="corner right"><i /><i /><i /><b>✦</b></span>
         </div>
       </div>
       <div className="ov-idle-ring" aria-hidden><i /></div>

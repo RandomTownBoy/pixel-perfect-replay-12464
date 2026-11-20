@@ -184,46 +184,44 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
 .ov-idle-ring i { position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; translate: -50% -50%; will-change: transform;
   background: conic-gradient(transparent 0 22%, var(--ov) 36%, var(--pop) 46%, #fff 50%, transparent 50.2% 72%, var(--electric) 86%, var(--primary) 96%, #fff 100%);
-  animation: ov-idle-spin 3.6s linear infinite; }
+  animation: ov-idle-spin 9s linear infinite; }
 @keyframes ov-idle-breathe { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 @keyframes ov-idle-spin { to { transform: rotate(360deg); } }
 /* Lapisan hidup saat idle. z-index:-1 di dalam .ov-card (yang punya stacking context lewat backdrop-filter) = di atas latar kartu tapi di BAWAH semua teks.
    overflow hidden + radius sama dengan kartu: tidak ada yang keluar dari kotak. Hanya transform/opacity yang dianimasikan, jadi ringan untuk OBS. */
 .ov-fx { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; pointer-events: none; animation: ov-fx-in 0.9s ease-out both; }
-.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.34; will-change: transform; }
+.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.24; will-change: transform; }
 .ov-fx .aur.a { left: -12%; top: -38%; background: radial-gradient(circle, var(--primary) 0%, transparent 68%); animation: ov-aur-a 15s ease-in-out infinite; }
 .ov-fx .aur.b { right: -16%; bottom: -44%; background: radial-gradient(circle, var(--pop) 0%, transparent 68%); animation: ov-aur-b 19s ease-in-out infinite; }
-.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.26; animation: ov-aur-c 23s ease-in-out infinite; }
+.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.17; animation: ov-aur-c 23s ease-in-out infinite; }
 .ov-fx .sp { position: absolute; bottom: -1em; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-  animation: ov-spark var(--d) linear var(--dl) infinite; }
+  animation: ov-spark var(--d) ease-in-out var(--dl) infinite; }
 .ov-fx .sp:nth-of-type(3n+1) { background: var(--pop); }
 .ov-fx .sp:nth-of-type(3n+2) { background: var(--electric); }
 .ov-fx .shine { position: absolute; top: -25%; bottom: -25%; left: 0; width: 26%; will-change: transform;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.2) 55%, transparent);
-  transform: translateX(-160%) skewX(-18deg); animation: ov-shine 7s ease-in-out 1.2s infinite; }
-.ov-prism-rail { position: absolute; left: 7%; right: 7%; bottom: 0.58em; height: 1.18em; display: flex; align-items: center; justify-content: center; gap: 0.42em; opacity: 0.9; }
-.ov-prism-rail::before { content: ""; position: absolute; left: 4%; right: 4%; top: 50%; height: 1px; transform: translateY(-50%); background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--electric) 65%, transparent) 18%, color-mix(in oklab, var(--pop) 75%, transparent) 50%, color-mix(in oklab, var(--primary) 65%, transparent) 82%, transparent); box-shadow: 0 0 0.65em var(--ov); }
-.ov-prism-rail .prism-wing { display: flex; align-items: center; gap: 0.24em; flex: 1; height: 100%; }
-.ov-prism-rail .prism-wing.left { justify-content: flex-end; }
-.ov-prism-rail .prism-wing.right { justify-content: flex-start; }
-.ov-prism-rail .prism-wing i { display: block; height: 0.42em; width: clamp(0.7em, 8%, 2.8em); transform: skewX(-34deg); border: 1px solid color-mix(in oklab, var(--electric) 75%, white); background: linear-gradient(180deg, color-mix(in oklab, var(--electric) 45%, transparent), color-mix(in oklab, var(--primary) 18%, transparent)); box-shadow: 0 0 0.55em color-mix(in oklab, var(--electric) 70%, transparent); animation: ov-prism-pulse 2.8s ease-in-out infinite; }
-.ov-prism-rail .prism-wing i:nth-child(2) { width: clamp(1.2em, 13%, 4.2em); animation-delay: -0.9s; border-color: color-mix(in oklab, var(--pop) 80%, white); background: linear-gradient(180deg, color-mix(in oklab, var(--pop) 48%, transparent), transparent); }
-.ov-prism-rail .prism-wing i:nth-child(3) { width: clamp(0.45em, 5%, 1.7em); animation-delay: -1.7s; }
-.ov-prism-rail .prism-core { position: relative; width: 2.65em; height: 1.05em; display: grid; place-items: center; flex: none; }
-.ov-prism-rail .prism-core::before { content: ""; position: absolute; inset: 0.08em 0.5em; transform: rotate(45deg) skew(-8deg,-8deg); border: 1px solid rgba(255,255,255,0.82); background: linear-gradient(135deg, color-mix(in oklab, var(--pop) 70%, transparent), color-mix(in oklab, var(--electric) 58%, transparent)); box-shadow: 0 0 0.8em color-mix(in oklab, var(--pop) 75%, transparent), inset 0 0 0.45em rgba(255,255,255,0.45); }
-.ov-prism-rail .prism-core b { position: relative; z-index: 1; color: white; font-size: 0.72em; line-height: 1; text-shadow: 0 0 0.55em white; animation: ov-prism-star 3s ease-in-out infinite; }
-.ov-prism-rail .prism-core i { position: absolute; top: 50%; width: 0.42em; height: 1px; background: white; box-shadow: 0 0 0.45em var(--electric); }
-.ov-prism-rail .prism-core i:first-child { left: -0.08em; }
-.ov-prism-rail .prism-core i:last-child { right: -0.08em; }
+  transform: translateX(-160%) skewX(-18deg); opacity: 0.72; animation: ov-shine 12s ease-in-out 2s infinite; }
+/* Ornamen sudut: aksen sirkuit/konstelasi di sisi bawah, tidak memasuki area teks utama. */
+.ov-cornerwork { position: absolute; inset: 0; pointer-events: none; }
+.ov-cornerwork .corner { position: absolute; bottom: 0.72em; width: 3.05em; height: 2.45em; opacity: 0.82; }
+.ov-cornerwork .corner.left { left: 0.78em; }
+.ov-cornerwork .corner.right { right: 0.78em; transform: scaleX(-1); }
+.ov-cornerwork .corner::before { content: ""; position: absolute; left: 0; bottom: 0; width: 2.45em; height: 1.55em; border-left: 1px solid color-mix(in oklab, var(--electric) 82%, white); border-bottom: 1px solid color-mix(in oklab, var(--pop) 78%, white); border-radius: 0 0 0 0.72em; box-shadow: -0.22em 0 0.65em -0.35em var(--electric), 0 0.22em 0.65em -0.35em var(--pop); }
+.ov-cornerwork .corner::after { content: ""; position: absolute; left: 0.48em; bottom: 0.48em; width: 1.05em; height: 0.42em; border: 1px solid color-mix(in oklab, var(--primary) 82%, white); transform: skewX(-34deg); background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 42%, transparent), color-mix(in oklab, var(--electric) 24%, transparent)); box-shadow: 0 0 0.55em color-mix(in oklab, var(--primary) 55%, transparent); animation: ov-corner-glint 3.4s ease-in-out infinite; }
+.ov-cornerwork .corner i { position: absolute; z-index: 1; width: 0.28em; height: 0.28em; border-radius: 50%; border: 1px solid rgba(255,255,255,0.85); background: var(--electric); box-shadow: 0 0 0.5em var(--electric); }
+.ov-cornerwork .corner i:nth-child(1) { left: 0.02em; bottom: 1.48em; }
+.ov-cornerwork .corner i:nth-child(2) { left: 1.12em; bottom: 0.02em; background: var(--pop); box-shadow: 0 0 0.5em var(--pop); }
+.ov-cornerwork .corner i:nth-child(3) { right: 0.02em; top: 0.12em; width: 0.2em; height: 0.2em; background: white; }
+.ov-cornerwork .corner b { position: absolute; right: 0.36em; bottom: 0.92em; color: white; font-size: 0.58em; line-height: 1; text-shadow: 0 0 0.7em var(--pop); animation: ov-corner-star 3.2s ease-in-out infinite; }
 @keyframes ov-fx-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ov-aur-a { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(55%, 30%) scale(1.2); } 66% { transform: translate(20%, 70%) scale(0.9); } }
 @keyframes ov-aur-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-70%, -45%) scale(0.85); } }
 @keyframes ov-aur-c { 0%, 100% { transform: translate(0, 0) scale(0.9); } 25% { transform: translate(60%, 40%) scale(1.2); } 75% { transform: translate(-50%, -30%) scale(1); } }
-@keyframes ov-spark { 0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; } 12% { opacity: 0.95; transform: translateY(-1.5em) rotate(40deg) scale(1); } 50% { opacity: 0.35; } 62% { opacity: 0.9; } 100% { transform: translateY(-17em) rotate(260deg) scale(0.2); opacity: 0; } }
+@keyframes ov-spark { 0%, 100% { transform: translateY(0) rotate(0) scale(0.45); opacity: 0; } 22% { opacity: 0.58; transform: translateY(-0.8em) rotate(35deg) scale(1); } 72% { opacity: 0.28; transform: translateY(-3.8em) rotate(115deg) scale(0.72); } }
 @keyframes ov-shine { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 85%, 100% { transform: translateX(520%) skewX(-18deg); } }
-@keyframes ov-prism-pulse { 0%, 100% { opacity: 0.48; filter: brightness(0.85); } 50% { opacity: 1; filter: brightness(1.65); } }
-@keyframes ov-prism-star { 0%, 100% { transform: scale(0.78) rotate(0); opacity: 0.7; } 50% { transform: scale(1.2) rotate(45deg); opacity: 1; } }
+@keyframes ov-corner-glint { 0%, 100% { opacity: 0.35; transform: translateX(0) skewX(-34deg); } 50% { opacity: 0.82; transform: translateX(0.24em) skewX(-34deg); } }
+@keyframes ov-corner-star { 0%, 100% { opacity: 0.65; transform: scale(0.82) rotate(0); } 50% { opacity: 1; transform: scale(1.15) rotate(45deg); } }
 /* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
 .ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
   color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }
@@ -377,4 +375,4 @@
 @keyframes ov-teaser-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.25em); } }
 @media (prefers-reduced-motion: reduce) { .ov-opt.overtook, .ov-overtake, .ov-count3, .ov-opt.champ::after, .ov-teaser-dots i { animation: none !important; } .ov-opt.champ::after { display: none; } }
 
-@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine, .ov-fx .wv, .ov-fx .wv svg { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine, .ov-fx .wv, .ov-fx .wv svg, .ov-cornerwork .corner::after, .ov-cornerwork .corner b { animation: none !important; } }

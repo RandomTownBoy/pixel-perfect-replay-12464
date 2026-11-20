@@ -24,6 +24,7 @@ export type Question = {
 export type Activity = { id: string; text: string; at: number };
 export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
+  visualEffect: "spotlight" | "meteor" | "aurora" | "orbit" | "prism";
   sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
   countdown: number; giftRules: GiftRule[];
   /** Posisi tulisan panduan interaksi di overlay. */
@@ -124,7 +125,7 @@ export type OverlayState = {
   votes?: { a: number; b: number } | undefined;
   banner?: { text: string; at: number } | undefined;
   audienceCode?: string | undefined;
-  accent: Settings["accent"]; textScale: number; sound: boolean; showTitle: boolean; showBadge: boolean;
+  accent: Settings["accent"]; textScale: number; visualEffect?: Settings["visualEffect"]; sound: boolean; showTitle: boolean; showBadge: boolean;
   intake?: Intake | undefined;
   guidePos?: Settings["guidePosition"] | undefined;
   /** Hanya ada selama masih ada kiriman yang menunggu giliran: overlay menggambar garis loading kiri→kanan selama item ini tayang. */
@@ -232,7 +233,7 @@ const defaultState: State = {
   categories: DEFAULT_CATEGORIES,
   activity: [{ id: "demo-start", text: "Demo Mode aktif — data contoh dimuat", at: now }],
   settings: {
-    creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
+    creatorName: "Kyoka", accent: "purple", textScale: 1, visualEffect: "spotlight", sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
     guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, antiDuplicate: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
@@ -253,6 +254,8 @@ const defaultState: State = {
 export function normalizeSettings(s: Settings): Settings {
   const d = defaultState.settings;
   const patch: Partial<Settings> = {};
+  const visualEffects: Settings["visualEffect"][] = ["spotlight", "meteor", "aurora", "orbit", "prism"];
+  if (!visualEffects.includes(s.visualEffect)) patch.visualEffect = d.visualEffect;
   const spinCapacity = clampInt(s.spinCapacity, LIMITS.spin.min, LIMITS.spin.max, d.spinCapacity);
   // Irisan roda tidak boleh melebihi kapasitas.
   const spinSlices = clampInt(s.spinSlices, LIMITS.spin.min, Math.min(LIMITS.spin.max, spinCapacity), Math.min(d.spinSlices, spinCapacity));
@@ -411,6 +414,7 @@ function pick(p: Partial<Settings>): Partial<OverlayState> {
   const out: Partial<OverlayState> = {};
   if (p.accent) out.accent = p.accent;
   if (p.textScale) out.textScale = p.textScale;
+  if (p.visualEffect) out.visualEffect = p.visualEffect;
   if (p.sound !== undefined) out.sound = p.sound;
   if (p.showTitle !== undefined) out.showTitle = p.showTitle;
   if (p.showBadge !== undefined) out.showBadge = p.showBadge;
@@ -440,7 +444,7 @@ export const sample = <T,>(arr: T[], n: number) => shuffle(arr).slice(0, n);
 /* ---------- Overlay realtime channel (same-browser, Demo Mode) ---------- */
 
 export const defaultOverlay = (): OverlayState => ({
-  visible: true, payload: null, updatedAt: 0, payloadAt: 0, accent: state.settings.accent, textScale: state.settings.textScale,
+  visible: true, payload: null, updatedAt: 0, payloadAt: 0, accent: state.settings.accent, textScale: state.settings.textScale, visualEffect: state.settings.visualEffect,
   sound: state.settings.sound, showTitle: state.settings.showTitle, showBadge: state.settings.showBadge,
 });
 

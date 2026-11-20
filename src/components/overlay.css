@@ -187,6 +187,32 @@
   animation: ov-idle-spin 3.6s linear infinite; }
 @keyframes ov-idle-breathe { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 @keyframes ov-idle-spin { to { transform: rotate(360deg); } }
+/* Lapisan hidup saat idle. z-index:-1 di dalam .ov-card (yang punya stacking context lewat backdrop-filter) = di atas latar kartu tapi di BAWAH semua teks.
+   overflow hidden + radius sama dengan kartu: tidak ada yang keluar dari kotak. Hanya transform/opacity yang dianimasikan, jadi ringan untuk OBS. */
+.ov-fx { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; pointer-events: none; animation: ov-fx-in 0.9s ease-out both; }
+.ov-fx .aur { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0.34; will-change: transform; }
+.ov-fx .aur.a { left: -12%; top: -38%; background: radial-gradient(circle, var(--primary) 0%, transparent 68%); animation: ov-aur-a 15s ease-in-out infinite; }
+.ov-fx .aur.b { right: -16%; bottom: -44%; background: radial-gradient(circle, var(--pop) 0%, transparent 68%); animation: ov-aur-b 19s ease-in-out infinite; }
+.ov-fx .aur.c { left: 22%; top: 8%; width: 50%; background: radial-gradient(circle, var(--electric) 0%, transparent 68%); opacity: 0.26; animation: ov-aur-c 23s ease-in-out infinite; }
+.ov-fx .sp { position: absolute; bottom: -1em; width: var(--sz); height: var(--sz); background: #fff; opacity: 0; will-change: transform, opacity;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: ov-spark var(--d) linear var(--dl) infinite; }
+.ov-fx .sp:nth-of-type(3n+1) { background: var(--pop); }
+.ov-fx .sp:nth-of-type(3n+2) { background: var(--electric); }
+.ov-fx .shine { position: absolute; top: -25%; bottom: -25%; left: 0; width: 26%; will-change: transform;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0.2) 55%, transparent);
+  transform: translateX(-160%) skewX(-18deg); animation: ov-shine 7s ease-in-out 1.2s infinite; }
+.ov-fx .wave { position: absolute; left: 0; right: 0; bottom: 0.15em; height: 1.7em; -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); }
+.ov-fx .wv { position: absolute; inset: 0; transform-origin: 50% 50%; animation: ov-wave-breathe var(--bd) ease-in-out infinite; filter: drop-shadow(0 0 0.3em var(--wc)); opacity: 0.85; }
+.ov-fx .wv svg { position: absolute; left: 0; top: 0; width: 200%; height: 100%; will-change: transform; animation: ov-wave-flow 8s linear infinite; }
+@keyframes ov-fx-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ov-aur-a { 0%, 100% { transform: translate(0, 0) scale(1); } 33% { transform: translate(55%, 30%) scale(1.2); } 66% { transform: translate(20%, 70%) scale(0.9); } }
+@keyframes ov-aur-b { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-70%, -45%) scale(0.85); } }
+@keyframes ov-aur-c { 0%, 100% { transform: translate(0, 0) scale(0.9); } 25% { transform: translate(60%, 40%) scale(1.2); } 75% { transform: translate(-50%, -30%) scale(1); } }
+@keyframes ov-spark { 0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; } 12% { opacity: 0.95; transform: translateY(-1.5em) rotate(40deg) scale(1); } 50% { opacity: 0.35; } 62% { opacity: 0.9; } 100% { transform: translateY(-17em) rotate(260deg) scale(0.2); opacity: 0; } }
+@keyframes ov-shine { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 85%, 100% { transform: translateX(520%) skewX(-18deg); } }
+@keyframes ov-wave-flow { to { transform: translateX(-50%); } }
+@keyframes ov-wave-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
 /* Tombol kecil "aktifkan suara": hanya muncul kalau browser memblokir audio; hilang setelah diklik. */
 .ov-sound-pill { position: absolute; left: 0.8em; bottom: 0.8em; pointer-events: auto; cursor: pointer; border: 0.1em solid var(--ov); border-radius: 2em; padding: 0.35em 0.9em; font: 700 0.8em var(--font-sans, system-ui);
   color: var(--foreground); background: color-mix(in oklab, var(--background) 85%, transparent); backdrop-filter: blur(8px); animation: ov-idle-breathe 1.6s ease-in-out infinite; }
@@ -340,4 +366,4 @@
 @keyframes ov-teaser-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-0.25em); } }
 @media (prefers-reduced-motion: reduce) { .ov-opt.overtook, .ov-overtake, .ov-count3, .ov-opt.champ::after, .ov-teaser-dots i { animation: none !important; } .ov-opt.champ::after { display: none; } }
 
-@media (prefers-reduced-motion: reduce) { .ov-idle-ring i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ov-idle-ring i, .ov-fx .aur, .ov-fx .sp, .ov-fx .shine, .ov-fx .wv, .ov-fx .wv svg { animation: none; } }

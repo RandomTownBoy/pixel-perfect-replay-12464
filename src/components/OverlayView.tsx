@@ -135,10 +135,11 @@ export function OverlayView({ state, preview, safe = "auto" }: { state: OverlayS
   // Saat animasi penutup (hasil) tampil, musik direndahkan supaya efek hasil terdengar jelas.
   const outroOn = !!outro;
   useEffect(() => { music.level(outroOn ? 0.35 : 1); }, [outroOn]);
-  const lines = p && state.guidePos !== "off" ? guideLines(p, state.intake) : [];
-  const pos = state.guidePos ?? "tr";
+  // Nilai posisi yang tidak dikenal (state lama/kosong) jatuh ke kanan atas, bukan menyembunyikan panduan.
+  const pos = state.guidePos === "tl" || state.guidePos === "bl" || state.guidePos === "br" || state.guidePos === "off" ? state.guidePos : "tr";
+  const lines = p && pos !== "off" ? guideLines(p, state.intake) : [];
   // Slot panduan selalu ada (tinggi tetap) supaya kartu tidak bergeser naik-turun antar gimmick.
-  const guide = state.visible && !!p && state.guidePos !== "off" && (
+  const guide = state.visible && !!p && pos !== "off" && (
     <div className={`ov-guide-slot ${pos === "tl" || pos === "bl" ? "l" : "r"}`}>
       {lines.length > 0 && <div className="ov-guide">{lines.map((l) => <span key={l}>💬 {l}</span>)}</div>}
     </div>

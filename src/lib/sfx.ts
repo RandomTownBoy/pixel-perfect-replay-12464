@@ -29,12 +29,35 @@ function ac(): AudioContext | null {
   } catch { return null; }
 }
 
-/** Browser kadang memblokir suara sebelum ada interaksi; satu klik/tombol di halaman membukanya. */
+/* ---- Status "audio diblokir browser" (autoplay policy) ---- */
+let blocked = false;
+const listeners = new Set<() => void>();
+function setBlocked(b: boolean) { if (b !== blocked) { blocked = b; listeners.forEach((l) => l()); } }
+export const sfxBlocked = () => blocked;
+export const subscribeSfxBlocked = (cb: () => void) => { listeners.add(cb); return () => { listeners.delete(cb); }; };
+
+/** Buat AudioContext lebih awal dan cek apakah browser mengizinkannya jalan. Kalau tidak, `sfxBlocked()` jadi true (dipakai untuk menampilkan tombol aktivasi). */
+export function probeSfx() {
+  const c = ac(); if (!c) return;
+  c.onstatechange = () => setBlocked(c.state !== "running");
+  setBlocked(c.state !== "running");
+}
+
+/** Dipanggil dari klik tombol aktivasi: membuka audio lalu memutar satu bunyi sebagai konfirmasi. */
+export async function resumeSfx() {
+  const c = ac(); if (!c) return;
+  try { await c.resume(); } catch { /* abaikan */ }
+  setBlocked(c.state !== "running");
+  if (c.state === "running") { tone(note(4), 0.15, { type: "triangle", vol: 0.15 }); tone(note(7), 0.25, { t: 0.1, type: "triangle", vol: 0.15 }); }
+}
+
+/** Interaksi pertama di halaman (klik/tombol/sentuh) otomatis membuka audio. */
 export function unlockSfx() {
   if (typeof window === "undefined") return;
-  const go = () => { const c = ac(); if (c && c.state === "suspended") void c.resume(); };
+  const go = () => { void resumeSfx(); };
   window.addEventListener("pointerdown", go, { once: true });
   window.addEventListener("keydown", go, { once: true });
+  window.addEventListener("touchstart", go, { once: true });
 }
 
 /** Batasi pemanggilan beruntun supaya tidak menumpuk (mis. banyak vote dalam sekejap). */

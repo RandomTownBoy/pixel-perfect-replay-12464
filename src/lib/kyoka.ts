@@ -457,6 +457,7 @@ export const sample = <T,>(arr: T[], n: number) => shuffle(arr).slice(0, n);
 export const defaultOverlay = (): OverlayState => ({
   visible: true, payload: null, updatedAt: 0, payloadAt: 0, accent: state.settings.accent, textScale: state.settings.textScale, visualEffect: state.settings.visualEffect,
   sound: state.settings.sound, sfxVolume: state.settings.sfxVolume, musicVolume: state.settings.musicVolume, showTitle: state.settings.showTitle, showBadge: state.settings.showBadge,
+  guidePos: state.settings.guidePosition,
 });
 
 export function readOverlay(): OverlayState {
@@ -558,7 +559,9 @@ export function setOverlayIntake(intake: Intake) {
   pushOverlay({ ...readOverlay(), intake, guidePos: state.settings.guidePosition });
 }
 export function resetOverlay() {
-  pushOverlay({ ...defaultOverlay(), payload: null });
+  // intake (input yang dibuka) harus ikut dipertahankan, kalau tidak tulisan panduan penonton jadi salah/hilang setelah Reset.
+  const keep = readOverlay().intake;
+  pushOverlay({ ...defaultOverlay(), ...(keep ? { intake: keep } : {}), payload: null });
   actions.log("Overlay di-reset");
 }
 

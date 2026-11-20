@@ -42,6 +42,8 @@ export type Settings = {
   autoApproveCards: boolean;
   /** Antrean habis: otomatis pindah ke jenis antrean lain yang punya kiriman menunggu (jenis lain harus auto ON). Mati = tetap armed dan menunggu input. */
   autoSwitchQueue: boolean;
+  /** Anti duplikat/spam: kiriman yang sama atau mirip (termasuk lintas gimmick) dan pengirim yang terlalu sering masuk ke tab Cek; satu suara per penonton. */
+  antiDuplicate: boolean;
   /** Alamat publik untuk link penonton (mis. https://situsmu.lovable.app). Kosong = pakai alamat halaman ini. */
   publicUrl: string;
   /** Kapasitas pertanyaan penonton yang belum digunakan. */
@@ -78,9 +80,13 @@ export type OverlayPayload =
     durationMs?: number | undefined; startedAt?: number | undefined; winnerIndex?: number | undefined;
     /** Item yang baru masuk roda + kapan, untuk animasi masuk dan chip "Ditambahkan ke roda". */
     added?: string[] | undefined; addedAt?: number | undefined;
+    /** Fase result/spinning: pertanyaan baru yang sudah masuk antrean roda tapi menunggu putaran berikutnya (roda tidak diubah di tengah hasil). */
+    queued?: number | undefined; queuedAt?: number | undefined;
   }
   | { gimmick: "thisorthat"; a?: string | undefined; b?: string | undefined; countdownEnd?: number | undefined }
-  | { gimmick: "card"; count: number; revealed?: number | undefined; /** Urutan indeks kartu yang sudah dibuka di deck ini; tetap terbuka sampai deck diganti. */ opened?: number[] | undefined; text?: string | undefined; phase?: CardPhase | undefined }
+  | { gimmick: "card"; count: number; revealed?: number | undefined; /** Urutan indeks kartu yang sudah dibuka di deck ini; tetap terbuka sampai deck diganti. */ opened?: number[] | undefined; text?: string | undefined; phase?: CardPhase | undefined;
+    /** Nama deck yang tayang, supaya kartu baru yang masuk ke deck ini bisa disinkronkan real time. */ deck?: string | undefined;
+    /** Jumlah kartu yang baru masuk + kapan, untuk animasi masuk dan chip "Kartu baru masuk". */ added?: number | undefined; addedAt?: number | undefined }
   | { gimmick: "hottake"; topic?: string | undefined; followups?: string[] | undefined }
   | { gimmick: "confession"; prompt?: string | undefined; category?: string | undefined }
   | { gimmick: "chaos"; mode: "story"; words: string[]; /** Kata sedang diacak (animasi gulir) di overlay. */ rolling?: boolean | undefined }
@@ -228,7 +234,7 @@ const defaultState: State = {
   settings: {
     creatorName: "Kyoka", accent: "purple", textScale: 1, sound: true,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
-    guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
+    guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, antiDuplicate: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
       { id: "rose", name: "Rose", emoji: "🌹", effect: "vote", weight: 1, reward: "+1 suara" },
       { id: "heart", name: "Finger Heart", emoji: "🫰", effect: "vote", weight: 5, reward: "+5 suara" },
@@ -304,7 +310,7 @@ function setState(fn: (s: State) => State) {
   if (state.settings !== prev.settings) { const n = normalizeSettings(state.settings); if (n !== state.settings) state = { ...state, settings: n }; }
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
   listeners.forEach((l) => l());
-  if (prev.questions !== state.questions) syncSpinWheel();
+  if (prev.questions !== state.questions) { syncSpinWheel(); syncCardDeck(); }
   if (!silent && (prev.settings !== state.settings || prev.categories !== state.categories)) persistListeners.forEach((l) => l());
 }
 /** Dipanggil saat pengaturan atau kategori berubah oleh pengguna (bukan saat dimuat dari database). */
@@ -486,13 +492,31 @@ function syncSpinWheel() {
   if (typeof window === "undefined") return;
   const o = readOverlay();
   const p = o.payload;
-  if (!p || p.gimmick !== "spin" || p.phase !== "standby" || !p.category) return;
+  if (!p || p.gimmick !== "spin" || !p.phase || !p.category) return;
+  if (p.phase !== "standby") {
+    // Roda tidak diubah saat berputar / menampilkan hasil. Pertanyaan baru hanya dihitung sebagai "menunggu" dan chip-nya muncul real time.
+    const known = new Set(p.items ?? []);
+    const waiting = spinPoolOf(state.questions, p.category, state.settings.spinSlices).filter((x) => !known.has(x.text)).length;
+    if (waiting !== (p.queued ?? 0)) pushOverlay({ ...o, payload: { ...p, queued: waiting || undefined, queuedAt: waiting ? Date.now() : undefined } });
+    return;
+  }
   const items = spinPoolOf(state.questions, p.category, state.settings.spinSlices).map((x) => x.text);
   const prev = p.items ?? [];
   if (items.length === prev.length && items.every((t, i) => t === prev[i])) return;
   const had = new Set(prev);
   const added = items.filter((t) => !had.has(t));
   pushOverlay({ ...o, payload: { ...p, items, added: added.length ? added : undefined, addedAt: added.length ? Date.now() : undefined } });
+}
+/** Kartu baru masuk ke deck yang sedang tayang (standby/dealt): jumlah kartu di overlay ikut naik real time, dengan animasi masuk. */
+function syncCardDeck() {
+  if (typeof window === "undefined") return;
+  const o = readOverlay();
+  const p = o.payload;
+  if (!p || p.gimmick !== "card" || !p.deck || (p.phase !== "standby" && p.phase !== "dealt")) return;
+  const count = Math.min(6, state.questions.filter((q) => q.gimmick === "card" && q.category === p.deck).length);
+  if (count === p.count || count === 0) return;
+  const added = count > p.count ? count - p.count : undefined;
+  pushOverlay({ ...o, payload: { ...p, count, opened: (p.opened ?? []).filter((i) => i < count), added, addedAt: added ? Date.now() : undefined } });
 }
 export function setOverlayVisible(visible: boolean) {
   pushOverlay({ ...readOverlay(), visible });

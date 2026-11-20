@@ -9,6 +9,7 @@ import {
   type GimmickId, type Intake, type OverlayPayload, type OverlayState, type Question, type Settings, type SpinPayload,
 } from "@/lib/kyoka";
 import { getLockedDecks, pickViewerDeck } from "@/lib/decks";
+import { suspectReason } from "@/lib/dedupe";
 
 /* ---------- auth ---------- */
 export function useAuthUser() {
@@ -324,8 +325,22 @@ async function saveRouted(r: Submission, target?: GimmickId, category?: string, 
   const res = await liveActions.saveToBank(r, target, category);
   if (!res.ok) toast.error(res.message);
 }
-function routeSubmission(r: Submission) {
+/** Tahan kiriman mencurigakan (duplikat/spam) di tab Cek dengan alasannya, supaya host bisa memilih tolak atau terima. */
+async function holdForReview(r: Submission, reason: string) {
+  const ok = await liveActions.setStatus(r.id, "review");
+  if (!ok) return;
+  setLive({ review: live.review.map((x) => (x.id === r.id ? { ...x, flagged: true, flag_reason: reason } : x)) });
+  const { error } = await supabase.from("audience_submissions").update({ flagged: true, flag_reason: reason } as never).eq("id", r.id);
+  if (error) console.warn("alasan duplikat tidak tersimpan di database", error.message);
+  actions.log(`Ditahan di Cek: ${reason}`);
+}
+function routeSubmission(r: Submission, opts: { skipDupe?: boolean } = {}) {
   if (r.status !== "pending") return;
+  if (!opts.skipDupe && !r.flagged && getSettings().antiDuplicate) {
+    const pool = [...live.inbox, ...live.review, ...live.history, ...live.queue, live.nowShowing];
+    const reason = suspectReason(r, pool);
+    if (reason) { void holdForReview(r, reason); return; }
+  }
   if (r.kind === "spin" || r.kind === "question") {
     const cfg = getSettings();
     const active = getQuestions().filter((q) => q.gimmick === "spin" && q.category === VIEWER_CATEGORY && !q.used).length;
@@ -412,7 +427,7 @@ export const liveActions = {
     const before = { inbox: live.inbox, review: live.review, history: live.history };
     const item = [...live.inbox, ...live.review, ...live.history].find((x) => x.id === id);
     if (item) {
-      const moved: Submission = { ...item, status };
+      const moved: Submission = { ...item, status, ...(status === "pending" && item.flagged ? { flagged: false, flag_reason: null } : {}) };
       const byNewest = (x: Submission, y: Submission) => Date.parse(y.created_at) - Date.parse(x.created_at);
       const without = (l: Submission[]) => l.filter((x) => x.id !== id);
       setLive({
@@ -429,7 +444,11 @@ export const liveActions = {
       return false;
     }
     // Dikembalikan ke Inbox / diloloskan dari "Cek": kiriman antrean ikut disalurkan seperti kiriman baru.
-    if (status === "pending" && item && item.status !== "pending" && QUEUE_KINDS.has(item.kind)) routeSubmission({ ...item, status });
+    // Host menerima kiriman dari "Cek": tanda flag dihapus (best-effort) supaya tidak terpental balik ke Cek.
+    if (status === "pending" && item?.flagged) {
+      void supabase.from("audience_submissions").update({ flagged: false, flag_reason: null } as never).eq("id", id).then(({ error: fe }) => { if (fe) console.warn("flag tidak terhapus", fe.message); });
+    }
+    if (status === "pending" && item && item.status !== "pending" && QUEUE_KINDS.has(item.kind)) routeSubmission({ ...item, status, flagged: false }, { skipDupe: true });
     return true;
   },
   /**
@@ -761,12 +780,20 @@ function parseVote(text: string | null, gimmick: string): "a" | "b" | null {
   return null;
 }
 /** Sisi yang harus dihitung untuk komentar ini, atau null (bukan vote / bukan saat gimmick vote / sudah memilih / ditolak filter). */
+/** Identitas penonton untuk membatasi satu suara per ronde. Dengan anti duplikat, penonton tanpa user_id dikenali lewat handle/nickname. */
+function voterKey(e: LiveEvent): string | null {
+  if (e.user_id) return e.user_id;
+  if (!getSettings().antiDuplicate) return null;
+  if (e.handle) return `h:${e.handle.toLowerCase()}`;
+  return e.nickname ? `n:${e.nickname.toLowerCase()}` : null;
+}
 function voteOf(e: LiveEvent): "a" | "b" | null {
   const o = readOverlay();
   const g = o.payload?.gimmick;
   if (!o.visible || (g !== "thisorthat" && g !== "hottake")) return null;
   if (e.flagged || countedVotes.has(e.id)) return null;
-  if (e.user_id && userSide.has(e.user_id)) return null;
+  const vk = voterKey(e);
+  if (vk && userSide.has(vk)) return null;
   if (e.vote_choice === "a" || e.vote_choice === "b") return e.vote_choice;
   if (live.intake.followersOnly && e.is_follower !== true) return null;
   return parseVote(e.content, g);
@@ -808,7 +835,8 @@ function handleLiveEvent(e: LiveEvent) {
   if (counted) {
     if (countedVotes.size > 3000) countedVotes.clear();
     countedVotes.add(e.id);
-    if (e.user_id) userSide.set(e.user_id, counted);
+    const vk = voterKey(e);
+    if (vk) userSide.set(vk, counted);
     liveActions.addTiktok(counted, 1);
     return;
   }

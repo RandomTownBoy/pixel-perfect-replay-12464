@@ -34,6 +34,7 @@ function SettingsPage() {
   const vipTiers = useKyoka((x) => x.settings.vipTiers);
   const giftNotify = useKyoka((x) => x.settings.giftNotify);
   const autoSwitchQueue = useKyoka((x) => x.settings.autoSwitchQueue);
+  const antiDuplicate = useKyoka((x) => x.settings.antiDuplicate);
   const publicUrl = useKyoka((x) => x.settings.publicUrl);
   const [newWord, setNewWord] = useState("");
   const addWord = () => {
@@ -163,6 +164,10 @@ function SettingsPage() {
           <label className="flex items-center justify-between gap-2"><span>Pindah otomatis antar sesi</span>
             <input type="checkbox" className="h-4 w-4" checked={autoSwitchQueue} onChange={(e) => actions.updateSettings({ autoSwitchQueue: e.target.checked })} />
           </label>
+          <label className="flex items-center justify-between gap-2"><span>Anti duplikat &amp; spam</span>
+            <input type="checkbox" className="h-4 w-4" checked={antiDuplicate} onChange={(e) => actions.updateSettings({ antiDuplicate: e.target.checked })} />
+          </label>
+          <p className="text-xs text-muted-foreground">Kiriman yang sama atau mirip dengan kiriman lain (walau dikirim ke gimmick berbeda), atau dari pengirim yang mengirim 3+ kali dalam semenit, ditahan di tab <b>Cek</b> beserta alasannya, supaya kamu bisa menerima atau menolak. Vote komentar dibatasi satu suara per penonton.</p>
           <p className="text-xs text-muted-foreground">Saat antrean satu jenis habis, lanjut ke jenis lain yang punya kiriman menunggu (yang “Lanjut otomatis”-nya hidup). Mati = sesi tetap menunggu input jenis yang sama.</p>
         </Panel>
 

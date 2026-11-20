@@ -11,6 +11,18 @@ let noiseBuf: AudioBuffer | null = null;
 let enabled = false;
 const lastAt: Record<string, number> = {};
 const MUSIC_BASE = 0.42; // backsound dinaikkan agar lebih terasa di live
+let sfxVol = 1; // pengali volume efek (pengaturan Studio)
+let musicVol = 1; // pengali volume musik
+const musicBase = () => MUSIC_BASE * musicVol;
+
+/** Atur volume dari pengaturan Studio: efek 0-3x, musik 0-2x. Berlaku seketika, juga untuk suara yang sedang berjalan. */
+export function setVolumes(sfx: number, mus: number) {
+  sfxVol = Math.min(3, Math.max(0, sfx));
+  musicVol = Math.min(2, Math.max(0, mus));
+  const c = ctx;
+  if (c && master) master.gain.setTargetAtTime(1.15 * sfxVol, c.currentTime, 0.05);
+  if (c && musicBus) musicBus.gain.setTargetAtTime(musicBase() * musicLevel, c.currentTime, 0.1);
+}
 
 /** Nyalakan/matikan semua suara. Dipanggil OverlayView menurut `state.sound` dan mode pratinjau. */
 export function setSfxEnabled(on: boolean) {
@@ -26,11 +38,11 @@ function ac(): AudioContext | null {
       if (!AC) return null;
       ctx = new AC();
       const comp = ctx.createDynamicsCompressor(); // supaya banyak suara sekaligus tidak pecah
-      comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.004; comp.release.value = 0.2;
+      comp.threshold.value = -10; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
       comp.connect(ctx.destination);
-      master = ctx.createGain(); master.gain.value = 1.15; // boost efek suara sekitar 28%, tetap melewati compressor
+      master = ctx.createGain(); master.gain.value = 1.15 * sfxVol; // volume efek diatur dari Studio, tetap melewati compressor
       master.connect(comp);
-      musicBus = ctx.createGain(); musicBus.gain.value = MUSIC_BASE; musicBus.connect(comp);
+      musicBus = ctx.createGain(); musicBus.gain.value = musicBase(); musicBus.connect(comp);
     }
     if (ctx.state === "suspended") void ctx.resume();
     return ctx;
@@ -140,8 +152,8 @@ function duck(depth = 0.45, secs = 1) {
   const c = ctx; if (!c || !musicBus) return;
   const now = c.currentTime;
   musicBus.gain.cancelScheduledValues(now);
-  musicBus.gain.setTargetAtTime(MUSIC_BASE * musicLevel * depth, now, 0.03);
-  musicBus.gain.setTargetAtTime(MUSIC_BASE * musicLevel, now + secs, 0.45);
+  musicBus.gain.setTargetAtTime(musicBase() * musicLevel * depth, now, 0.03);
+  musicBus.gain.setTargetAtTime(musicBase() * musicLevel, now + secs, 0.45);
 }
 
 /** Pentatonik mayor C: apa pun urutannya selalu enak didengar. */
@@ -516,6 +528,6 @@ export const music = {
   /** Volume relatif 0..1, mis. diturunkan saat animasi penutup tampil. */
   level(x: number) {
     musicLevel = Math.max(0, Math.min(1, x));
-    const c = ctx; if (c && musicBus) musicBus.gain.setTargetAtTime(MUSIC_BASE * musicLevel, c.currentTime, 0.3);
+    const c = ctx; if (c && musicBus) musicBus.gain.setTargetAtTime(musicBase() * musicLevel, c.currentTime, 0.3);
   },
 };

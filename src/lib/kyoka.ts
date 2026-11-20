@@ -26,7 +26,10 @@ export type Settings = {
   creatorName: string; accent: "purple" | "blue" | "pink" | "yellow"; textScale: number;
   /** "random" = lima scene idle bergantian, urutan diacak tiap ronde; selain itu mengunci satu scene. */
   visualEffect: "random" | "showtime" | "comet" | "neko" | "sakura" | "beat";
-  sound: boolean; overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
+  sound: boolean;
+  /** Volume efek suara (0 - 3, 1 = bawaan lama) dan musik latar (0 - 2). */
+  sfxVolume: number; musicVolume: number;
+  overlayWidth: number; overlayHeight: number; showTitle: boolean; showBadge: boolean;
   countdown: number; giftRules: GiftRule[];
   /** Posisi tulisan panduan interaksi di overlay. */
   guidePosition: "tr" | "tl" | "br" | "bl" | "off";
@@ -126,7 +129,7 @@ export type OverlayState = {
   votes?: { a: number; b: number } | undefined;
   banner?: { text: string; at: number } | undefined;
   audienceCode?: string | undefined;
-  accent: Settings["accent"]; textScale: number; visualEffect?: Settings["visualEffect"]; sound: boolean; showTitle: boolean; showBadge: boolean;
+  accent: Settings["accent"]; textScale: number; visualEffect?: Settings["visualEffect"]; sound: boolean; sfxVolume?: number; musicVolume?: number; showTitle: boolean; showBadge: boolean;
   intake?: Intake | undefined;
   guidePos?: Settings["guidePosition"] | undefined;
   /** Hanya ada selama masih ada kiriman yang menunggu giliran: overlay menggambar garis loading kiri→kanan selama item ini tayang. */
@@ -234,7 +237,7 @@ const defaultState: State = {
   categories: DEFAULT_CATEGORIES,
   activity: [{ id: "demo-start", text: "Demo Mode aktif — data contoh dimuat", at: now }],
   settings: {
-    creatorName: "Kyoka", accent: "purple", textScale: 1, visualEffect: "random", sound: true,
+    creatorName: "Kyoka", accent: "purple", textScale: 1, visualEffect: "random", sound: true, sfxVolume: 2, musicVolume: 1,
     overlayWidth: 1080, overlayHeight: 1920, showTitle: true, showBadge: true, countdown: 10,
     guidePosition: "tr", bannedWords: [], vipTiers: [1, 100, 1000], vipSince: 0, fastTrackTier: 1, giftNotify: true, autoApproveCards: true, autoSwitchQueue: true, antiDuplicate: true, publicUrl: "", spinCapacity: 30, spinSlices: 10, spinModeration: "auto", queueDurations: { ...QUEUE_SECONDS },
     giftRules: [
@@ -258,6 +261,10 @@ export function normalizeSettings(s: Settings): Settings {
   // Nilai lama (spotlight/meteor/aurora/orbit/prism) tidak ada di daftar ini, jadi otomatis pindah ke "random".
   const visualEffects: Settings["visualEffect"][] = ["random", "showtime", "comet", "neko", "sakura", "beat"];
   if (!visualEffects.includes(s.visualEffect)) patch.visualEffect = d.visualEffect;
+  const sfxVolume = typeof s.sfxVolume === "number" && Number.isFinite(s.sfxVolume) ? Math.min(3, Math.max(0, s.sfxVolume)) : d.sfxVolume;
+  if (sfxVolume !== s.sfxVolume) patch.sfxVolume = sfxVolume;
+  const musicVolume = typeof s.musicVolume === "number" && Number.isFinite(s.musicVolume) ? Math.min(2, Math.max(0, s.musicVolume)) : d.musicVolume;
+  if (musicVolume !== s.musicVolume) patch.musicVolume = musicVolume;
   const spinCapacity = clampInt(s.spinCapacity, LIMITS.spin.min, LIMITS.spin.max, d.spinCapacity);
   // Irisan roda tidak boleh melebihi kapasitas.
   const spinSlices = clampInt(s.spinSlices, LIMITS.spin.min, Math.min(LIMITS.spin.max, spinCapacity), Math.min(d.spinSlices, spinCapacity));
@@ -418,6 +425,8 @@ function pick(p: Partial<Settings>): Partial<OverlayState> {
   if (p.textScale) out.textScale = p.textScale;
   if (p.visualEffect) out.visualEffect = p.visualEffect;
   if (p.sound !== undefined) out.sound = p.sound;
+  if (p.sfxVolume !== undefined) out.sfxVolume = p.sfxVolume;
+  if (p.musicVolume !== undefined) out.musicVolume = p.musicVolume;
   if (p.showTitle !== undefined) out.showTitle = p.showTitle;
   if (p.showBadge !== undefined) out.showBadge = p.showBadge;
   if (p.guidePosition) out.guidePos = p.guidePosition;
@@ -447,7 +456,7 @@ export const sample = <T,>(arr: T[], n: number) => shuffle(arr).slice(0, n);
 
 export const defaultOverlay = (): OverlayState => ({
   visible: true, payload: null, updatedAt: 0, payloadAt: 0, accent: state.settings.accent, textScale: state.settings.textScale, visualEffect: state.settings.visualEffect,
-  sound: state.settings.sound, showTitle: state.settings.showTitle, showBadge: state.settings.showBadge,
+  sound: state.settings.sound, sfxVolume: state.settings.sfxVolume, musicVolume: state.settings.musicVolume, showTitle: state.settings.showTitle, showBadge: state.settings.showBadge,
 });
 
 export function readOverlay(): OverlayState {
